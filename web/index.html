@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SIMyCity — a SimCity for the real world, tended like a community garden</title>
+<meta name="description" content="Open-source, public-data simulation of real parcels and their infrastructure dependencies. Why isn't there a Costco near me? Would a data center succeed here? Should it be built at all?" />
+<style>
+  :root{
+    --soil:#1c2526; --ink:#16201f; --paper:#f6f4ec; --card:#fffdf7;
+    --garden:#2f9e44; --garden-deep:#1f7a33; --leaf:#74c476;
+    --amber:#d9a441; --water:#3a8fb7; --power:#e8843c; --slate:#5b6b6a;
+    --line:#e3ddcd; --shadow:0 10px 30px rgba(20,30,28,.10);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink);background:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased}
+  a{color:var(--garden-deep);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 22px}
+  h1,h2,h3{line-height:1.15;letter-spacing:-.02em}
+  .pill{display:inline-block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+    padding:.28em .7em;border-radius:999px;background:rgba(116,198,118,.18);color:var(--garden-deep)}
+
+  /* ---------- hero ---------- */
+  header.hero{background:radial-gradient(1200px 500px at 80% -10%,#21323033 0,transparent 60%),
+    linear-gradient(160deg,#16201f 0%,#1c2c2a 60%,#22332f 100%);color:#eef3ee;padding:70px 0 84px;position:relative;overflow:hidden}
+  .brand{font-weight:800;font-size:1.15rem;letter-spacing:-.01em}
+  .brand b{color:var(--leaf)}
+  .nav{display:flex;justify-content:space-between;align-items:center;gap:18px;font-size:.92rem;flex-wrap:wrap}
+  .nav a{color:#cfe6d3}
+  .hero h1{font-size:clamp(2.1rem,5.2vw,3.7rem);margin:.5em 0 .25em;max-width:16ch}
+  .hero h1 .my{color:var(--leaf);font-style:italic}
+  .lede{font-size:clamp(1.05rem,2.2vw,1.32rem);color:#d4e4d6;max-width:54ch}
+  .wordplay{font-size:.95rem;color:#9fc6a5;margin-top:.6em}
+  .cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:30px}
+  .btn{display:inline-block;font-weight:700;padding:.8em 1.25em;border-radius:12px;border:1px solid transparent;font-size:.98rem}
+  .btn.primary{background:var(--garden);color:#06210d}
+  .btn.primary:hover{background:var(--leaf);text-decoration:none}
+  .btn.ghost{border-color:#3c5450;color:#d8ead9}
+  .btn.ghost:hover{border-color:var(--leaf);text-decoration:none}
+  .hero-art{position:absolute;right:-40px;bottom:-30px;width:430px;max-width:48vw;opacity:.95}
+
+  /* ---------- sections ---------- */
+  section{padding:62px 0;border-bottom:1px solid var(--line)}
+  section h2{font-size:clamp(1.5rem,3.4vw,2.15rem);margin:0 0 .15em}
+  .sub{color:var(--slate);max-width:62ch;margin:.2em 0 0}
+  .eyebrow{font-size:.8rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--garden-deep);margin-bottom:.4em}
+
+  /* three questions */
+  .qgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px}
+  .qcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--shadow)}
+  .qcard .num{font-size:.78rem;font-weight:800;color:var(--amber);letter-spacing:.1em}
+  .qcard h3{margin:.3em 0 .35em;font-size:1.18rem}
+  .qcard p{margin:0;color:var(--slate);font-size:.96rem}
+  .qcard code{background:#eef3ec;color:var(--garden-deep);padding:.12em .4em;border-radius:6px;font-size:.85em}
+
+  /* dependency diagram + standoff */
+  .twocol{display:grid;grid-template-columns:1.15fr .85fr;gap:34px;align-items:center;margin-top:26px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+  figure{margin:0}
+  figcaption{color:var(--slate);font-size:.88rem;margin-top:8px}
+  .flow line, .flow path{stroke-linecap:round}
+  .dash{stroke-dasharray:5 7;animation:dash 1.4s linear infinite}
+  @keyframes dash{to{stroke-dashoffset:-24}}
+  .spin{transform-origin:center;animation:spin 26s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* giants */
+  .giants{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:26px}
+  .giant{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px;font-size:.9rem}
+  .giant b{display:block;font-size:.96rem}
+  .giant span{color:var(--slate);font-size:.84rem}
+  .giant.more{display:flex;align-items:center;justify-content:center;text-align:center;background:#eef3ec;border-style:dashed}
+
+  /* garden / gamification */
+  .garden{background:linear-gradient(180deg,#f0efe4,#f6f4ec)}
+  .badges{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:28px}
+  .badge{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;text-align:center;box-shadow:var(--shadow)}
+  .badge svg{width:54px;height:54px}
+  .badge b{display:block;margin-top:8px;font-size:.98rem}
+  .badge span{color:var(--slate);font-size:.82rem}
+  .board{margin-top:30px;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+  .board .row{display:grid;grid-template-columns:42px 1fr auto auto;gap:12px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);font-size:.94rem}
+  .board .row:first-child{border-top:none;background:#eef3ec;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate)}
+  .board .rank{font-weight:800;color:var(--amber);text-align:center}
+  .tag{font-size:.72rem;background:#eef3ec;color:var(--garden-deep);padding:.2em .55em;border-radius:999px;white-space:nowrap}
+  .note{font-size:.82rem;color:var(--slate);margin-top:10px;font-style:italic}
+
+  /* sleep / automation */
+  .sleep{display:grid;grid-template-columns:1fr 1fr;gap:30px;align-items:center}
+  .steps{counter-reset:s;margin:18px 0 0;padding:0;list-style:none}
+  .steps li{counter-increment:s;position:relative;padding:10px 0 10px 44px;border-top:1px dashed var(--line)}
+  .steps li:before{content:counter(s);position:absolute;left:0;top:9px;width:30px;height:30px;border-radius:50%;
+    background:var(--garden);color:#06210d;font-weight:800;display:grid;place-items:center;font-size:.9rem}
+  .steps b{display:block}
+  .steps span{color:var(--slate);font-size:.92rem}
+
+  /* mission */
+  .mission{background:#16201f;color:#eaf2ea}
+  .mission h2{color:#fff}
+  .mission .sub{color:#bcd2bd}
+  .mission blockquote{font-size:clamp(1.15rem,2.6vw,1.5rem);max-width:30ch;margin:.6em 0 0;line-height:1.3;border-left:3px solid var(--leaf);padding-left:18px}
+
+  footer{padding:40px 0;color:var(--slate);font-size:.9rem}
+  .footrow{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
+
+  @media(max-width:860px){
+    .qgrid,.giants,.badges{grid-template-columns:1fr 1fr}
+    .twocol,.sleep{grid-template-columns:1fr}
+    .hero-art{display:none}
+    .board .row{grid-template-columns:34px 1fr auto}
+    .board .row .tag{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <nav class="nav">
+      <div class="brand">SIM<b>y</b>City</div>
+      <div>
+        <a href="#questions">What it answers</a> &nbsp;
+        <a href="#how">How it works</a> &nbsp;
+        <a href="#giants">Giants</a> &nbsp;
+        <a href="#garden">Contribute</a> &nbsp;
+        <a href="https://github.com/jodeit/simy_city">GitHub →</a>
+      </div>
+    </nav>
+
+    <span class="pill" style="margin-top:34px">Open source · public data · early &amp; growing</span>
+    <h1>A SimCity for the real world — tended like a <span class="my">community garden</span>.</h1>
+    <p class="lede">Pick a real plot of land. Ask why your neighborhood is the way it is,
+      what would happen if you changed it, and whether it <em>should</em> change at all —
+      answered with free, public data and modeled like the systems in SimCity.</p>
+    <p class="wordplay"><strong>SIM</strong>ulation + <strong>my/our</strong> city. The name is the mission:
+      it's <em>your</em> city, and you can help build the model of it.</p>
+    <div class="cta">
+      <a class="btn primary" href="#garden">Plant a seed → contribute</a>
+      <a class="btn ghost" href="#how">See how it works</a>
+    </div>
+  </div>
+
+  <!-- hero art: a city block sprouting from a leaf -->
+  <svg class="hero-art" viewBox="0 0 400 360" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <ellipse cx="210" cy="320" rx="180" ry="26" fill="#0c1413"/>
+    <path d="M210 320C140 250 120 150 210 70c90 80 70 180 0 250Z" fill="#1f7a33"/>
+    <path d="M210 320V96" stroke="#74c476" stroke-width="3"/>
+    <g opacity=".96">
+      <rect x="150" y="190" width="40" height="120" rx="4" fill="#2f9e44"/>
+      <rect x="196" y="150" width="46" height="160" rx="4" fill="#3a8fb7"/>
+      <rect x="248" y="210" width="36" height="100" rx="4" fill="#d9a441"/>
+      <g fill="#eef3ee" opacity=".85">
+        <rect x="158" y="202" width="8" height="8"/><rect x="174" y="202" width="8" height="8"/>
+        <rect x="158" y="222" width="8" height="8"/><rect x="174" y="222" width="8" height="8"/>
+        <rect x="204" y="164" width="9" height="9"/><rect x="223" y="164" width="9" height="9"/>
+        <rect x="204" y="186" width="9" height="9"/><rect x="223" y="186" width="9" height="9"/>
+        <rect x="256" y="224" width="8" height="8"/><rect x="270" y="224" width="8" height="8"/>
+      </g>
+    </g>
+  </svg>
+</header>
+
+<!-- ===================== THREE QUESTIONS ===================== -->
+<section id="questions">
+  <div class="wrap">
+    <div class="eyebrow">The three questions</div>
+    <h2>Why · What if · Should we</h2>
+    <p class="sub">Most map tools stop at "what's here." SIMyCity is built around the questions
+      a resident, a developer, or a city actually asks.</p>
+    <div class="qgrid">
+      <div class="qcard">
+        <div class="num">01 — WHY</div>
+        <h3>Why isn't there a Costco near me?</h3>
+        <p>Not income — it's <em>drive-time rooftops</em>, road networks, and who already serves the trade area.
+          And why aren't developers building the homes that would change that? <code>simy standoffs</code></p>
+      </div>
+      <div class="qcard">
+        <div class="num">02 — WHAT IF</div>
+        <h3>Would a data center succeed on this plot?</h3>
+        <p>It needs power, water, and fiber nearby — and induces schools, fire, and roads at scale.
+          SIMyCity walks the dependency graph. <code>simy use data_center</code></p>
+      </div>
+      <div class="qcard">
+        <div class="num">03 — SHOULD WE</div>
+        <h3>Should it be built at all?</h3>
+        <p>The same parcel looks different to a developer, a resident, an environmentalist, and the city.
+          We hold those in tension instead of one score. <code>simy perspectives</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== HOW IT WORKS ===================== -->
+<section id="how">
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Dependencies &amp; standoffs, modeled like SimCity</h2>
+    <p class="sub">Every land use draws on service layers and induces new demand. And uses gate each
+      other — creating chicken-and-egg standoffs that are often the real reason "nothing is here."</p>
+
+    <div class="twocol">
+      <figure class="panel">
+        <svg viewBox="0 0 520 300" class="flow" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Data center dependency graph">
+          <!-- center node -->
+          <rect x="205" y="125" width="110" height="50" rx="10" fill="#16201f"/>
+          <text x="260" y="155" fill="#eef3ee" font-size="15" font-weight="700" text-anchor="middle">Data center</text>
+          <!-- requires (left) -->
+          <g font-size="12.5" text-anchor="middle">
+            <g>
+              <line x1="120" y1="60" x2="205" y2="135" stroke="#e8843c" stroke-width="3"/>
+              <rect x="40" y="42" width="92" height="36" rx="8" fill="#fff" stroke="#e8843c"/>
+              <text x="86" y="65" fill="#b35a1e">Power ⚡</text>
+            </g>
+            <g>
+              <line x1="120" y1="150" x2="205" y2="150" stroke="#3a8fb7" stroke-width="3"/>
+              <rect x="40" y="132" width="92" height="36" rx="8" fill="#fff" stroke="#3a8fb7"/>
+              <text x="86" y="155" fill="#2a6e8f">Water 💧</text>
+            </g>
+            <g>
+              <line x1="120" y1="240" x2="205" y2="165" stroke="#2f9e44" stroke-width="3"/>
+              <rect x="40" y="222" width="92" height="36" rx="8" fill="#fff" stroke="#2f9e44"/>
+              <text x="86" y="245" fill="#1f7a33">Fiber 🛜</text>
+            </g>
+          </g>
+          <!-- induces (right, dashed) -->
+          <g font-size="12.5" text-anchor="middle">
+            <line x1="315" y1="140" x2="395" y2="70" stroke="#d9a441" stroke-width="2.5" class="dash"/>
+            <line x1="315" y1="150" x2="395" y2="150" stroke="#d9a441" stroke-width="2.5" class="dash"/>
+            <line x1="315" y1="160" x2="395" y2="230" stroke="#d9a441" stroke-width="2.5" class="dash"/>
+            <rect x="395" y="52" width="92" height="36" rx="8" fill="#fdf6e6" stroke="#d9a441"/>
+            <text x="441" y="75" fill="#9a6f1c">Fire / ESD</text>
+            <rect x="395" y="132" width="92" height="36" rx="8" fill="#fdf6e6" stroke="#d9a441"/>
+            <text x="441" y="155" fill="#9a6f1c">Grid upgrade</text>
+            <rect x="395" y="212" width="92" height="36" rx="8" fill="#fdf6e6" stroke="#d9a441"/>
+            <text x="441" y="235" fill="#9a6f1c">Roads</text>
+          </g>
+          <text x="86" y="20" font-size="11" font-weight="700" fill="#5b6b6a" text-anchor="middle">REQUIRES</text>
+          <text x="441" y="20" font-size="11" font-weight="700" fill="#5b6b6a" text-anchor="middle">INDUCES</text>
+        </svg>
+        <figcaption>Solid = hard inputs it needs nearby. Dashed = second-order demand it creates, at scale.</figcaption>
+      </figure>
+
+      <figure class="panel">
+        <svg viewBox="0 0 280 260" class="flow" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Chicken and egg standoff">
+          <g class="spin" style="transform-box:fill-box">
+            <path d="M70 70 A90 90 0 0 1 210 70" stroke="#5b6b6a" stroke-width="3" fill="none" class="dash" marker-end="url(#a)"/>
+            <path d="M210 190 A90 90 0 0 1 70 190" stroke="#5b6b6a" stroke-width="3" fill="none" class="dash" marker-end="url(#a)"/>
+          </g>
+          <defs><marker id="a" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+            <path d="M0 0 L6 3 L0 6 Z" fill="#5b6b6a"/></marker></defs>
+          <g text-anchor="middle" font-size="13" font-weight="700">
+            <rect x="20" y="108" width="100" height="44" rx="10" fill="#2f9e44"/>
+            <text x="70" y="130" fill="#06210d">Housing</text><text x="70" y="146" fill="#06210d" font-size="10" font-weight="500">(rooftops)</text>
+            <rect x="160" y="108" width="100" height="44" rx="10" fill="#d9a441"/>
+            <text x="210" y="130" fill="#3a2a05">Retail</text><text x="210" y="146" fill="#3a2a05" font-size="10" font-weight="500">(amenity)</text>
+          </g>
+          <text x="140" y="30" text-anchor="middle" font-size="12" fill="#5b6b6a">each waits on the other…</text>
+          <text x="140" y="240" text-anchor="middle" font-size="12" fill="#1f7a33" font-weight="700">…nobody moves first.</text>
+        </svg>
+        <figcaption>SIMyCity finds these loops and names the <strong>cheapest</strong> way to break each one.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== GIANTS ===================== -->
+<section id="giants">
+  <div class="wrap">
+    <div class="eyebrow">Standing on the shoulders of giants</div>
+    <h2>We connect great open source — we don't reinvent it</h2>
+    <p class="sub">The routing math, the maps, the parcel and census data, the city sims — they already exist,
+      and they're excellent. SIMyCity is the missing connective layer that ties them to a civic decision.
+      <a href="../docs/prior-art.md">Full credits →</a></p>
+    <div class="giants">
+      <div class="giant"><b>A/B Street</b><span>civic traffic sim on open data</span></div>
+      <div class="giant"><b>OpenStreetMap</b><span>the open map of the world</span></div>
+      <div class="giant"><b>Overture Maps</b><span>open buildings &amp; places</span></div>
+      <div class="giant"><b>U.S. Census</b><span>demographics &amp; business data</span></div>
+      <div class="giant"><b>OSMnx · Pandana</b><span>street-network analysis</span></div>
+      <div class="giant"><b>UrbanSim (UDST)</b><span>land-use forecasting</span></div>
+      <div class="giant"><b>openrouteservice</b><span>drive-time isochrones</span></div>
+      <div class="giant more">+ 20 federal &amp; open datasets<br><span>FCC · EIA · USGS · FEMA · USFWS …</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== GARDEN / GAMIFICATION ===================== -->
+<section id="garden" class="garden">
+  <div class="wrap">
+    <div class="eyebrow">The community garden</div>
+    <h2>Tend a plot. Earn your patch. Improve a real place.</h2>
+    <p class="sub">Every contribution is a small, reviewable unit — add a dataset, refine a dependency
+      threshold (with a citation), or build a connector. Pick a plot and plant.</p>
+
+    <div class="badges">
+      <div class="badge">
+        <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" fill="#eef3ec" stroke="#2f9e44" stroke-width="2"/><path d="M32 16c-7 6-7 16 0 24 7-8 7-18 0-24Z" fill="#2f9e44"/><path d="M32 22v20" stroke="#74c476" stroke-width="2"/></svg>
+        <b>Source Scout</b><span>add a public dataset to the registry</span>
+      </div>
+      <div class="badge">
+        <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" fill="#fdf6e6" stroke="#d9a441" stroke-width="2"/><path d="M24 40l16-16M40 24v9M40 24h-9" stroke="#9a6f1c" stroke-width="3" stroke-linecap="round"/><circle cx="22" cy="42" r="4" fill="#d9a441"/></svg>
+        <b>Standoff Breaker</b><span>model an enabling edge / cheapest fix</span>
+      </div>
+      <div class="badge">
+        <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" fill="#eaf3f7" stroke="#3a8fb7" stroke-width="2"/><path d="M32 18c8 7 8 17 0 28-8-11-8-21 0-28Z" fill="#3a8fb7"/></svg>
+        <b>Habitat Guardian</b><span>improve an ecology / impact layer</span>
+      </div>
+      <div class="badge">
+        <svg viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" fill="#eef3ec" stroke="#1f7a33" stroke-width="2"/><rect x="22" y="22" width="20" height="20" rx="3" fill="#1f7a33"/><path d="M27 32l4 4 6-8" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>
+        <b>Connector Smith</b><span>ship a working data connector</span>
+      </div>
+    </div>
+
+    <div class="board" role="table" aria-label="Contributor garden (illustrative)">
+      <div class="row" role="row"><div class="rank">#</div><div>Gardener</div><div>Patches</div><div>Latest</div></div>
+      <div class="row" role="row"><div class="rank">1</div><div>🌻 you, maybe</div><div>—</div><div><span class="tag">be the first</span></div></div>
+      <div class="row" role="row"><div class="rank">2</div><div>🌿 night-shift agent</div><div>—</div><div><span class="tag">spare-token bot</span></div></div>
+      <div class="row" role="row"><div class="rank">3</div><div>🌱 weekend mapper</div><div>—</div><div><span class="tag">good first task</span></div></div>
+    </div>
+    <p class="note">Illustrative — the leaderboard fills in as the garden grows. Plots are real GitHub issues
+      labeled <code>good-first-task</code> and <code>agent-ready</code>.</p>
+  </div>
+</section>
+
+<!-- ===================== CONTRIBUTE WHILE YOU SLEEP ===================== -->
+<section id="sleep">
+  <div class="wrap sleep">
+    <div>
+      <div class="eyebrow">Semi-automated</div>
+      <h2>Contribute while you sleep 🌙</h2>
+      <p class="sub">Got Claude Code capacity sitting idle overnight? Point it at a pre-scoped task and
+        wake up to a pull request. Humans decide <em>what</em> and <em>whether</em>; agents do a lot of the
+        <em>how</em> — and every change still lands through review.</p>
+      <p class="note">Guardrails: agents propose, humans merge · no secrets in the repo ·
+        scope fenced to the task's files · schema tests are the automatic backstop.</p>
+    </div>
+    <ol class="steps">
+      <li><b>Pick a plot</b><span>an <code>agent-ready</code> issue with files, interface, and acceptance test spelled out.</span></li>
+      <li><b>Point your spare tokens at it</b><span>run an agent in the repo while you're away.</span></li>
+      <li><b>It opens a PR</b><span>tests + registry validation run automatically in CI.</span></li>
+      <li><b>You review &amp; merge</b><span>the garden grows a patch — credited to you.</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ===================== MISSION ===================== -->
+<section class="mission">
+  <div class="wrap">
+    <div class="eyebrow" style="color:var(--leaf)">Why we're doing this</div>
+    <h2>An honest tool, not a hype machine</h2>
+    <p class="sub">Closed, well-funded versions of "model the built world" exist. The public-good version —
+      open, free-data-first, owned by the people whose communities it describes — doesn't yet. That's the gap.</p>
+    <blockquote>Understand the place around you. Then help make it better — digitally, and in the real world.</blockquote>
+    <div class="cta" style="margin-top:34px">
+      <a class="btn primary" href="https://github.com/jodeit/simy_city">Star &amp; explore on GitHub</a>
+      <a class="btn ghost" href="../docs/contributing.md">Read the contributor guide</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footrow">
+    <div>SIM<b>y</b>City — open source under MIT · data under each provider's license (OSM = ODbL).</div>
+    <div><a href="https://github.com/jodeit/simy_city">GitHub</a> · <a href="../docs/prior-art.md">Prior art</a> · <a href="../docs/roadmap.md">Roadmap</a></div>
+  </div>
+</footer>
+
+</body>
+</html>

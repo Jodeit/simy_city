@@ -1,6 +1,11 @@
 # SIMyCity
 
+![SIMyCity](web/hero.png)
+
 **A SimCity for the real world — built on public data, tended like a community garden.**
+
+> 🌱 **New here?** Open the visual landing page — [`web/index.html`](web/index.html) — for the
+> guided tour, the prior-art credits, and how to claim a plot in the garden.
 
 The name is a play on words: **SimCity** (the simulation) + **"my / our city"**
 — because this is meant to be tended by a community, not run by one owner. The
@@ -102,6 +107,8 @@ simy todo                         # connectors a contributor could build next
 | Stakeholder engine | `simy_city/perspectives.py` | scores "should we?" across competing POVs |
 | CLI explorer | `simy_city/cli.py` | `simy report / layer / use / standoffs / perspectives / todo / validate` |
 | Tests | `tests/test_registry.py` | CI guards the model |
+| Landing page | `web/index.html` | visual tour for collaborators (GitHub Pages-ready) |
+| Prior art | `docs/prior-art.md` | the open-source giants we build on, credited |
 | Research doc | `docs/data-sources.md` | the public-data landscape, narrated |
 | Feedback loops | `docs/feedback-loops.md` | chicken-and-egg standoffs, explained |
 | Stakeholders | `docs/stakeholders.md` | the "should we develop?" / competing-priorities model |
