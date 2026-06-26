@@ -491,7 +491,9 @@ sources:
       fragmented/county-by-county, so we model the county-portal pattern here
       and generalize the connector later.
     docs_url: https://tnr-traviscountytx.hub.arcgis.com/
-    connector_status: none
+    # Wired live in the web explorer: clicking a point queries this ArcGIS layer,
+    # draws the real parcel boundary, and links to the TCAD record.
+    connector_status: partial
 
   # ---- BUILDINGS / DENSITY ---------------------------------------------------
   - id: overture_buildings

@@ -42,6 +42,11 @@
   .verdict.aligned{background:#e7f3e9;color:var(--garden-deep)}
   .live{font-size:.88rem;margin:6px 0}
   .live b{color:var(--ink)}
+  #parcelBlock{border-left:3px solid var(--power)}
+  .parcel{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+  .prow{display:flex;justify-content:space-between;gap:10px;font-size:.88rem;border-bottom:1px dotted var(--line);padding:3px 0}
+  .prow span{color:var(--slate)}
+  .prow b{text-align:right}
   .loading{color:var(--slate);font-style:italic;font-size:.85rem}
   .standoff{font-size:.85rem;background:#fff;border:1px dashed var(--amber);border-radius:10px;padding:9px 10px;margin:7px 0}
   .standoff b{color:#9a6f1c}
@@ -82,16 +87,17 @@
     <span class="hint">Click the map to drop it · <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
   </header>
   <div style="position:relative"><div id="map"></div>
-    <div class="legend">📍 Click anywhere to test a site. Default view: <b>78738</b> (Lake Travis, TX).<br>
-      Circle ≈ trade-area / service radius (drive-time proxy).</div>
+    <div class="legend">📍 Click a property to identify the <b>parcel</b> (real boundary + county record where available)
+      and test a use on it. Default view: <b>78738</b> (Lake Travis, TX).<br>
+      Orange outline = parcel · green circle ≈ trade-area / service radius (drive-time proxy).</div>
   </div>
   <aside id="panel">
     <div class="empty" id="empty">
       <h2>Would it work here?</h2>
       <p>Pick a development up top (try <b>Data center</b>), then <kbd>click</kbd> a spot on the map.</p>
-      <p>SIMyCity checks what it <b>needs nearby</b>, what it would <b>induce</b>, the <b>standoffs</b> in the way,
-        and whether stakeholders even think it <b>should</b> be built — using live OpenStreetMap data plus an
-        open model you can edit.</p>
+      <p>SIMyCity identifies the <b>actual parcel</b> (boundary + county record, where wired), then checks what the
+        use <b>needs nearby</b>, what it would <b>induce</b>, the <b>standoffs</b> in the way, and whether stakeholders
+        think it <b>should</b> be built — using live county parcel + OpenStreetMap data plus an open model you can edit.</p>
       <p class="src">Everything here runs in your browser. The thresholds live in
         <code>data_sources/layers.yaml</code> — change one and this changes.</p>
     </div>
@@ -135,7 +141,29 @@ const USE_PROBE={
   residential_subdivision:{radius:5000, label:"Nearest school (OSM)",  q:'nwr["amenity"="school"]', big:9000},
 };
 
-let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, lastLatLng=null, current="data_center";
+// Parcel sources, county-by-county (there is no single free national parcel API
+// with property lines). Each is an ArcGIS REST polygon layer queried by point.
+// Adding your county here is a one-entry contribution — see docs/contributing.md.
+const PARCEL_SOURCES=[
+  {
+    name:"Travis Central Appraisal District (Travis County, TX)",
+    // Candidate ArcGIS layers, tried in order (first that responds + has a parcel wins).
+    // Different hosts have different CORS/format support, so we fall back gracefully.
+    urls:[
+      "https://gis.traviscountytx.gov/server1/rest/services/Boundaries_and_Jurisdictions/TCAD_public/FeatureServer/0",
+      "https://geo.traviscountytx.gov/arcgis/rest/services/TNR/TCAD/MapServer/0",
+      "https://services1.arcgis.com/HGcSYZ5bvjRswoCb/arcgis/rest/services/TCAD_Selected_Locations/FeatureServer/0",
+    ],
+    // rough county bbox so we only query inside coverage [minLng,minLat,maxLng,maxLat]
+    bbox:[-98.17,30.02,-97.37,30.63],
+    record:(a)=>{const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID"]);
+      return id?`https://traviscad.org/property-search/?prop_id=${encodeURIComponent(id)}`:"https://traviscad.org/property-search/";},
+    source_label:"Travis Central Appraisal District",
+  },
+];
+
+let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
+let reqSeq=0; // bumped each click; async callbacks bail if they're stale
 
 // model.js sets window.SIMY_MODEL (works on file:// and Pages); fall back to fetch.
 if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;initUses();}
@@ -172,11 +200,13 @@ function analyze(latlng){
   ring=L.circle(latlng,{radius:probe.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
 
   lastLatLng=latlng;
+  const seq=++reqSeq;
   res.innerHTML=render(use,latlng);
   writeHash(latlng);
   fillTools(latlng);
+  runParcel(latlng,seq);
   document.getElementById("liveval").innerHTML='<span class="loading">querying OpenStreetMap…</span>';
-  runProbe(latlng,probe);
+  runProbe(latlng,probe,seq);
 }
 
 /* ---- shareable permalink + "make the case" ---- */
@@ -225,6 +255,10 @@ function render(use,latlng){
   const label=use.label;
   let h=`<h2>${label}</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)} — testing this site</div>`;
   h+=`<div class="toolbar" id="tools"></div>`;
+
+  // PARCEL identity (filled async by runParcel) — "what am I actually looking at?"
+  h+=`<div class="block" id="parcelBlock"><h3>Parcel / property</h3>
+      <div id="parcelVal" class="loading">identifying parcel…</div></div>`;
 
   // REQUIRES
   h+=`<div class="block"><h3>Needs nearby (feasibility)</h3>`;
@@ -326,19 +360,20 @@ const COST={low:0,medium:1,high:2};
 function cheapest(edges){return edges.reduce((a,b)=>COST[(b.breaker_cost||"high")]<COST[(a.breaker_cost||"high")]?b:a);}
 
 /* ---- live OSM probe via Overpass ---- */
-function runProbe(latlng,probe){
+function runProbe(latlng,probe,seq){
   const {lat,lng}=latlng;
   const parts=probe.q.split(";").filter(Boolean).map(q=>`${q}(around:${probe.big},${lat},${lng});`).join("");
   const ql=`[out:json][timeout:25];(${parts});out center 60;`;
   const endpoints=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
-  tryOverpass(endpoints,ql,latlng,probe);
+  tryOverpass(endpoints,ql,latlng,probe,seq);
 }
-function tryOverpass(eps,ql,latlng,probe){
+function tryOverpass(eps,ql,latlng,probe,seq){
+  if(seq!==reqSeq)return;
   if(!eps.length){setLive('<span class="loading">couldn’t reach OpenStreetMap right now — the model above still works.</span>');return;}
   fetch(eps[0],{method:"POST",body:ql})
     .then(r=>r.ok?r.json():Promise.reject(r.status))
-    .then(d=>showProbe(d,latlng,probe))
-    .catch(()=>tryOverpass(eps.slice(1),ql,latlng,probe));
+    .then(d=>{if(seq===reqSeq)showProbe(d,latlng,probe);})
+    .catch(()=>tryOverpass(eps.slice(1),ql,latlng,probe,seq));
 }
 function showProbe(d,latlng,probe){
   const els=(d.elements||[]).map(e=>{
@@ -359,6 +394,75 @@ function setLive(html){const el=document.getElementById("liveval");if(el)el.inne
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+
+/* ---- parcel identification (real property boundary + county record) ---- */
+function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
+function pick(a,keys){
+  if(!a)return null;
+  for(const k of keys){if(a[k]!==undefined&&a[k]!==null&&a[k]!=="")return a[k];}
+  const low={};for(const k in a)low[k.toLowerCase()]=a[k];
+  for(const k of keys){const v=low[k.toLowerCase()];if(v!==undefined&&v!==null&&v!=="")return v;}
+  return null;
+}
+function runParcel(latlng,seq){
+  if(parcelLayer){parcelLayer.remove();parcelLayer=null;}
+  const el=document.getElementById("parcelVal"); if(!el)return;
+  const src=PARCEL_SOURCES.find(s=>inBbox(latlng,s.bbox));
+  if(!src){
+    el.innerHTML=`No parcel layer wired for this spot yet. Property boundaries are published
+      <b>county-by-county</b>, so coverage grows as people add their county
+      (<a href="https://github.com/jodeit/simy_city/blob/main/web/explore.html" target="_blank" rel="noopener">how to add one</a>).
+      Mapped today: <b>Travis County, TX</b> — try the 78738 area.`;
+    return;
+  }
+  const qs="/query?f=geojson&returnGeometry=true&outSR=4326&spatialRel=esriSpatialRelIntersects"+
+    "&geometryType=esriGeometryPoint&inSR=4326&outFields=*&geometry="+encodeURIComponent(latlng.lng+","+latlng.lat);
+  tryParcel(src.urls.slice(),qs,src,false,seq);
+}
+function tryParcel(urls,qs,src,sawEmpty,seq){
+  if(seq!==reqSeq)return;                 // a newer click superseded this one
+  const el=document.getElementById("parcelVal"); if(!el)return;
+  if(!urls.length){
+    el.innerHTML=sawEmpty
+      ? `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel (road, right-of-way, or water). Try clicking a building.`
+      : `<span class="loading">couldn’t reach the county parcel service just now — the analysis below still works.</span>`;
+    return;
+  }
+  fetch(urls[0]+qs).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
+    if(seq!==reqSeq)return;
+    if(d&&d.features&&d.features.length){showParcel(d,src);}
+    else{tryParcel(urls.slice(1),qs,src,true,seq);}        // responded, no parcel here → remember & try next
+  }).catch(()=>tryParcel(urls.slice(1),qs,src,sawEmpty,seq)); // CORS/network → try next host
+}
+function showParcel(geo,src){
+  const el=document.getElementById("parcelVal");
+  const f=geo&&geo.features&&geo.features[0];
+  if(!f){el.innerHTML=`Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel
+    (likely a road, right-of-way, or water).`;return;}
+  const a=f.properties||{};
+  if(f.geometry){
+    parcelLayer=L.geoJSON(f,{style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
+    try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
+  }
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL"]);
+  let rows="";
+  const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
+  row("Parcel ID",id);
+  row("Owner",owner);
+  row("Address",situs);
+  row("Land use",land);
+  row("Acreage",acres!=null&&!isNaN(+acres)?(+acres).toFixed(2)+" ac":acres);
+  row("Appraised value",value!=null&&!isNaN(+value)?"$"+Number(value).toLocaleString():value);
+  if(!rows){Object.keys(a).slice(0,6).forEach(k=>row(k,a[k]));}
+  el.innerHTML=`<div class="parcel">${rows}</div>
+    <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
+    <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>`;
+}
 
 /* ---- bring-your-own-data (private, client-side only) ---- */
 const BYO_KEY="simy_byo_v1";
