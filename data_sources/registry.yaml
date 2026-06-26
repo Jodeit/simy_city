@@ -495,6 +495,50 @@ sources:
     # draws the real parcel boundary, and links to the TCAD record.
     connector_status: partial
 
+  - id: tx_water_districts
+    name: TCEQ Water Districts (MUD / WCID / CCN)
+    provider: TCEQ via Travis County TNR GIS
+    category: water
+    layers: [water, parcel]
+    coverage: Texas (Travis County layer for the testbed)
+    access:
+      type: rest_geojson
+      base_url: https://gis.traviscountytx.gov/server1/rest/services/Services_and_Facilities/Water_Providers/MapServer/2
+      auth: none
+      formats: [geojson]
+      rate_limit: "ArcGIS fair use"
+    key_fields: [district_name, district_type, geometry]
+    update_frequency: periodic
+    license: Public (Texas)
+    relevance_78738: >
+      Whether a parcel sits inside a Municipal Utility District (MUD) is a first-
+      order developer question in Texas — MUDs provide water/sewer but carry bond
+      debt and add property-tax burden. Wired live in the explorer's developer
+      checklist.
+    docs_url: https://www.tceq.texas.gov/gis/iwudview.html
+    connector_status: partial
+
+  - id: usgs_epqs
+    name: USGS Elevation Point Query Service (EPQS)
+    provider: U.S. Geological Survey
+    category: environment
+    layers: [environment, parcel]
+    coverage: US
+    access:
+      type: api
+      base_url: https://epqs.nationalmap.gov/v1/json
+      auth: none
+      formats: [json]
+      rate_limit: "fair use"
+    key_fields: [elevation]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: >
+      Point-elevation API used to estimate parcel slope live in the explorer.
+      Hill Country grading cost scales with slope — a core developer concern.
+    docs_url: https://apps.nationalmap.gov/epqs/
+    connector_status: partial
+
   # ---- BUILDINGS / DENSITY ---------------------------------------------------
   - id: overture_buildings
     name: Overture Maps / Microsoft Building Footprints

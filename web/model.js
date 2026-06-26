@@ -261,6 +261,30 @@ window.SIMY_MODEL = {
       "docs_url": "https://tnr-traviscountytx.hub.arcgis.com/",
       "relevance": "The parcel layer for the testbed \u2014 \"if I buy THIS plot.\" Gives boundary, acreage, current land use and valuation. National parcel coverage is fragmented/county-by-county, so we model the county-portal pattern here and generalize the connector later.\n"
     },
+    "tx_water_districts": {
+      "id": "tx_water_districts",
+      "name": "TCEQ Water Districts (MUD / WCID / CCN)",
+      "category": "water",
+      "layers": [
+        "water",
+        "parcel"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.tceq.texas.gov/gis/iwudview.html",
+      "relevance": "Whether a parcel sits inside a Municipal Utility District (MUD) is a first- order developer question in Texas \u2014 MUDs provide water/sewer but carry bond debt and add property-tax burden. Wired live in the explorer's developer checklist.\n"
+    },
+    "usgs_epqs": {
+      "id": "usgs_epqs",
+      "name": "USGS Elevation Point Query Service (EPQS)",
+      "category": "environment",
+      "layers": [
+        "environment",
+        "parcel"
+      ],
+      "auth": "none",
+      "docs_url": "https://apps.nationalmap.gov/epqs/",
+      "relevance": "Point-elevation API used to estimate parcel slope live in the explorer. Hill Country grading cost scales with slope \u2014 a core developer concern.\n"
+    },
     "overture_buildings": {
       "id": "overture_buildings",
       "name": "Overture Maps / Microsoft Building Footprints",
