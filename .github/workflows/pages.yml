@@ -1,0 +1,47 @@
+name: Deploy explorer to GitHub Pages
+
+# Publishes the web/ directory (landing page + interactive explorer) to GitHub
+# Pages. The model.js the explorer reads is regenerated from the YAML on every
+# deploy, so the live site can never drift from data_sources/*.yaml.
+#
+# One-time setup: repo Settings → Pages → Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths: ["web/**", "data_sources/**", "tools/build_model_json.py", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Rebuild model from YAML
+        run: |
+          pip install pyyaml
+          python tools/build_model_json.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

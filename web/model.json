@@ -1,0 +1,773 @@
+{
+  "meta": {
+    "version": "0.1.0",
+    "testbed_zip": "78738",
+    "testbed_note": "78738 = Bee Cave / Lakeway / Lake Travis, Travis County, TX. Affluent but low rooftop-density Hill Country in the Austin MSA, served by the ERCOT grid. Good stress test for \"why no Costco/Chipotle yet\" (it's drive-time trade-area and rooftop counts, not income) and for data-center siting (ERCOT power + water scarcity + flood/terrain constraints).\n",
+    "categories": [
+      "demographics",
+      "retail_poi",
+      "economy",
+      "power",
+      "water",
+      "broadband",
+      "transportation",
+      "civic_services",
+      "land_parcels",
+      "buildings",
+      "environment",
+      "ecology"
+    ]
+  },
+  "sources": {
+    "census_acs5": {
+      "id": "census_acs5",
+      "name": "American Community Survey 5-Year Detailed Tables",
+      "category": "demographics",
+      "layers": [
+        "demand",
+        "education",
+        "health",
+        "absorption"
+      ],
+      "auth": "free_api_key",
+      "docs_url": "https://www.census.gov/data/developers/data-sets/acs-5year.html",
+      "relevance": "The core demand signal. Costco/Chipotle siting models run on rooftops and households within a drive-time ring, plus income and household size \u2014 all here at block-group resolution.\n"
+    },
+    "census_tiger": {
+      "id": "census_tiger",
+      "name": "TIGER/Line Shapefiles & TIGERweb",
+      "category": "demographics",
+      "layers": [
+        "demand"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.census.gov/data/developers/data-sets/TIGERweb-map-service.html",
+      "relevance": "Provides the geometry (ZCTA 78738, tracts, county) we join every other dataset onto.\n"
+    },
+    "census_cbp_zbp": {
+      "id": "census_cbp_zbp",
+      "name": "County / ZIP Business Patterns (CBP / ZBP)",
+      "category": "economy",
+      "layers": [
+        "demand",
+        "competition",
+        "absorption"
+      ],
+      "auth": "free_api_key",
+      "docs_url": "https://www.census.gov/data/developers/data-sets/cbp-nonemp-zbp.html",
+      "relevance": "Counts of establishments by industry (NAICS) per ZIP \u2014 tells us how saturated grocery/warehouse-club/fast-casual already is around 78738.\n"
+    },
+    "bls_qcew": {
+      "id": "bls_qcew",
+      "name": "Quarterly Census of Employment & Wages",
+      "category": "economy",
+      "layers": [
+        "demand",
+        "absorption"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.bls.gov/cew/additional-resources/open-data/home.htm",
+      "relevance": "Daytime employment & wage base \u2014 matters for lunch-traffic businesses (Chipotle) more than residential population alone.\n"
+    },
+    "lehd_lodes": {
+      "id": "lehd_lodes",
+      "name": "LEHD Origin-Destination Employment Statistics (LODES)",
+      "category": "economy",
+      "layers": [
+        "demand",
+        "transportation",
+        "absorption"
+      ],
+      "auth": "none",
+      "docs_url": "https://lehd.ces.census.gov/data/",
+      "relevance": "Where 78738 residents actually work (mostly into Austin) and who commutes in \u2014 drives the \"trade area is bigger than the rooftops\" insight.\n"
+    },
+    "osm_overpass": {
+      "id": "osm_overpass",
+      "name": "OpenStreetMap (Overpass API)",
+      "category": "retail_poi",
+      "layers": [
+        "competition",
+        "demand",
+        "transportation",
+        "education",
+        "health",
+        "safety"
+      ],
+      "auth": "none",
+      "docs_url": "https://wiki.openstreetmap.org/wiki/Overpass_API",
+      "relevance": "The single most useful free POI layer. Lets us locate the *existing* Costco (Cedar Park / Southwest Austin), Chipotles, grocery stores, schools, fire stations, and the road network \u2014 all in one queryable source.\n"
+    },
+    "nominatim": {
+      "id": "nominatim",
+      "name": "Nominatim Geocoding",
+      "category": "retail_poi",
+      "layers": [
+        "demand"
+      ],
+      "auth": "none",
+      "docs_url": "https://nominatim.org/release-docs/latest/api/Search/",
+      "relevance": "Turns a street address or parcel into a coordinate to anchor analysis."
+    },
+    "openrouteservice": {
+      "id": "openrouteservice",
+      "name": "openrouteservice (isochrones & routing)",
+      "category": "transportation",
+      "layers": [
+        "transportation",
+        "demand",
+        "competition"
+      ],
+      "auth": "free_api_key",
+      "docs_url": "https://openrouteservice.org/dev/#/api-docs",
+      "relevance": "THE key to retail siting. A Costco needs ~X households inside a 10-15 min drive. Hill Country roads (few arterials, lake barriers) make 78738's drive-time trade area much smaller than its radius suggests \u2014 likely the real reason there's no warehouse club yet.\n"
+    },
+    "ntad_roads": {
+      "id": "ntad_roads",
+      "name": "National Transportation Atlas Database (NTAD)",
+      "category": "transportation",
+      "layers": [
+        "transportation"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.bts.gov/ntad",
+      "relevance": "Traffic counts (AADT) on TX-71 / RR 620 / Bee Cave Rd \u2014 retailers care a lot about cars-past-the-door.\n"
+    },
+    "eia_opendata": {
+      "id": "eia_opendata",
+      "name": "EIA Open Data API v2",
+      "category": "power",
+      "layers": [
+        "power"
+      ],
+      "auth": "free_api_key",
+      "docs_url": "https://www.eia.gov/opendata/documentation.php",
+      "relevance": "Generation inventory & retail electricity price \u2014 first-order input for the data-center example (is there spare generation in the region, what does power cost).\n"
+    },
+    "hifld_power": {
+      "id": "hifld_power",
+      "name": "HIFLD Open \u2014 Energy Infrastructure (plants, substations, transmission)",
+      "category": "power",
+      "layers": [
+        "power"
+      ],
+      "auth": "none",
+      "docs_url": "https://hifld-geoplatform.hub.arcgis.com/",
+      "relevance": "Locates the nearest substations & transmission lines. A data center can't just \"plug in\" \u2014 proximity to high-voltage capacity is decisive and this is the geospatial layer for it.\n"
+    },
+    "ercot_grid": {
+      "id": "ercot_grid",
+      "name": "ERCOT Public Reports & Interconnection Queue",
+      "category": "power",
+      "layers": [
+        "power"
+      ],
+      "auth": "free_account",
+      "docs_url": "https://www.ercot.com/gridinfo",
+      "relevance": "78738 is inside ERCOT. The interconnection queue shows where large new loads (data centers) and generators are already lining up \u2014 directly answers \"can the grid here absorb a 100MW data center, and at what scale of upgrade.\" Texas-specific superpower for this testbed.\n"
+    },
+    "nrel_resource": {
+      "id": "nrel_resource",
+      "name": "NREL Renewable Resource & Utility Rate APIs",
+      "category": "power",
+      "layers": [
+        "power",
+        "environment"
+      ],
+      "auth": "free_api_key",
+      "docs_url": "https://developer.nrel.gov/docs/",
+      "relevance": "Solar resource & local utility rate (which utility serves the parcel, $/kWh)."
+    },
+    "epa_sdwis_echo": {
+      "id": "epa_sdwis_echo",
+      "name": "EPA SDWIS / ECHO (public water systems & discharges)",
+      "category": "water",
+      "layers": [
+        "water"
+      ],
+      "auth": "none",
+      "docs_url": "https://echo.epa.gov/tools/web-services",
+      "relevance": "Which water system serves the parcel and its capacity/population served. Critical for water-hungry uses (data-center cooling, manufacturing) in a drought-prone Hill Country region.\n"
+    },
+    "usgs_nhd_water": {
+      "id": "usgs_nhd_water",
+      "name": "USGS National Hydrography Dataset & Water Services",
+      "category": "water",
+      "layers": [
+        "water",
+        "environment"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.usgs.gov/national-hydrography",
+      "relevance": "Lake Travis & Colorado River proximity, watershed boundaries, and gauge flows \u2014 supply context and a hard constraint for high-water uses.\n"
+    },
+    "fcc_bdc": {
+      "id": "fcc_bdc",
+      "name": "FCC National Broadband Map (Broadband Data Collection)",
+      "category": "broadband",
+      "layers": [
+        "broadband"
+      ],
+      "auth": "free_account",
+      "docs_url": "https://www.fcc.gov/BroadbandData/resources",
+      "relevance": "What internet (fiber? cable? fixed wireless?) actually reaches the parcel. A data center / office needs redundant high-capacity fiber; large parts of the Hill Country are still cable/DSL/fixed-wireless only.\n"
+    },
+    "nces_schools": {
+      "id": "nces_schools",
+      "name": "NCES / EDGE \u2014 Schools & Enrollment",
+      "category": "civic_services",
+      "layers": [
+        "education"
+      ],
+      "auth": "none",
+      "docs_url": "https://nces.ed.gov/programs/edge/",
+      "relevance": "Lake Travis ISD & Eanes ISD capacity. New rooftops trigger school demand; the dependency engine uses enrollment headroom to flag when a development \"needs a school.\"\n"
+    },
+    "hifld_civic": {
+      "id": "hifld_civic",
+      "name": "HIFLD Open \u2014 Public Safety & Health Facilities",
+      "category": "civic_services",
+      "layers": [
+        "safety",
+        "health"
+      ],
+      "auth": "none",
+      "docs_url": "https://hifld-geoplatform.hub.arcgis.com/",
+      "relevance": "Nearest fire station / ESD coverage, hospital beds, response-time gaps. Feeds the \"at what scale does this development require a new fire station\" threshold logic.\n"
+    },
+    "cms_hospitals": {
+      "id": "cms_hospitals",
+      "name": "CMS / HRSA Health Facility Data",
+      "category": "civic_services",
+      "layers": [
+        "health"
+      ],
+      "auth": "none",
+      "docs_url": "https://data.cms.gov/provider-data/",
+      "relevance": "Hospital capacity & service lines within the drive-time ring."
+    },
+    "tcad_parcels": {
+      "id": "tcad_parcels",
+      "name": "Travis County Parcels & Land Use (TNR GeoHub / TCAD)",
+      "category": "land_parcels",
+      "layers": [
+        "parcel",
+        "demand",
+        "entitlement"
+      ],
+      "auth": "none",
+      "docs_url": "https://tnr-traviscountytx.hub.arcgis.com/",
+      "relevance": "The parcel layer for the testbed \u2014 \"if I buy THIS plot.\" Gives boundary, acreage, current land use and valuation. National parcel coverage is fragmented/county-by-county, so we model the county-portal pattern here and generalize the connector later.\n"
+    },
+    "overture_buildings": {
+      "id": "overture_buildings",
+      "name": "Overture Maps / Microsoft Building Footprints",
+      "category": "buildings",
+      "layers": [
+        "demand",
+        "competition"
+      ],
+      "auth": "none",
+      "docs_url": "https://docs.overturemaps.org/",
+      "relevance": "Actual rooftop count & built density \u2014 the truest proxy for \"how many customers physically live here.\" In low-density Hill Country this number is the crux of the Costco question.\n"
+    },
+    "fema_nfhl": {
+      "id": "fema_nfhl",
+      "name": "FEMA National Flood Hazard Layer",
+      "category": "environment",
+      "layers": [
+        "environment",
+        "parcel"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.fema.gov/flood-maps/national-flood-hazard-layer",
+      "relevance": "Hill Country = flash-flood country (Flash Flood Alley). Floodway/100-yr zones are a hard developability constraint on any parcel near a creek or the lake.\n"
+    },
+    "usgs_3dep": {
+      "id": "usgs_3dep",
+      "name": "USGS 3DEP Elevation / The National Map",
+      "category": "environment",
+      "layers": [
+        "environment",
+        "parcel"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.usgs.gov/3d-elevation-program",
+      "relevance": "Slope/terrain drives grading cost. Steep Hill Country lots can be far more expensive to develop than flat ones of the same price.\n"
+    },
+    "usfws_critical_habitat": {
+      "id": "usfws_critical_habitat",
+      "name": "USFWS Critical Habitat & Endangered Species (ECOS)",
+      "category": "ecology",
+      "layers": [
+        "habitat"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.fws.gov/program/critical-habitat",
+      "relevance": "The Hill Country is designated habitat for the endangered golden-cheeked warbler (and historically black-capped vireo). Clearing oak-juniper for a subdivision or data center can trigger Endangered Species Act review \u2014 a first-order \"should we\" constraint, not just a cost.\n"
+    },
+    "padus_protected_areas": {
+      "id": "padus_protected_areas",
+      "name": "PAD-US Protected Areas Database",
+      "category": "ecology",
+      "layers": [
+        "habitat"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview",
+      "relevance": "The Balcones Canyonlands Preserve sits in/around 78738 \u2014 large tracts are already off-limits by conservation agreement. Defines what is permanently undevelopable and what abuts sensitive land.\n"
+    },
+    "nlcd_landcover": {
+      "id": "nlcd_landcover",
+      "name": "NLCD Land Cover, Impervious Surface & Tree Canopy",
+      "category": "ecology",
+      "layers": [
+        "land_cover",
+        "carbon",
+        "water"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.mrlc.gov/data",
+      "relevance": "Quantifies what's there now (oak-juniper woodland vs. cleared) and the impervious-cover increase a development would add \u2014 central to both carbon (canopy loss) and water-quality impact over the aquifer.\n"
+    },
+    "gbif_biodiversity": {
+      "id": "gbif_biodiversity",
+      "name": "GBIF Species Occurrence",
+      "category": "ecology",
+      "layers": [
+        "habitat"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.gbif.org/developer/summary",
+      "relevance": "Crowdsourced species observations near a parcel \u2014 a biodiversity signal that complements the regulatory habitat layers (what actually lives here, not just what's legally designated).\n"
+    },
+    "tceq_edwards_aquifer": {
+      "id": "tceq_edwards_aquifer",
+      "name": "Edwards Aquifer Recharge/Contributing Zones (TCEQ)",
+      "category": "ecology",
+      "layers": [
+        "water",
+        "land_cover",
+        "environment"
+      ],
+      "auth": "none",
+      "docs_url": "https://www.tceq.texas.gov/permitting/eapp",
+      "relevance": "Parts of the area drain to the Edwards Aquifer. Development over the recharge/contributing zone faces strict impervious-cover and water-quality rules (TCEQ Edwards Rules) \u2014 a hard, locally famous \"should/can we\" gate.\n"
+    }
+  },
+  "layers": {
+    "demand": {
+      "label": "Demand / Customers",
+      "provides": "rooftops, households, daytime population, spending power",
+      "measured_by": [
+        "census_acs5",
+        "census_cbp_zbp",
+        "lehd_lodes",
+        "overture_buildings"
+      ],
+      "capacity_unit": "households_in_drive_time"
+    },
+    "competition": {
+      "label": "Competition / Saturation",
+      "provides": "existing same-category supply",
+      "measured_by": [
+        "osm_overpass",
+        "census_cbp_zbp"
+      ],
+      "capacity_unit": "competitors_in_trade_area"
+    },
+    "transportation": {
+      "label": "Transportation / Access",
+      "provides": "drive-time reach, traffic exposure",
+      "measured_by": [
+        "openrouteservice",
+        "ntad_roads",
+        "osm_overpass"
+      ],
+      "capacity_unit": "minutes_drive_time"
+    },
+    "power": {
+      "label": "Power",
+      "provides": "electricity capacity & price",
+      "measured_by": [
+        "eia_opendata",
+        "hifld_power",
+        "ercot_grid",
+        "nrel_resource"
+      ],
+      "capacity_unit": "MW_available_at_nearest_substation"
+    },
+    "water": {
+      "label": "Water & Wastewater",
+      "provides": "potable supply, discharge capacity",
+      "measured_by": [
+        "epa_sdwis_echo",
+        "usgs_nhd_water"
+      ],
+      "capacity_unit": "MGD_available"
+    },
+    "broadband": {
+      "label": "Broadband",
+      "provides": "internet capacity & redundancy",
+      "measured_by": [
+        "fcc_bdc"
+      ],
+      "capacity_unit": "max_advertised_gbps"
+    },
+    "education": {
+      "label": "Schools",
+      "provides": "K-12 capacity",
+      "measured_by": [
+        "nces_schools",
+        "census_acs5"
+      ],
+      "capacity_unit": "enrollment_headroom"
+    },
+    "health": {
+      "label": "Health Care",
+      "provides": "hospital/clinic capacity",
+      "measured_by": [
+        "hifld_civic",
+        "cms_hospitals"
+      ],
+      "capacity_unit": "beds_per_1000"
+    },
+    "safety": {
+      "label": "Fire / EMS / Police",
+      "provides": "emergency response coverage",
+      "measured_by": [
+        "hifld_civic"
+      ],
+      "capacity_unit": "response_time_minutes"
+    },
+    "parcel": {
+      "label": "Land / Parcel Feasibility",
+      "provides": "buildable land, zoning, hazard constraints",
+      "measured_by": [
+        "tcad_parcels",
+        "fema_nfhl",
+        "usgs_3dep"
+      ],
+      "capacity_unit": "buildable_acres"
+    },
+    "entitlement": {
+      "label": "Zoning / Entitlement",
+      "provides": "legal permission to build a use at a density",
+      "measured_by": [
+        "tcad_parcels"
+      ],
+      "capacity_unit": "allowed_density"
+    },
+    "absorption": {
+      "label": "Market Absorption (demand-to-build)",
+      "provides": "confidence that built homes/space will sell or lease quickly",
+      "measured_by": [
+        "census_acs5",
+        "bls_qcew",
+        "lehd_lodes",
+        "census_cbp_zbp"
+      ],
+      "capacity_unit": "years_of_supply"
+    },
+    "habitat": {
+      "label": "Habitat & Biodiversity",
+      "provides": "ecological value at risk from development",
+      "measured_by": [
+        "usfws_critical_habitat",
+        "padus_protected_areas",
+        "gbif_biodiversity"
+      ],
+      "capacity_unit": "habitat_sensitivity"
+    },
+    "land_cover": {
+      "label": "Land Cover & Impervious Surface",
+      "provides": "natural land lost and runoff added by development",
+      "measured_by": [
+        "nlcd_landcover",
+        "tceq_edwards_aquifer"
+      ],
+      "capacity_unit": "impervious_increase_pct"
+    },
+    "carbon": {
+      "label": "Carbon",
+      "provides": "emissions from construction, operation, and canopy/soil loss",
+      "measured_by": [
+        "nlcd_landcover",
+        "eia_opendata"
+      ],
+      "capacity_unit": "tonnes_CO2e_per_year"
+    },
+    "environment": {
+      "label": "Environment / Hazards",
+      "provides": "flood/terrain/climate constraints",
+      "measured_by": [
+        "fema_nfhl",
+        "usgs_3dep",
+        "usgs_nhd_water"
+      ],
+      "capacity_unit": "constraint_score"
+    }
+  },
+  "land_uses": {
+    "warehouse_club": {
+      "label": "Warehouse Club (Costco-type)",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 100000,
+          "drive_time_min": 15
+        },
+        "competition": {
+          "max_same_brand_in_trade_area": 0
+        },
+        "transportation": {
+          "near_highway_aadt": 40000
+        },
+        "parcel": {
+          "min_buildable_acres": 15
+        }
+      },
+      "induces": {
+        "transportation": {
+          "note": "major traffic generator; may require signal/turn-lane upgrades"
+        }
+      },
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "high",
+        "carbon": "medium",
+        "traffic": "high"
+      },
+      "notes": "Costco's own rule of thumb is a large rooftop base within a short drive and a big flat pad. 78738 likely fails the drive-time household count, not income.\n"
+    },
+    "fast_casual": {
+      "label": "Fast-Casual Restaurant (Chipotle-type)",
+      "requires": {
+        "demand": {
+          "min_daytime_population": 20000,
+          "drive_time_min": 10
+        },
+        "transportation": {
+          "near_arterial_aadt": 20000
+        },
+        "parcel": {
+          "min_buildable_acres": 0.7
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "medium"
+      },
+      "notes": "Drafts off daytime/lunch population and car traffic more than nighttime rooftops \u2014 hence why an office node or retail anchor matters.\n"
+    },
+    "data_center": {
+      "label": "Data Center",
+      "requires": {
+        "power": {
+          "min_MW": 20,
+          "prefer_substation_within_km": 5
+        },
+        "water": {
+          "min_MGD": 1.0,
+          "note": "for evaporative cooling; air-cooled relaxes this"
+        },
+        "broadband": {
+          "min_redundant_fiber_routes": 2,
+          "min_gbps": 100
+        },
+        "parcel": {
+          "min_buildable_acres": 10,
+          "prefer_flood_zone": "none"
+        },
+        "environment": {
+          "prefer_low_slope": true
+        }
+      },
+      "induces": {
+        "safety": {
+          "trigger": "hazmat/electrical load may raise ESD/fire requirements"
+        },
+        "power": {
+          "trigger": ">50MW load typically forces transmission upgrade / ERCOT interconnection study"
+        }
+      },
+      "impacts": {
+        "habitat": "medium",
+        "land_cover": "high",
+        "carbon": "high",
+        "water_stress": "high",
+        "traffic": "low"
+      },
+      "notes": "The flagship dependency example. Power + water + fiber are the gating trio; ERCOT interconnection queue position determines real-world timeline. Its high carbon + water impacts make it the sharpest \"should we?\" case.\n"
+    },
+    "residential_subdivision": {
+      "label": "Residential Subdivision (housing-developer lens)",
+      "requires": {
+        "water": {
+          "min_MGD_per_1000_homes": 0.3
+        },
+        "power": {
+          "distribution_capacity": true
+        },
+        "transportation": {
+          "road_access": true
+        },
+        "parcel": {
+          "min_buildable_acres": 5,
+          "prefer_flood_zone": "none"
+        },
+        "entitlement": {
+          "zoning_allows_residential": true
+        }
+      },
+      "demand_signals": {
+        "absorption": {
+          "max_years_of_supply": 2.0,
+          "note": "hot market: homes sell fast"
+        },
+        "jobs": {
+          "layer": "demand",
+          "signal": "nearby_job_growth"
+        },
+        "amenities": {
+          "signal": "retail / schools / services already present nearby"
+        },
+        "price": {
+          "signal": "achievable price > land + infra + construction cost"
+        }
+      },
+      "induces": {
+        "education": {
+          "trigger_per_homes": 1000,
+          "note": "~0.5 students/home; flags school headroom"
+        },
+        "safety": {
+          "trigger_per_homes": 5000,
+          "note": "may justify new fire/EMS station"
+        },
+        "health": {
+          "trigger_per_homes": 20000,
+          "note": "supports an urgent-care / clinic"
+        },
+        "transportation": {
+          "note": "trip generation may require road widening"
+        }
+      },
+      "impacts": {
+        "habitat": "high",
+        "land_cover": "high",
+        "carbon": "high",
+        "water_stress": "medium",
+        "traffic": "medium"
+      },
+      "notes": "The canonical SimCity feedback loop AND the chicken-and-egg crux: rooftops create the demand that makes retail viable \u2014 but developers build rooftops only when demand signals (jobs, amenities, absorption) are already present. When the amenity they're waiting for is itself waiting for rooftops, you get a standoff. See `enabling_edges` below and `simy standoffs`.\n"
+    }
+  },
+  "actor_uses": {
+    "employment_center": {
+      "label": "Employment Center (office / industrial jobs)",
+      "note": "A jobs anchor. Often the public-incentive lever that breaks a housing/retail standoff."
+    },
+    "broadband_buildout": {
+      "label": "Broadband Buildout (ISP investment)",
+      "note": "Private ISP capital expansion; gated by rooftop density, so itself part of standoffs."
+    }
+  },
+  "enabling_edges": [
+    {
+      "from": "residential_subdivision",
+      "to": "warehouse_club",
+      "via": "rooftops / household count in trade area",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "residential_subdivision",
+      "to": "fast_casual",
+      "via": "resident + daytime demand",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "warehouse_club",
+      "to": "residential_subdivision",
+      "via": "retail amenity raises home absorption & price",
+      "breaker_cost": "medium"
+    },
+    {
+      "from": "fast_casual",
+      "to": "residential_subdivision",
+      "via": "amenity raises home absorption",
+      "breaker_cost": "low"
+    },
+    {
+      "from": "employment_center",
+      "to": "residential_subdivision",
+      "via": "jobs create housing demand (absorption)",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "residential_subdivision",
+      "to": "employment_center",
+      "via": "labor pool attracts employers",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "broadband_buildout",
+      "to": "residential_subdivision",
+      "via": "service availability unblocks development",
+      "breaker_cost": "medium"
+    },
+    {
+      "from": "broadband_buildout",
+      "to": "data_center",
+      "via": "redundant fiber is a hard data-center gate",
+      "breaker_cost": "medium"
+    },
+    {
+      "from": "residential_subdivision",
+      "to": "broadband_buildout",
+      "via": "rooftop density makes ISP buildout profitable",
+      "breaker_cost": "medium"
+    }
+  ],
+  "stakeholders": {
+    "developer": {
+      "label": "Developer",
+      "question": "Will this make money?",
+      "pro_build": true,
+      "opposes_impacts": [],
+      "note": "Structurally pro-build; the real leaning is gated by market/absorption data (M1)."
+    },
+    "resident": {
+      "label": "Existing Resident",
+      "question": "Does this improve daily life without ruining the area?",
+      "amenity_seeker": true,
+      "opposes_impacts": [
+        "traffic",
+        "land_cover"
+      ],
+      "note": "Wants amenities and services nearby, but not the traffic and sprawl that come with them."
+    },
+    "environmentalist": {
+      "label": "Environmentalist",
+      "question": "What does this destroy or emit?",
+      "opposes_impacts": [
+        "habitat",
+        "land_cover",
+        "carbon",
+        "water_stress"
+      ],
+      "note": "Weighs habitat loss, impervious cover, carbon, and water stress against any built benefit."
+    },
+    "municipality": {
+      "label": "Municipality / Taxpayer",
+      "question": "Does the tax base cover the public services it triggers?",
+      "pro_build": true,
+      "opposes_structure": [
+        "induces"
+      ],
+      "note": "Welcomes tax base but bears the cost of every induced school, fire station, and road."
+    }
+  }
+}

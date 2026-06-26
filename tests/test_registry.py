@@ -112,6 +112,28 @@ def test_perspectives_cover_all_stakeholders(reg):
         assert v.leaning in {"favorable", "mixed", "opposed"}
 
 
+def test_web_model_json_in_sync():
+    """The committed web/model.json must match what the YAML compiles to."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    committed = root / "web" / "model.json"
+    if not committed.exists():
+        import pytest
+        pytest.skip("web/model.json not generated yet")
+
+    before = committed.read_text(encoding="utf-8")
+    subprocess.run([sys.executable, "tools/build_model_json.py"], cwd=root, check=True,
+                   capture_output=True)
+    after = committed.read_text(encoding="utf-8")
+    assert json.loads(before) == json.loads(after), (
+        "web/model.json is stale — run `python tools/build_model_json.py` and commit."
+    )
+
+
 def test_data_center_is_contested(reg):
     from simy_city.perspectives import contested, evaluate
 

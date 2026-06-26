@@ -4,8 +4,13 @@
 
 **A SimCity for the real world — built on public data, tended like a community garden.**
 
-> 🌱 **New here?** Open the visual landing page — [`web/index.html`](web/index.html) — for the
-> guided tour, the prior-art credits, and how to claim a plot in the garden.
+> 🗺️ **Try it:** the [**interactive explorer**](web/explore.html) — click a spot on the map,
+> drop a development (data center, Costco, Chipotle, housing), and watch the model check what it
+> needs, what it induces, the standoffs in the way, and whether it *should* be built. Runs entirely
+> in your browser on live OpenStreetMap data.
+> Once GitHub Pages is enabled it'll be live at **https://jodeit.github.io/simy_city/explore.html**.
+>
+> 🌱 **New here?** The [landing page](web/index.html) gives the guided tour and how to claim a plot.
 
 The name is a play on words: **SimCity** (the simulation) + **"my / our city"**
 — because this is meant to be tended by a community, not run by one owner. The
@@ -96,6 +101,16 @@ simy perspectives data_center     # "should we?" — leaning by stakeholder
 simy todo                         # connectors a contributor could build next
 ```
 
+**Run the web explorer locally:**
+
+```bash
+python tools/build_model_json.py          # compile the YAML model → web/model.js
+python -m http.server -d web 8000         # then open http://localhost:8000/explore.html
+```
+
+To publish it: in the repo's **Settings → Pages**, set *Source = GitHub Actions*. The included
+[`pages.yml`](.github/workflows/pages.yml) workflow rebuilds the model and deploys `web/` on every push to `main`.
+
 ## What's in the box now
 
 | Piece | File | What it does |
@@ -107,6 +122,8 @@ simy todo                         # connectors a contributor could build next
 | Stakeholder engine | `simy_city/perspectives.py` | scores "should we?" across competing POVs |
 | CLI explorer | `simy_city/cli.py` | `simy report / layer / use / standoffs / perspectives / todo / validate` |
 | Tests | `tests/test_registry.py` | CI guards the model |
+| Interactive explorer | `web/explore.html` | click-a-map demo: drop a use, see needs/standoffs/should-we, live OSM |
+| Model compiler | `tools/build_model_json.py` | YAML → `web/model.json`/`.js` (single source of truth for the viz) |
 | Landing page | `web/index.html` | visual tour for collaborators (GitHub Pages-ready) |
 | Prior art | `docs/prior-art.md` | the open-source giants we build on, credited |
 | Research doc | `docs/data-sources.md` | the public-data landscape, narrated |
