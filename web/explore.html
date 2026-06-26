@@ -99,6 +99,7 @@
   <aside id="panel">
     <div class="empty" id="empty">
       <h2>Would it work here?</h2>
+      <p><button class="ubtn" id="ctaTry">Try: Drop a Data center</button></p>
       <p>Pick a development up top (try <b>Data center</b>), then <kbd>click</kbd> a spot on the map.</p>
       <p>SIMyCity identifies the <b>actual parcel</b> (boundary + county record, where wired), then checks what the
         use <b>needs nearby</b>, what it would <b>induce</b>, the <b>standoffs</b> in the way, and whether stakeholders
@@ -648,7 +649,17 @@ function applyHash(){
   return false;
 }
 
-wireBYO(); loadBYO(); applyHash();
+function wireCTA(){
+  const b=document.getElementById('ctaTry');
+  if(!b) return;
+  b.onclick=()=>{
+    selectUse('data_center');
+    const p=document.querySelector('#empty p');
+    if(p) p.innerHTML='Now click on the map to drop the Data center and run the analysis.';
+  };
+}
+
+wireBYO(); loadBYO(); wireCTA(); applyHash();
 </script>
 </body>
 </html>
