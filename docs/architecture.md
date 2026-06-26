@@ -76,6 +76,19 @@ The output is a graph, which is both the explanation *and* the SimCity feedback
 loop: dropping a use changes the layers, which changes what *else* becomes
 viable nearby.
 
+### Standoff detector (`simy_city/standoffs.py`) — **built**
+Finds chicken-and-egg cycles in the `enabling_edges` graph among *absent* uses and
+reports the cheapest edge to break each. Runs on the model alone; at M1 it takes
+the set of uses already present at a location to filter to *actually stuck*
+standoffs. See `docs/feedback-loops.md`.
+
+### Stakeholder / perspectives engine (`simy_city/perspectives.py`) — **built**
+Scores a land use through every stakeholder lens (developer, resident,
+environmentalist, municipality) from each use's `impacts` profile, and flags when
+a use is **contested** — a real values trade-off. The "should we?" layer. At M2
+the qualitative severities are replaced by values measured from the ecology data
+sources. See `docs/stakeholders.md`.
+
 ### Scoring (`simy_city/score.py`) — **designed**
 Turns the graph into a succeed/fail scorecard with transparent, cited reasons.
 Every threshold in `layers.yaml` should eventually carry a planning-standard

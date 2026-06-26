@@ -4,13 +4,16 @@ From a data catalog to a working real-world SimCity. Each milestone is a usable
 artifact, not just scaffolding.
 
 ## ✅ M0 — Public-data source registry + research doc (this milestone)
-- 23 free datasets cataloged in `data_sources/registry.yaml`, each annotated with
-  access/auth/license and 78738 relevance.
-- SimCity-style service-layer + dependency model in `data_sources/layers.yaml`
-  (requires/induces edges for warehouse club, fast-casual, data center,
-  residential).
-- Validated loader + query API + CLI (`simy report/layer/use/todo/validate`).
-- Research doc (`docs/data-sources.md`), architecture, contribution model.
+- 28 free datasets cataloged in `data_sources/registry.yaml`, each annotated with
+  access/auth/license and 78738 relevance (now including ecology/impact sources:
+  USFWS habitat, PAD-US, NLCD, GBIF, TCEQ Edwards Aquifer).
+- SimCity-style model in `data_sources/layers.yaml`: service layers; land uses
+  with requires/induces edges; **enabling edges** (chicken-and-egg standoffs);
+  **impacts + stakeholders** (the "should we develop?" question).
+- Validated loader + query API + CLI
+  (`simy report/layer/use/standoffs/perspectives/todo/validate`).
+- Detectors: `standoffs.py` (feedback loops), `perspectives.py` (competing POVs).
+- Docs: data landscape, feedback loops, stakeholders, architecture, contribution.
 
 ## M1 — First connectors + a real trade area
 Make the data *move*, starting with the cheapest high-value sources:

@@ -29,6 +29,22 @@ follows a retail/office anchor with lunch traffic; 78738 needs that daytime node
 (e.g. the Hill Country Galleria area) to clear the bar, which narrows the viable
 parcels to a handful of corridors.
 
+## Q1c: "...and why aren't housing developers building the rooftops?"
+
+If rooftops are what bring retail, the next question is why developers haven't
+added them. A 78738 parcel can be buildable yet idle because the *demand signals*
+are split across a standoff (`simy standoffs`):
+
+- Developers want **amenities + jobs + fast absorption** before committing.
+- Retail/amenities want **rooftops** before committing.
+- Each waits on the other; nobody moves first.
+
+The model's cheapest break for the housing↔fast-casual loop is a single
+**fast-casual amenity anchor** (low cost) — versus seeding an **employment
+center** (high cost). That's an actionable lever, and exactly the kind of
+coordination problem a community (or a city incentive) can solve where no single
+private actor will. See `docs/feedback-loops.md`.
+
 ## Q2: "If I bought a plot and built a data center, would it succeed?"
 
 The model walks `data_center` `requires` → `induces`:
@@ -47,11 +63,30 @@ project dependency.
 **Expected verdict:** power + fiber are the gating pair here; water and ERCOT
 queue timing decide *scale and schedule* more than yes/no.
 
+## Q3: "Should the data center be built here at all?"
+
+Feasible and profitable is not the same as *should*. Through the stakeholder lens
+(`simy perspectives data_center`), 78738 makes the conflict vivid:
+
+| Stakeholder | Leaning | Why (78738) |
+|---|---|---|
+| Developer | favorable | cheap edge land, ERCOT power market |
+| Resident | opposed | traffic + loss of Hill Country character |
+| Environmentalist | opposed | high carbon + **water stress in a drought region** + clearing oak-juniper (golden-cheeked warbler habitat), often over the **Edwards Aquifer recharge zone** |
+| Municipality | mixed | tax base vs. induced services + utility upgrades |
+
+The model returns **CONTESTED** — the honest answer. The ecology sources
+(`usfws_critical_habitat`, `tceq_edwards_aquifer`, `nlcd_landcover`) are what will
+turn those qualitative leanings into measured ones at a specific parcel. See
+`docs/stakeholders.md`.
+
 ## Try the model surface today
 
 ```bash
-simy use warehouse_club   # the dependency profile behind Q1
-simy use data_center      # the dependency profile behind Q2
-simy layer power          # the sources that will answer the power gate
-simy report               # where the data is still thin
+simy use warehouse_club             # the dependency profile behind Q1
+simy standoffs                      # the housing/retail standoff behind Q1c
+simy use data_center                # the dependency profile behind Q2
+simy perspectives data_center       # the competing priorities behind Q3
+simy layer power                    # the sources that will answer the power gate
+simy report                         # where the data is still thin
 ```

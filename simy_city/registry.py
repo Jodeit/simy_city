@@ -80,6 +80,13 @@ class Registry:
     sources: list[Source]
     layers: dict[str, Layer]
     land_uses: dict
+    enabling_edges: list[dict] = field(default_factory=list)
+    actor_uses: dict = field(default_factory=dict)
+    stakeholders: dict = field(default_factory=dict)
+
+    def all_use_ids(self) -> set[str]:
+        """Land uses plus lightweight actor-uses referenced by enabling edges."""
+        return set(self.land_uses) | set(self.actor_uses)
 
     # ---- lookups -----------------------------------------------------------
     def get(self, source_id: str) -> Source:
@@ -160,6 +167,9 @@ def load_registry(data_dir: Path | str | None = None) -> Registry:
         sources=sources,
         layers=layers,
         land_uses=lay_doc.get("land_uses", {}),
+        enabling_edges=list(lay_doc.get("enabling_edges", []) or []),
+        actor_uses=lay_doc.get("actor_uses", {}) or {},
+        stakeholders=lay_doc.get("stakeholders", {}) or {},
     )
     _validate(reg)
     return reg
@@ -201,6 +211,13 @@ def _validate(reg: Registry) -> None:
         for lid in (body.get("induces") or {}):
             if lid not in known_layers:
                 errors.append(f"land_use '{use}': induces unknown layer '{lid}'")
+
+    # Enabling edges must reference known uses (land uses or actor uses).
+    known_uses = reg.all_use_ids()
+    for i, edge in enumerate(reg.enabling_edges):
+        for end in ("from", "to"):
+            if edge.get(end) not in known_uses:
+                errors.append(f"enabling_edges[{i}]: '{end}' references unknown use '{edge.get(end)}'")
 
     if errors:
         raise ValueError("registry validation failed:\n  - " + "\n  - ".join(errors))

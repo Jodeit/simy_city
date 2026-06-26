@@ -10,7 +10,7 @@
 #     connectors are missing.
 #   * `relevance_78738` captures the concrete west-Austin / Lake Travis testbed.
 #
-# Schema (see data_sources/schema.py for validation):
+# Schema (validated by simy_city/registry.py — run `simy validate`):
 #   id                 unique slug
 #   name               human name
 #   provider           org that publishes it
@@ -51,7 +51,8 @@ meta:
     - civic_services      # schools, hospitals, fire, police, EMS
     - land_parcels        # parcel geometry, ownership, valuation, zoning
     - buildings           # rooftop footprints / built density
-    - environment         # flood, terrain, climate, hazards
+    - environment         # flood, terrain, climate, hazards (developability)
+    - ecology             # habitat, biodiversity, land cover, carbon (impact of developing)
 
 sources:
 
@@ -60,7 +61,7 @@ sources:
     name: American Community Survey 5-Year Detailed Tables
     provider: U.S. Census Bureau
     category: demographics
-    layers: [demand, education, health]
+    layers: [demand, education, health, absorption]
     coverage: US (block group → nation)
     access:
       type: api
@@ -104,7 +105,7 @@ sources:
     name: County / ZIP Business Patterns (CBP / ZBP)
     provider: U.S. Census Bureau
     category: economy
-    layers: [demand, competition]
+    layers: [demand, competition, absorption]
     coverage: US (county & ZIP)
     access:
       type: api
@@ -125,7 +126,7 @@ sources:
     name: Quarterly Census of Employment & Wages
     provider: U.S. Bureau of Labor Statistics
     category: economy
-    layers: [demand]
+    layers: [demand, absorption]
     coverage: US (county/industry)
     access:
       type: api
@@ -146,7 +147,7 @@ sources:
     name: LEHD Origin-Destination Employment Statistics (LODES)
     provider: U.S. Census Bureau
     category: economy
-    layers: [demand, transportation]
+    layers: [demand, transportation, absorption]
     coverage: US (block-level jobs & commute flows)
     access:
       type: bulk_download
@@ -473,7 +474,7 @@ sources:
     name: Travis County Parcels & Land Use (TNR GeoHub / TCAD)
     provider: Travis County TNR GIS / Travis Central Appraisal District
     category: land_parcels
-    layers: [parcel, demand]
+    layers: [parcel, demand, entitlement]
     coverage: Travis County, TX (local testbed)
     access:
       type: rest_geojson
@@ -557,4 +558,119 @@ sources:
       Slope/terrain drives grading cost. Steep Hill Country lots can be far more
       expensive to develop than flat ones of the same price.
     docs_url: https://www.usgs.gov/3d-elevation-program
+    connector_status: none
+
+  # ---- ECOLOGY / IMPACT ("should we develop?") -------------------------------
+  # These measure the *cost of developing*, not the feasibility of it. They feed
+  # the environmentalist's voice in the stakeholder model (docs/stakeholders.md).
+  - id: usfws_critical_habitat
+    name: USFWS Critical Habitat & Endangered Species (ECOS)
+    provider: U.S. Fish & Wildlife Service
+    category: ecology
+    layers: [habitat]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://ecos.fws.gov/ecp/report/table/critical-habitat.html
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "ArcGIS fair use"
+    key_fields: [species, critical_habitat_polygon, listing_status]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: >
+      The Hill Country is designated habitat for the endangered golden-cheeked
+      warbler (and historically black-capped vireo). Clearing oak-juniper for a
+      subdivision or data center can trigger Endangered Species Act review — a
+      first-order "should we" constraint, not just a cost.
+    docs_url: https://www.fws.gov/program/critical-habitat
+    connector_status: none
+
+  - id: padus_protected_areas
+    name: PAD-US Protected Areas Database
+    provider: U.S. Geological Survey (GAP)
+    category: ecology
+    layers: [habitat]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-download
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "fair use"
+    key_fields: [protected_area, owner, gap_status, geometry]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: >
+      The Balcones Canyonlands Preserve sits in/around 78738 — large tracts are
+      already off-limits by conservation agreement. Defines what is permanently
+      undevelopable and what abuts sensitive land.
+    docs_url: https://www.usgs.gov/programs/gap-analysis-project/science/pad-us-data-overview
+    connector_status: none
+
+  - id: nlcd_landcover
+    name: NLCD Land Cover, Impervious Surface & Tree Canopy
+    provider: USGS / MRLC
+    category: ecology
+    layers: [land_cover, carbon, water]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://www.mrlc.gov/
+      auth: none
+      formats: [geotiff, wms]
+      rate_limit: "fair use"
+    key_fields: [land_cover_class, percent_impervious, percent_tree_canopy, change]
+    update_frequency: "~biennial"
+    license: Public domain
+    relevance_78738: >
+      Quantifies what's there now (oak-juniper woodland vs. cleared) and the
+      impervious-cover increase a development would add — central to both carbon
+      (canopy loss) and water-quality impact over the aquifer.
+    docs_url: https://www.mrlc.gov/data
+    connector_status: none
+
+  - id: gbif_biodiversity
+    name: GBIF Species Occurrence
+    provider: Global Biodiversity Information Facility
+    category: ecology
+    layers: [habitat]
+    coverage: Global
+    access:
+      type: api
+      base_url: https://api.gbif.org/v1/
+      auth: none
+      formats: [json]
+      rate_limit: "fair use"
+    key_fields: [species, occurrence_coordinates, observation_date]
+    update_frequency: continuous
+    license: "CC-BY / CC0 per dataset"
+    relevance_78738: >
+      Crowdsourced species observations near a parcel — a biodiversity signal that
+      complements the regulatory habitat layers (what actually lives here, not just
+      what's legally designated).
+    docs_url: https://www.gbif.org/developer/summary
+    connector_status: none
+
+  - id: tceq_edwards_aquifer
+    name: Edwards Aquifer Recharge/Contributing Zones (TCEQ)
+    provider: Texas Commission on Environmental Quality
+    category: ecology
+    layers: [water, land_cover, environment]
+    coverage: Central Texas (local testbed)
+    access:
+      type: rest_geojson
+      base_url: https://www.tceq.texas.gov/gis
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "fair use"
+    key_fields: [recharge_zone, contributing_zone, geometry]
+    update_frequency: periodic
+    license: Public (Texas)
+    relevance_78738: >
+      Parts of the area drain to the Edwards Aquifer. Development over the
+      recharge/contributing zone faces strict impervious-cover and water-quality
+      rules (TCEQ Edwards Rules) — a hard, locally famous "should/can we" gate.
+    docs_url: https://www.tceq.texas.gov/permitting/eapp
+    connector_status: none
     connector_status: none

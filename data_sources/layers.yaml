@@ -74,6 +74,40 @@ layers:
     measured_by: [tcad_parcels, fema_nfhl, usgs_3dep]
     capacity_unit: buildable_acres
 
+  entitlement:
+    label: Zoning / Entitlement
+    provides: legal permission to build a use at a density
+    measured_by: [tcad_parcels]   # land-use code is a weak proxy; true zoning is municipal (a known data gap)
+    capacity_unit: allowed_density
+
+  absorption:
+    label: Market Absorption (demand-to-build)
+    provides: confidence that built homes/space will sell or lease quickly
+    measured_by: [census_acs5, bls_qcew, lehd_lodes, census_cbp_zbp]
+    capacity_unit: years_of_supply   # lower = hotter market = developers invest
+
+  # ---- IMPACT layers: the *cost of developing* (the "should we?" question) ----
+  # Unlike `environment` (which gates whether you *can* build), these measure what
+  # building *destroys or emits*. Higher = worse. They give the environmentalist a
+  # quantified voice instead of a veto.
+  habitat:
+    label: Habitat & Biodiversity
+    provides: ecological value at risk from development
+    measured_by: [usfws_critical_habitat, padus_protected_areas, gbif_biodiversity]
+    capacity_unit: habitat_sensitivity   # protected/critical/biodiverse = high
+
+  land_cover:
+    label: Land Cover & Impervious Surface
+    provides: natural land lost and runoff added by development
+    measured_by: [nlcd_landcover, tceq_edwards_aquifer]
+    capacity_unit: impervious_increase_pct
+
+  carbon:
+    label: Carbon
+    provides: emissions from construction, operation, and canopy/soil loss
+    measured_by: [nlcd_landcover, eia_opendata]
+    capacity_unit: tonnes_CO2e_per_year
+
   environment:
     label: Environment / Hazards
     provides: flood/terrain/climate constraints
@@ -99,6 +133,11 @@ land_uses:
       parcel:        { min_buildable_acres: 15 }
     induces:
       transportation: { note: "major traffic generator; may require signal/turn-lane upgrades" }
+    impacts:            # cost of developing — see stakeholders / "should we?"
+      habitat: low
+      land_cover: high       # big-box + parking = lots of new impervious surface
+      carbon: medium         # construction + ongoing energy + induced car trips
+      traffic: high
     notes: >
       Costco's own rule of thumb is a large rooftop base within a short drive and
       a big flat pad. 78738 likely fails the drive-time household count, not income.
@@ -110,6 +149,11 @@ land_uses:
       transportation: { near_arterial_aadt: 20000 }
       parcel:        { min_buildable_acres: 0.7 }
     induces: {}
+    impacts:
+      habitat: low
+      land_cover: low
+      carbon: low
+      traffic: medium
     notes: >
       Drafts off daytime/lunch population and car traffic more than nighttime
       rooftops — hence why an office node or retail anchor matters.
@@ -125,22 +169,123 @@ land_uses:
     induces:
       safety:    { trigger: "hazmat/electrical load may raise ESD/fire requirements" }
       power:     { trigger: ">50MW load typically forces transmission upgrade / ERCOT interconnection study" }
+    impacts:
+      habitat: medium        # large clearing footprint, often on cheaper edge land
+      land_cover: high
+      carbon: high           # major continuous electricity draw + embodied carbon
+      water_stress: high     # evaporative cooling in a drought-prone region
+      traffic: low
     notes: >
       The flagship dependency example. Power + water + fiber are the gating
       trio; ERCOT interconnection queue position determines real-world timeline.
+      Its high carbon + water impacts make it the sharpest "should we?" case.
 
   residential_subdivision:
-    label: Residential Subdivision
+    label: Residential Subdivision (housing-developer lens)
+    # `requires` = supply-side feasibility (can it physically/legally be built?)
     requires:
       water:        { min_MGD_per_1000_homes: 0.3 }
       power:        { distribution_capacity: true }
       transportation: { road_access: true }
       parcel:       { min_buildable_acres: 5, prefer_flood_zone: none }
+      entitlement:  { zoning_allows_residential: true }
+    # `demand_signals` = why a developer chooses to invest *here, now*. A parcel
+    # can be perfectly buildable and still sit idle because absorption is weak.
+    demand_signals:
+      absorption: { max_years_of_supply: 2.0, note: "hot market: homes sell fast" }
+      jobs:       { layer: demand, signal: nearby_job_growth }
+      amenities:  { signal: "retail / schools / services already present nearby" }
+      price:      { signal: "achievable price > land + infra + construction cost" }
     induces:
       education: { trigger_per_homes: 1000, note: "~0.5 students/home; flags school headroom" }
       safety:    { trigger_per_homes: 5000, note: "may justify new fire/EMS station" }
       health:    { trigger_per_homes: 20000, note: "supports an urgent-care / clinic" }
       transportation: { note: "trip generation may require road widening" }
+    impacts:
+      habitat: high          # greenfield subdivisions clear the most oak-juniper
+      land_cover: high
+      carbon: high           # land-use change + per-capita suburban driving
+      water_stress: medium
+      traffic: medium
     notes: >
-      The canonical SimCity feedback loop: rooftops create the demand that makes
-      retail (above) viable, but also induce schools/fire/health needs at scale.
+      The canonical SimCity feedback loop AND the chicken-and-egg crux: rooftops
+      create the demand that makes retail viable — but developers build rooftops
+      only when demand signals (jobs, amenities, absorption) are already present.
+      When the amenity they're waiting for is itself waiting for rooftops, you get
+      a standoff. See `enabling_edges` below and `simy standoffs`.
+
+# -----------------------------------------------------------------------------
+# ENABLING EDGES — directed "X makes Y more viable" relationships between land
+# uses. These are what create chicken-and-egg standoffs: when a set of *absent*
+# uses forms a cycle, each is waiting on another and nobody moves first. The
+# standoff detector (simy_city/standoffs.py, `simy standoffs`) finds these cycles
+# and reports the breaker — the cheapest edge a public actor could subsidize to
+# unstick the loop.
+#
+#   from   the use whose presence/growth provides the signal
+#   to     the use that becomes more viable as a result
+#   via    the mechanism (the demand_signal or layer it satisfies)
+#   breaker_cost  rough relative cost for a public actor to supply `via` directly
+#                 (low/medium/high) — used to suggest where to break a standoff
+# -----------------------------------------------------------------------------
+enabling_edges:
+  - { from: residential_subdivision, to: warehouse_club, via: "rooftops / household count in trade area", breaker_cost: high }
+  - { from: residential_subdivision, to: fast_casual,    via: "resident + daytime demand", breaker_cost: high }
+  - { from: warehouse_club, to: residential_subdivision, via: "retail amenity raises home absorption & price", breaker_cost: medium }
+  - { from: fast_casual,    to: residential_subdivision, via: "amenity raises home absorption", breaker_cost: low }
+  - { from: employment_center, to: residential_subdivision, via: "jobs create housing demand (absorption)", breaker_cost: high }
+  - { from: residential_subdivision, to: employment_center, via: "labor pool attracts employers", breaker_cost: high }
+  - { from: broadband_buildout, to: residential_subdivision, via: "service availability unblocks development", breaker_cost: medium }
+  - { from: broadband_buildout, to: data_center, via: "redundant fiber is a hard data-center gate", breaker_cost: medium }
+  - { from: residential_subdivision, to: broadband_buildout, via: "rooftop density makes ISP buildout profitable", breaker_cost: medium }
+
+# Lightweight "actor" uses referenced by enabling_edges that aren't full
+# drop-on-a-parcel developments but matter for standoff reasoning. Kept minimal
+# on purpose; promote to full land_uses entries when we model them in depth.
+actor_uses:
+  employment_center:
+    label: Employment Center (office / industrial jobs)
+    note: "A jobs anchor. Often the public-incentive lever that breaks a housing/retail standoff."
+  broadband_buildout:
+    label: Broadband Buildout (ISP investment)
+    note: "Private ISP capital expansion; gated by rooftop density, so itself part of standoffs."
+
+# -----------------------------------------------------------------------------
+# STAKEHOLDERS — the "should we develop?" question has no single answer; it has
+# competing answers. Each stakeholder weighs the same parcel differently. The
+# perspectives engine (simy_city/perspectives.py, `simy perspectives <use>`)
+# scores a land use through every lens so the *tension* is explicit rather than
+# collapsed into one verdict. SIMyCity's job is to show the trade-off, not to
+# pick a winner.
+#
+#   opposes_impacts   impact dimensions (on a use's `impacts` block) this
+#                     stakeholder counts against the project; higher severity = worse
+#   opposes_structure structural costs: currently "induces" = each induced public
+#                     service is a burden this stakeholder bears
+#   pro_build         baseline lean toward building (gated by market data at M1)
+#   amenity_seeker    credits uses that are themselves amenities (retail/services)
+# -----------------------------------------------------------------------------
+stakeholders:
+  developer:
+    label: Developer
+    question: "Will this make money?"
+    pro_build: true
+    opposes_impacts: []
+    note: "Structurally pro-build; the real leaning is gated by market/absorption data (M1)."
+  resident:
+    label: Existing Resident
+    question: "Does this improve daily life without ruining the area?"
+    amenity_seeker: true
+    opposes_impacts: [traffic, land_cover]
+    note: "Wants amenities and services nearby, but not the traffic and sprawl that come with them."
+  environmentalist:
+    label: Environmentalist
+    question: "What does this destroy or emit?"
+    opposes_impacts: [habitat, land_cover, carbon, water_stress]
+    note: "Weighs habitat loss, impervious cover, carbon, and water stress against any built benefit."
+  municipality:
+    label: Municipality / Taxpayer
+    question: "Does the tax base cover the public services it triggers?"
+    pro_build: true
+    opposes_structure: [induces]
+    note: "Welcomes tax base but bears the cost of every induced school, fire station, and road."
