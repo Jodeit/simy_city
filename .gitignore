@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Data cache (public-API responses are cached locally, not committed)
+.cache/
+data_cache/
+*.parquet
+*.geoparquet
+
+# Secrets — API keys live in the environment, never the repo
+.env
+*.key
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,146 @@
+# simy_city — Service Layers & Dependency Model
+# -----------------------------------------------------------------------------
+# These are the SimCity-style "systems" a parcel/development draws on. The
+# registry tags each data source with the layer(s) it feeds. The dependency
+# engine (simy_city/depgraph.py) walks `requires` edges to answer:
+#   "If I put USE X on this parcel, what does it need, is it available nearby,
+#    and what second-order needs (schools/fire/etc.) does it induce, at what
+#    scale?"
+#
+# Each layer has:
+#   provides      what this layer supplies to a development
+#   measured_by   which registry source ids quantify supply near a parcel
+#   capacity_unit the unit we score headroom in
+# -----------------------------------------------------------------------------
+
+layers:
+  demand:
+    label: Demand / Customers
+    provides: rooftops, households, daytime population, spending power
+    measured_by: [census_acs5, census_cbp_zbp, lehd_lodes, overture_buildings]
+    capacity_unit: households_in_drive_time
+
+  competition:
+    label: Competition / Saturation
+    provides: existing same-category supply
+    measured_by: [osm_overpass, census_cbp_zbp]
+    capacity_unit: competitors_in_trade_area
+
+  transportation:
+    label: Transportation / Access
+    provides: drive-time reach, traffic exposure
+    measured_by: [openrouteservice, ntad_roads, osm_overpass]
+    capacity_unit: minutes_drive_time
+
+  power:
+    label: Power
+    provides: electricity capacity & price
+    measured_by: [eia_opendata, hifld_power, ercot_grid, nrel_resource]
+    capacity_unit: MW_available_at_nearest_substation
+
+  water:
+    label: Water & Wastewater
+    provides: potable supply, discharge capacity
+    measured_by: [epa_sdwis_echo, usgs_nhd_water]
+    capacity_unit: MGD_available   # million gallons/day
+
+  broadband:
+    label: Broadband
+    provides: internet capacity & redundancy
+    measured_by: [fcc_bdc]
+    capacity_unit: max_advertised_gbps
+
+  education:
+    label: Schools
+    provides: K-12 capacity
+    measured_by: [nces_schools, census_acs5]
+    capacity_unit: enrollment_headroom
+
+  health:
+    label: Health Care
+    provides: hospital/clinic capacity
+    measured_by: [hifld_civic, cms_hospitals]
+    capacity_unit: beds_per_1000
+
+  safety:
+    label: Fire / EMS / Police
+    provides: emergency response coverage
+    measured_by: [hifld_civic]
+    capacity_unit: response_time_minutes
+
+  parcel:
+    label: Land / Parcel Feasibility
+    provides: buildable land, zoning, hazard constraints
+    measured_by: [tcad_parcels, fema_nfhl, usgs_3dep]
+    capacity_unit: buildable_acres
+
+  environment:
+    label: Environment / Hazards
+    provides: flood/terrain/climate constraints
+    measured_by: [fema_nfhl, usgs_3dep, usgs_nhd_water]
+    capacity_unit: constraint_score
+
+# -----------------------------------------------------------------------------
+# Land uses we can "drop" on a parcel, SimCity-style, with their dependency
+# edges. `requires` = hard inputs. `induces` = second-order public-service
+# demand this use creates, with a rough trigger scale. These thresholds are
+# deliberately first-draft, sourced-where-possible, and meant to be refined by
+# contributors (each should eventually cite a planning standard).
+# -----------------------------------------------------------------------------
+
+land_uses:
+
+  warehouse_club:        # Costco-type
+    label: Warehouse Club (Costco-type)
+    requires:
+      demand:        { min_households_drive_time: 100000, drive_time_min: 15 }
+      competition:   { max_same_brand_in_trade_area: 0 }
+      transportation: { near_highway_aadt: 40000 }
+      parcel:        { min_buildable_acres: 15 }
+    induces:
+      transportation: { note: "major traffic generator; may require signal/turn-lane upgrades" }
+    notes: >
+      Costco's own rule of thumb is a large rooftop base within a short drive and
+      a big flat pad. 78738 likely fails the drive-time household count, not income.
+
+  fast_casual:           # Chipotle-type
+    label: Fast-Casual Restaurant (Chipotle-type)
+    requires:
+      demand:        { min_daytime_population: 20000, drive_time_min: 10 }
+      transportation: { near_arterial_aadt: 20000 }
+      parcel:        { min_buildable_acres: 0.7 }
+    induces: {}
+    notes: >
+      Drafts off daytime/lunch population and car traffic more than nighttime
+      rooftops — hence why an office node or retail anchor matters.
+
+  data_center:
+    label: Data Center
+    requires:
+      power:     { min_MW: 20, prefer_substation_within_km: 5 }
+      water:     { min_MGD: 1.0, note: "for evaporative cooling; air-cooled relaxes this" }
+      broadband: { min_redundant_fiber_routes: 2, min_gbps: 100 }
+      parcel:    { min_buildable_acres: 10, prefer_flood_zone: none }
+      environment: { prefer_low_slope: true }
+    induces:
+      safety:    { trigger: "hazmat/electrical load may raise ESD/fire requirements" }
+      power:     { trigger: ">50MW load typically forces transmission upgrade / ERCOT interconnection study" }
+    notes: >
+      The flagship dependency example. Power + water + fiber are the gating
+      trio; ERCOT interconnection queue position determines real-world timeline.
+
+  residential_subdivision:
+    label: Residential Subdivision
+    requires:
+      water:        { min_MGD_per_1000_homes: 0.3 }
+      power:        { distribution_capacity: true }
+      transportation: { road_access: true }
+      parcel:       { min_buildable_acres: 5, prefer_flood_zone: none }
+    induces:
+      education: { trigger_per_homes: 1000, note: "~0.5 students/home; flags school headroom" }
+      safety:    { trigger_per_homes: 5000, note: "may justify new fire/EMS station" }
+      health:    { trigger_per_homes: 20000, note: "supports an urgent-care / clinic" }
+      transportation: { note: "trip generation may require road widening" }
+    notes: >
+      The canonical SimCity feedback loop: rooftops create the demand that makes
+      retail (above) viable, but also induce schools/fire/health needs at scale.

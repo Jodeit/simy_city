@@ -1,0 +1,560 @@
+# simy_city — Public Data Source Registry
+# -----------------------------------------------------------------------------
+# This is the canonical, machine-readable catalog of public datasets the project
+# uses to model parcels and their infrastructure dependencies.
+#
+# Design goals:
+#   * Every entry is free / public (some require a free API key or account).
+#   * Each source is tagged with the SimCity-style "service layer(s)" it feeds,
+#     so the dependency engine and the contributor automation can discover which
+#     connectors are missing.
+#   * `relevance_78738` captures the concrete west-Austin / Lake Travis testbed.
+#
+# Schema (see data_sources/schema.py for validation):
+#   id                 unique slug
+#   name               human name
+#   provider           org that publishes it
+#   category           one of the high-level buckets below
+#   layers             which SimCity service layers this feeds (see layers.yaml)
+#   coverage           geographic extent
+#   access:
+#     type             api | rest_geojson | wms | wfs | bulk_download | scrape
+#     base_url         endpoint or download root
+#     auth             none | free_api_key | free_account | registration
+#     formats          [json, csv, geojson, shapefile, ...]
+#     rate_limit       notes / limits if known
+#   key_fields         the columns/attributes we actually consume
+#   update_frequency   how often the source refreshes
+#   license            usage terms
+#   relevance_78738    why it matters for the Bee Cave / Lake Travis testbed
+#   docs_url           where a contributor learns the API
+#   connector_status   none | stub | partial | done  (tracked by automation)
+# -----------------------------------------------------------------------------
+
+meta:
+  version: 0.1.0
+  testbed_zip: "78738"
+  testbed_note: >
+    78738 = Bee Cave / Lakeway / Lake Travis, Travis County, TX. Affluent but
+    low rooftop-density Hill Country in the Austin MSA, served by the ERCOT grid.
+    Good stress test for "why no Costco/Chipotle yet" (it's drive-time trade-area
+    and rooftop counts, not income) and for data-center siting (ERCOT power +
+    water scarcity + flood/terrain constraints).
+  categories:
+    - demographics        # who lives/works here, demand
+    - retail_poi          # existing businesses & competitors
+    - economy             # jobs, business counts, wages
+    - power               # generation, grid, interconnection
+    - water               # supply, utilities, hydrology
+    - broadband           # internet availability
+    - transportation      # roads, drive-time trade areas
+    - civic_services      # schools, hospitals, fire, police, EMS
+    - land_parcels        # parcel geometry, ownership, valuation, zoning
+    - buildings           # rooftop footprints / built density
+    - environment         # flood, terrain, climate, hazards
+
+sources:
+
+  # ---- DEMOGRAPHICS / DEMAND -------------------------------------------------
+  - id: census_acs5
+    name: American Community Survey 5-Year Detailed Tables
+    provider: U.S. Census Bureau
+    category: demographics
+    layers: [demand, education, health]
+    coverage: US (block group → nation)
+    access:
+      type: api
+      base_url: https://api.census.gov/data/2023/acs/acs5
+      auth: free_api_key
+      formats: [json]
+      rate_limit: "500 calls/day without key; effectively unlimited with free key"
+    key_fields: [population, median_household_income, age_distribution, households, housing_units, commute, vehicles_available]
+    update_frequency: annual (5-yr rolling)
+    license: Public domain (U.S. Government work)
+    relevance_78738: >
+      The core demand signal. Costco/Chipotle siting models run on rooftops and
+      households within a drive-time ring, plus income and household size — all
+      here at block-group resolution.
+    docs_url: https://www.census.gov/data/developers/data-sets/acs-5year.html
+    connector_status: none
+
+  - id: census_tiger
+    name: TIGER/Line Shapefiles & TIGERweb
+    provider: U.S. Census Bureau
+    category: demographics
+    layers: [demand]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://tigerweb.geo.census.gov/arcgis/rest/services
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "fair use"
+    key_fields: [tract, block_group, zcta, place, county, geometry]
+    update_frequency: annual
+    license: Public domain
+    relevance_78738: >
+      Provides the geometry (ZCTA 78738, tracts, county) we join every other
+      dataset onto.
+    docs_url: https://www.census.gov/data/developers/data-sets/TIGERweb-map-service.html
+    connector_status: none
+
+  # ---- ECONOMY ---------------------------------------------------------------
+  - id: census_cbp_zbp
+    name: County / ZIP Business Patterns (CBP / ZBP)
+    provider: U.S. Census Bureau
+    category: economy
+    layers: [demand, competition]
+    coverage: US (county & ZIP)
+    access:
+      type: api
+      base_url: https://api.census.gov/data/2022/cbp
+      auth: free_api_key
+      formats: [json]
+      rate_limit: "with free key, effectively unlimited"
+    key_fields: [naics, establishments, employment, annual_payroll]
+    update_frequency: annual
+    license: Public domain
+    relevance_78738: >
+      Counts of establishments by industry (NAICS) per ZIP — tells us how
+      saturated grocery/warehouse-club/fast-casual already is around 78738.
+    docs_url: https://www.census.gov/data/developers/data-sets/cbp-nonemp-zbp.html
+    connector_status: none
+
+  - id: bls_qcew
+    name: Quarterly Census of Employment & Wages
+    provider: U.S. Bureau of Labor Statistics
+    category: economy
+    layers: [demand]
+    coverage: US (county/industry)
+    access:
+      type: api
+      base_url: https://data.bls.gov/cew/data/api
+      auth: none
+      formats: [csv, json]
+      rate_limit: "fair use; registration raises BLS API limits"
+    key_fields: [industry, employment, average_weekly_wage, establishment_count]
+    update_frequency: quarterly
+    license: Public domain
+    relevance_78738: >
+      Daytime employment & wage base — matters for lunch-traffic businesses
+      (Chipotle) more than residential population alone.
+    docs_url: https://www.bls.gov/cew/additional-resources/open-data/home.htm
+    connector_status: none
+
+  - id: lehd_lodes
+    name: LEHD Origin-Destination Employment Statistics (LODES)
+    provider: U.S. Census Bureau
+    category: economy
+    layers: [demand, transportation]
+    coverage: US (block-level jobs & commute flows)
+    access:
+      type: bulk_download
+      base_url: https://lehd.ces.census.gov/data/lodes/
+      auth: none
+      formats: [csv]
+      rate_limit: "static files"
+    key_fields: [jobs_by_block, home_to_work_flows]
+    update_frequency: annual
+    license: Public domain
+    relevance_78738: >
+      Where 78738 residents actually work (mostly into Austin) and who commutes
+      in — drives the "trade area is bigger than the rooftops" insight.
+    docs_url: https://lehd.ces.census.gov/data/
+    connector_status: none
+
+  # ---- RETAIL / POI / COMPETITION -------------------------------------------
+  - id: osm_overpass
+    name: OpenStreetMap (Overpass API)
+    provider: OpenStreetMap contributors
+    category: retail_poi
+    layers: [competition, demand, transportation, education, health, safety]
+    coverage: Global
+    access:
+      type: api
+      base_url: https://overpass-api.de/api/interpreter
+      auth: none
+      formats: [json, xml]
+      rate_limit: "shared public instance; self-host for heavy use"
+    key_fields: [amenity, shop, brand, name, geometry, highway, building]
+    update_frequency: continuous
+    license: ODbL (attribution + share-alike)
+    relevance_78738: >
+      The single most useful free POI layer. Lets us locate the *existing*
+      Costco (Cedar Park / Southwest Austin), Chipotles, grocery stores, schools,
+      fire stations, and the road network — all in one queryable source.
+    docs_url: https://wiki.openstreetmap.org/wiki/Overpass_API
+    connector_status: none
+
+  - id: nominatim
+    name: Nominatim Geocoding
+    provider: OpenStreetMap
+    category: retail_poi
+    layers: [demand]
+    coverage: Global
+    access:
+      type: api
+      base_url: https://nominatim.openstreetmap.org/search
+      auth: none
+      formats: [json]
+      rate_limit: "1 req/sec on public instance; self-host for batch"
+    key_fields: [lat, lon, address, bounding_box]
+    update_frequency: continuous
+    license: ODbL
+    relevance_78738: "Turns a street address or parcel into a coordinate to anchor analysis."
+    docs_url: https://nominatim.org/release-docs/latest/api/Search/
+    connector_status: none
+
+  # ---- TRANSPORTATION / DRIVE-TIME ------------------------------------------
+  - id: openrouteservice
+    name: openrouteservice (isochrones & routing)
+    provider: HeiGIT / OpenStreetMap
+    category: transportation
+    layers: [transportation, demand, competition]
+    coverage: Global
+    access:
+      type: api
+      base_url: https://api.openrouteservice.org
+      auth: free_api_key
+      formats: [geojson]
+      rate_limit: "free tier ~2,000 isochrone calls/day; self-host OSRM/Valhalla for unlimited"
+    key_fields: [isochrone_polygon, drive_time, distance_matrix]
+    update_frequency: continuous (rides on OSM)
+    license: "ORS terms; underlying data ODbL"
+    relevance_78738: >
+      THE key to retail siting. A Costco needs ~X households inside a 10-15 min
+      drive. Hill Country roads (few arterials, lake barriers) make 78738's
+      drive-time trade area much smaller than its radius suggests — likely the
+      real reason there's no warehouse club yet.
+    docs_url: https://openrouteservice.org/dev/#/api-docs
+    connector_status: none
+
+  - id: ntad_roads
+    name: National Transportation Atlas Database (NTAD)
+    provider: U.S. DOT / Bureau of Transportation Statistics
+    category: transportation
+    layers: [transportation]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://geodata.bts.gov/
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "fair use"
+    key_fields: [road_class, aadt_traffic_counts, geometry]
+    update_frequency: annual
+    license: Public domain
+    relevance_78738: >
+      Traffic counts (AADT) on TX-71 / RR 620 / Bee Cave Rd — retailers care a
+      lot about cars-past-the-door.
+    docs_url: https://www.bts.gov/ntad
+    connector_status: none
+
+  # ---- POWER -----------------------------------------------------------------
+  - id: eia_opendata
+    name: EIA Open Data API v2
+    provider: U.S. Energy Information Administration
+    category: power
+    layers: [power]
+    coverage: US
+    access:
+      type: api
+      base_url: https://api.eia.gov/v2/
+      auth: free_api_key
+      formats: [json, xml]
+      rate_limit: "generous; key required"
+    key_fields: [operating_generator_capacity, plant_fuel, retail_price, generation]
+    update_frequency: monthly/annual
+    license: Public domain
+    relevance_78738: >
+      Generation inventory & retail electricity price — first-order input for the
+      data-center example (is there spare generation in the region, what does
+      power cost).
+    docs_url: https://www.eia.gov/opendata/documentation.php
+    connector_status: none
+
+  - id: hifld_power
+    name: HIFLD Open — Energy Infrastructure (plants, substations, transmission)
+    provider: DHS / Homeland Infrastructure Foundation-Level Data
+    category: power
+    layers: [power]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://services.arcgis.com/  # HIFLD Open feature services
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "ArcGIS fair use"
+    key_fields: [power_plant, substation, transmission_line, voltage, capacity_mw]
+    update_frequency: periodic
+    license: Public (some layers attribution)
+    relevance_78738: >
+      Locates the nearest substations & transmission lines. A data center can't
+      just "plug in" — proximity to high-voltage capacity is decisive and this
+      is the geospatial layer for it.
+    docs_url: https://hifld-geoplatform.hub.arcgis.com/
+    connector_status: none
+
+  - id: ercot_grid
+    name: ERCOT Public Reports & Interconnection Queue
+    provider: Electric Reliability Council of Texas
+    category: power
+    layers: [power]
+    coverage: Texas (ERCOT region)
+    access:
+      type: bulk_download
+      base_url: https://www.ercot.com/mp/data-products
+      auth: free_account
+      formats: [csv, xml, zip]
+      rate_limit: "MIS public reports; some require free account"
+    key_fields: [interconnection_queue, system_load, locational_capacity, generation_mix]
+    update_frequency: daily–monthly
+    license: Public (ERCOT terms)
+    relevance_78738: >
+      78738 is inside ERCOT. The interconnection queue shows where large new
+      loads (data centers) and generators are already lining up — directly
+      answers "can the grid here absorb a 100MW data center, and at what scale of
+      upgrade." Texas-specific superpower for this testbed.
+    docs_url: https://www.ercot.com/gridinfo
+    connector_status: none
+
+  - id: nrel_resource
+    name: NREL Renewable Resource & Utility Rate APIs
+    provider: National Renewable Energy Laboratory
+    category: power
+    layers: [power, environment]
+    coverage: US
+    access:
+      type: api
+      base_url: https://developer.nrel.gov/api/
+      auth: free_api_key
+      formats: [json]
+      rate_limit: "free key; ~1,000 req/hr"
+    key_fields: [solar_resource, utility_rates, utility_company]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: "Solar resource & local utility rate (which utility serves the parcel, $/kWh)."
+    docs_url: https://developer.nrel.gov/docs/
+    connector_status: none
+
+  # ---- WATER -----------------------------------------------------------------
+  - id: epa_sdwis_echo
+    name: EPA SDWIS / ECHO (public water systems & discharges)
+    provider: U.S. Environmental Protection Agency
+    category: water
+    layers: [water]
+    coverage: US
+    access:
+      type: api
+      base_url: https://echo.epa.gov/tools/web-services
+      auth: none
+      formats: [json, csv]
+      rate_limit: "fair use"
+    key_fields: [public_water_system, population_served, source_type, npdes_discharge]
+    update_frequency: quarterly
+    license: Public domain
+    relevance_78738: >
+      Which water system serves the parcel and its capacity/population served.
+      Critical for water-hungry uses (data-center cooling, manufacturing) in a
+      drought-prone Hill Country region.
+    docs_url: https://echo.epa.gov/tools/web-services
+    connector_status: none
+
+  - id: usgs_nhd_water
+    name: USGS National Hydrography Dataset & Water Services
+    provider: U.S. Geological Survey
+    category: water
+    layers: [water, environment]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://hydro.nationalmap.gov/arcgis/rest/services
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "fair use"
+    key_fields: [streams, water_bodies, watersheds, stream_gauges, flow]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: >
+      Lake Travis & Colorado River proximity, watershed boundaries, and gauge
+      flows — supply context and a hard constraint for high-water uses.
+    docs_url: https://www.usgs.gov/national-hydrography
+    connector_status: none
+
+  # ---- BROADBAND -------------------------------------------------------------
+  - id: fcc_bdc
+    name: FCC National Broadband Map (Broadband Data Collection)
+    provider: Federal Communications Commission
+    category: broadband
+    layers: [broadband]
+    coverage: US
+    access:
+      type: api
+      base_url: https://broadbandmap.fcc.gov/  # Public Data API + bulk download
+      auth: free_account            # API token via "Manage API Access"
+      formats: [json, csv, shapefile, geopackage]
+      rate_limit: "token-based; bulk snapshots also downloadable"
+    key_fields: [provider, technology, max_advertised_down, max_advertised_up, location_coverage]
+    update_frequency: semiannual (Dec/Jun snapshots)
+    license: Public
+    relevance_78738: >
+      What internet (fiber? cable? fixed wireless?) actually reaches the parcel.
+      A data center / office needs redundant high-capacity fiber; large parts of
+      the Hill Country are still cable/DSL/fixed-wireless only.
+    docs_url: https://www.fcc.gov/BroadbandData/resources
+    connector_status: none
+
+  # ---- CIVIC SERVICES --------------------------------------------------------
+  - id: nces_schools
+    name: NCES / EDGE — Schools & Enrollment
+    provider: National Center for Education Statistics
+    category: civic_services
+    layers: [education]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://nces.ed.gov/programs/edge/Geographic/SchoolLocations
+      auth: none
+      formats: [geojson, shapefile, csv]
+      rate_limit: "fair use"
+    key_fields: [school, district, enrollment, grade_range, geometry]
+    update_frequency: annual
+    license: Public domain
+    relevance_78738: >
+      Lake Travis ISD & Eanes ISD capacity. New rooftops trigger school demand;
+      the dependency engine uses enrollment headroom to flag when a development
+      "needs a school."
+    docs_url: https://nces.ed.gov/programs/edge/
+    connector_status: none
+
+  - id: hifld_civic
+    name: HIFLD Open — Public Safety & Health Facilities
+    provider: DHS / HIFLD
+    category: civic_services
+    layers: [safety, health]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://hifld-geoplatform.hub.arcgis.com/
+      auth: none
+      formats: [geojson, shapefile]
+      rate_limit: "ArcGIS fair use"
+    key_fields: [fire_station, ems, police, hospital, urgent_care, beds]
+    update_frequency: periodic
+    license: Public (attribution)
+    relevance_78738: >
+      Nearest fire station / ESD coverage, hospital beds, response-time gaps.
+      Feeds the "at what scale does this development require a new fire station"
+      threshold logic.
+    docs_url: https://hifld-geoplatform.hub.arcgis.com/
+    connector_status: none
+
+  - id: cms_hospitals
+    name: CMS / HRSA Health Facility Data
+    provider: Centers for Medicare & Medicaid Services / HRSA
+    category: civic_services
+    layers: [health]
+    coverage: US
+    access:
+      type: api
+      base_url: https://data.cms.gov/provider-data/
+      auth: none
+      formats: [json, csv]
+      rate_limit: "fair use"
+    key_fields: [hospital, beds, ownership, services, geometry]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: "Hospital capacity & service lines within the drive-time ring."
+    docs_url: https://data.cms.gov/provider-data/
+    connector_status: none
+
+  # ---- LAND / PARCELS / ZONING ----------------------------------------------
+  - id: tcad_parcels
+    name: Travis County Parcels & Land Use (TNR GeoHub / TCAD)
+    provider: Travis County TNR GIS / Travis Central Appraisal District
+    category: land_parcels
+    layers: [parcel, demand]
+    coverage: Travis County, TX (local testbed)
+    access:
+      type: rest_geojson
+      base_url: https://tnr-traviscountytx.opendata.arcgis.com/
+      auth: none
+      formats: [geojson, csv, shapefile, kml, wms, wfs]
+      rate_limit: "ArcGIS fair use"
+    key_fields: [parcel_id, owner, land_use, appraised_value, acreage, geometry]
+    update_frequency: annual (appraisal cycle)
+    license: Public records (Texas)
+    relevance_78738: >
+      The parcel layer for the testbed — "if I buy THIS plot." Gives boundary,
+      acreage, current land use and valuation. National parcel coverage is
+      fragmented/county-by-county, so we model the county-portal pattern here
+      and generalize the connector later.
+    docs_url: https://tnr-traviscountytx.hub.arcgis.com/
+    connector_status: none
+
+  # ---- BUILDINGS / DENSITY ---------------------------------------------------
+  - id: overture_buildings
+    name: Overture Maps / Microsoft Building Footprints
+    provider: Overture Maps Foundation
+    category: buildings
+    layers: [demand, competition]
+    coverage: Global
+    access:
+      type: bulk_download
+      base_url: https://overturemaps.org/
+      auth: none
+      formats: [geoparquet]
+      rate_limit: "S3 parquet; query with DuckDB"
+    key_fields: [building_footprint, height, area, geometry]
+    update_frequency: monthly
+    license: "Overture/ODbL/CDLA depending on theme"
+    relevance_78738: >
+      Actual rooftop count & built density — the truest proxy for "how many
+      customers physically live here." In low-density Hill Country this number is
+      the crux of the Costco question.
+    docs_url: https://docs.overturemaps.org/
+    connector_status: none
+
+  # ---- ENVIRONMENT / HAZARDS -------------------------------------------------
+  - id: fema_nfhl
+    name: FEMA National Flood Hazard Layer
+    provider: Federal Emergency Management Agency
+    category: environment
+    layers: [environment, parcel]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://hazards.fema.gov/arcgis/rest/services
+      auth: none
+      formats: [geojson, wms]
+      rate_limit: "ArcGIS fair use"
+    key_fields: [flood_zone, base_flood_elevation, floodway]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: >
+      Hill Country = flash-flood country (Flash Flood Alley). Floodway/100-yr
+      zones are a hard developability constraint on any parcel near a creek or
+      the lake.
+    docs_url: https://www.fema.gov/flood-maps/national-flood-hazard-layer
+    connector_status: none
+
+  - id: usgs_3dep
+    name: USGS 3DEP Elevation / The National Map
+    provider: U.S. Geological Survey
+    category: environment
+    layers: [environment, parcel]
+    coverage: US
+    access:
+      type: rest_geojson
+      base_url: https://elevation.nationalmap.gov/arcgis/rest/services
+      auth: none
+      formats: [geotiff, json]
+      rate_limit: "fair use"
+    key_fields: [elevation, slope, terrain]
+    update_frequency: periodic
+    license: Public domain
+    relevance_78738: >
+      Slope/terrain drives grading cost. Steep Hill Country lots can be far more
+      expensive to develop than flat ones of the same price.
+    docs_url: https://www.usgs.gov/3d-elevation-program
+    connector_status: none

@@ -1,0 +1,24 @@
+name: CI
+
+# Guards the registry schema so any contribution — human or spare-token agent —
+# gets immediate feedback if it breaks the YAML model.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Validate registry
+        run: simy validate
+      - name: Tests
+        run: pytest -q

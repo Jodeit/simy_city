@@ -1,0 +1,45 @@
+[project]
+name = "simy_city"
+version = "0.1.0"
+description = "SimCity-style parcel & infrastructure-dependency analysis built on public data."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "simy_city contributors" }]
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+# Connectors / analysis pull these in as the project grows. Kept out of the core
+# so the registry tooling runs with a minimal footprint (important for the
+# spare-token contributor agents).
+geo = [
+    "geopandas>=0.14",
+    "shapely>=2.0",
+    "requests>=2.31",
+    "duckdb>=0.10",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+simy = "simy_city.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["simy_city"]
+
+[tool.setuptools.package-data]
+simy_city = ["../data_sources/*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
