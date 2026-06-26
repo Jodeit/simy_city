@@ -50,6 +50,27 @@
   .legend{position:absolute;z-index:500;bottom:14px;left:14px;background:rgba(255,253,247,.94);border:1px solid var(--line);
     border-radius:10px;padding:8px 11px;font-size:.78rem;color:var(--slate)}
   .legend b{color:var(--ink)}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px}
+  .toolbtn{font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink);
+    padding:.4em .7em;border-radius:9px;cursor:pointer}
+  .toolbtn:hover{border-color:var(--garden);color:var(--garden-deep)}
+  .casebox{flex-basis:100%;margin-top:4px}
+  .casebox summary{cursor:pointer;font-size:.82rem;color:var(--garden-deep);font-weight:600}
+  .casebox textarea{width:100%;height:140px;margin-top:7px;font:inherit;font-size:.78rem;border:1px solid var(--line);
+    border-radius:9px;padding:8px;resize:vertical;background:#fffdf7}
+  .casebox .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .ok{color:var(--garden-deep);font-size:.78rem;font-weight:600;margin-left:6px}
+  /* bring-your-own-data modal */
+  .modal{position:fixed;inset:0;background:rgba(15,23,21,.55);display:none;z-index:1000;align-items:center;justify-content:center}
+  .modal.open{display:flex}
+  .modal .box{background:var(--paper);border-radius:16px;max-width:520px;width:92%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal h3{margin:0 0 4px;font-size:1.1rem}
+  .modal p{color:var(--slate);font-size:.86rem;margin:.2em 0 .6em}
+  .modal textarea{width:100%;height:130px;font:inherit;font-size:.82rem;border:1px solid var(--line);border-radius:10px;padding:9px}
+  .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+  .modal .btnp{background:var(--garden);color:#06210d;border:none;font-weight:700;padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
+  .modal .btng{background:none;border:1px solid var(--line);padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
+  .privacy{font-size:.76rem;color:var(--garden-deep);background:#e7f3e9;border-radius:8px;padding:6px 9px;margin-top:8px}
   @media(max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 52vh auto}#panel{border-left:none;border-top:1px solid var(--line)}}
 </style>
 </head>
@@ -58,7 +79,7 @@
   <header>
     <span class="brand">SIM<b>y</b>City <span style="font-weight:500;color:#9fc6a5">Explorer</span></span>
     <div class="uses" id="uses"></div>
-    <span class="hint">Click the map to drop it · <a href="index.html">about</a></span>
+    <span class="hint">Click the map to drop it · <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
   </header>
   <div style="position:relative"><div id="map"></div>
     <div class="legend">📍 Click anywhere to test a site. Default view: <b>78738</b> (Lake Travis, TX).<br>
@@ -76,6 +97,23 @@
     </div>
     <div id="result" style="display:none"></div>
   </aside>
+</div>
+
+<div class="modal" id="byoModal">
+  <div class="box">
+    <h3>Bring your own data <span style="font-weight:500;color:var(--slate)">(private)</span></h3>
+    <p>Drop pins from your own list — comps, sites you're tracking, parcels you own. One per line as
+      <code>lat, lng, label</code>, or paste GeoJSON points.</p>
+    <textarea id="byoText" placeholder="30.3072, -97.9203, My empty lot
+30.3331, -97.9637, Comp — sold Q1
+{ GeoJSON FeatureCollection of points also works }"></textarea>
+    <div class="privacy">🔒 Stays in your browser (saved to local storage). Never uploaded, never leaves your device.</div>
+    <div class="actions">
+      <button class="btng" id="byoClear">Clear</button>
+      <button class="btng" id="byoCancel">Close</button>
+      <button class="btnp" id="byoAdd">Add to map</button>
+    </div>
+  </div>
 </div>
 
 <script src="vendor/leaflet/leaflet.js"></script>
@@ -97,7 +135,7 @@ const USE_PROBE={
   residential_subdivision:{radius:5000, label:"Nearest school (OSM)",  q:'nwr["amenity"="school"]', big:9000},
 };
 
-let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, current="data_center";
+let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, lastLatLng=null, current="data_center";
 
 // model.js sets window.SIMY_MODEL (works on file:// and Pages); fall back to fetch.
 if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;initUses();}
@@ -109,11 +147,15 @@ function initUses(){
   order.forEach(id=>{
     const b=document.createElement("button");
     b.className="ubtn"+(id===current?" active":"");
+    b.dataset.use=id;
     b.textContent=MODEL.land_uses[id].label.replace(/\s*\(.*\)/,"");
-    b.onclick=()=>{current=id;[...el.children].forEach(c=>c.classList.remove("active"));b.classList.add("active");
-      if(marker)analyze(marker.getLatLng());};
+    b.onclick=()=>{selectUse(id);if(lastLatLng)analyze(lastLatLng);};
     el.appendChild(b);
   });
+}
+function selectUse(id){
+  current=id;
+  document.querySelectorAll("#uses .ubtn").forEach(b=>b.classList.toggle("active",b.dataset.use===id));
 }
 
 map=L.map("map",{zoomControl:true}).setView([30.327,-97.949],12); // 78738
@@ -129,14 +171,60 @@ function analyze(latlng){
   marker=L.marker(latlng).addTo(map);
   ring=L.circle(latlng,{radius:probe.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
 
+  lastLatLng=latlng;
   res.innerHTML=render(use,latlng);
+  writeHash(latlng);
+  fillTools(latlng);
   document.getElementById("liveval").innerHTML='<span class="loading">querying OpenStreetMap…</span>';
   runProbe(latlng,probe);
+}
+
+/* ---- shareable permalink + "make the case" ---- */
+function permalink(latlng){
+  return location.href.split("#")[0]+`#use=${current}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`;
+}
+function writeHash(latlng){
+  try{history.replaceState(null,"",`#use=${current}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`);}catch(e){}
+}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function buildCaseText(use,latlng){
+  const views=evaluate(use), contested=isContested(views);
+  const sos=findStandoffs().filter(s=>s.cycle.includes(currentKey()));
+  let t=`SIMyCity — "${use.label}" @ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}\n`;
+  t+=`Verdict: ${contested?"CONTESTED — a real values trade-off":"stakeholders broadly aligned"}.\n\n`;
+  t+=`Should we build it? By stakeholder:\n`;
+  views.forEach(v=>{t+=`  • ${v.label}: ${v.leaning}${v.reasons[0]?` (${v.reasons[0]})`:""}\n`;});
+  if(sos.length){const b=cheapest(sos[0].edges);
+    t+=`\nWhy it stalls / what unlocks it:\n  ${sos[0].cycle.map(useLabel).join(" → ")}\n  cheapest break: ${b.via} (cost ${b.breaker_cost})\n`;}
+  t+=`\nIt would need nearby: ${Object.keys(use.requires||{}).join(", ")}.\n`;
+  t+=`\nExplore / edit this analysis: ${permalink(latlng)}\nBuilt on open public data · github.com/jodeit/simy_city\n`;
+  return t;
+}
+function fillTools(latlng){
+  const el=document.getElementById("tools"); if(!el)return;
+  const use=MODEL.land_uses[current], link=permalink(latlng), txt=buildCaseText(use,latlng);
+  el.innerHTML=
+    `<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`+
+    `<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
+    `<textarea readonly id="caseTxt">${esc(txt)}</textarea>`+
+    `<div class="row"><button class="toolbtn" id="caseCopy">Copy text</button>`+
+    `<a class="toolbtn" id="caseMail" href="#">Email it</a>`+
+    `<span class="ok" id="toolMsg"></span></div></details>`;
+  document.getElementById("shareBtn").onclick=()=>copy(link,"link copied — share it");
+  document.getElementById("caseCopy").onclick=()=>copy(txt,"copied");
+  document.getElementById("caseMail").href=
+    `mailto:?subject=${encodeURIComponent("SIMyCity: "+use.label+" — should we build it here?")}&body=${encodeURIComponent(txt)}`;
+}
+function copy(text,msg){
+  const done=()=>{const m=document.getElementById("toolMsg");if(m){m.textContent="✓ "+msg;setTimeout(()=>m.textContent="",2500);}};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,done);}
+  else{const t=document.getElementById("caseTxt");if(t){t.select();document.execCommand("copy");}done();}
 }
 
 function render(use,latlng){
   const label=use.label;
   let h=`<h2>${label}</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)} — testing this site</div>`;
+  h+=`<div class="toolbar" id="tools"></div>`;
 
   // REQUIRES
   h+=`<div class="block"><h3>Needs nearby (feasibility)</h3>`;
@@ -271,6 +359,50 @@ function setLive(html){const el=document.getElementById("liveval");if(el)el.inne
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+
+/* ---- bring-your-own-data (private, client-side only) ---- */
+const BYO_KEY="simy_byo_v1";
+function parseBYO(text){
+  text=text.trim(); if(!text)return [];
+  if(text[0]==="{"||text[0]==="["){ // GeoJSON
+    try{const g=JSON.parse(text), feats=g.type==="FeatureCollection"?g.features:(Array.isArray(g)?g:[g]);
+      return feats.map(f=>{const c=(f.geometry||f).coordinates;const name=(f.properties&&(f.properties.name||f.properties.label))||"point";
+        return c?{lat:c[1],lng:c[0],label:name}:null;}).filter(Boolean);
+    }catch(e){return [];}
+  }
+  return text.split("\n").map(line=>{const p=line.split(/[,;\t]/).map(s=>s.trim());
+    const lat=parseFloat(p[0]),lng=parseFloat(p[1]);
+    return (isFinite(lat)&&isFinite(lng))?{lat,lng,label:p.slice(2).join(", ")||"my point"}:null;}).filter(Boolean);
+}
+function renderBYO(pts){
+  if(byoLayer)byoLayer.remove();
+  if(!pts.length)return;
+  byoLayer=L.layerGroup(pts.map(p=>L.marker([p.lat,p.lng],{
+    icon:L.divIcon({className:"",html:'<div style="background:#b3306b;width:14px;height:14px;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>',iconSize:[14,14],iconAnchor:[7,14]})
+  }).bindPopup("🔒 "+esc(p.label||"my point")))).addTo(map);
+}
+function loadBYO(){const raw=localStorage.getItem(BYO_KEY);if(raw){document.getElementById("byoText").value=raw;renderBYO(parseBYO(raw));}}
+function wireBYO(){
+  const modal=document.getElementById("byoModal"), ta=document.getElementById("byoText");
+  document.getElementById("byoOpen").onclick=e=>{e.preventDefault();modal.classList.add("open");};
+  document.getElementById("byoCancel").onclick=()=>modal.classList.remove("open");
+  modal.onclick=e=>{if(e.target===modal)modal.classList.remove("open");};
+  document.getElementById("byoAdd").onclick=()=>{const pts=parseBYO(ta.value);localStorage.setItem(BYO_KEY,ta.value);
+    renderBYO(pts);modal.classList.remove("open");if(pts.length)map.panTo([pts[0].lat,pts[0].lng]);};
+  document.getElementById("byoClear").onclick=()=>{ta.value="";localStorage.removeItem(BYO_KEY);if(byoLayer)byoLayer.remove();};
+}
+
+/* ---- honor an incoming share link (#use=..&lat=..&lng=..) ---- */
+function applyHash(){
+  const h=location.hash.replace(/^#/,""); if(!h)return false;
+  const q={}; h.split("&").forEach(kv=>{const[k,v]=kv.split("=");q[k]=v;});
+  const lat=parseFloat(q.lat), lng=parseFloat(q.lng);
+  if(q.use&&MODEL.land_uses[q.use])selectUse(q.use);
+  if(isFinite(lat)&&isFinite(lng)){map.setView([lat,lng],13);analyze(L.latLng(lat,lng));return true;}
+  return false;
+}
+
+wireBYO(); loadBYO(); applyHash();
 </script>
 </body>
 </html>

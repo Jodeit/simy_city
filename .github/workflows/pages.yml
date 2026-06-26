@@ -33,6 +33,11 @@ jobs:
         run: |
           pip install pyyaml
           python tools/build_model_json.py
+      # enablement:true creates/enables the Pages site via the workflow token on
+      # first run — so no manual "Settings → Pages" step is needed.
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

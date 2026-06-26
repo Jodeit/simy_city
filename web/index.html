@@ -74,6 +74,17 @@
   .giant span{color:var(--slate);font-size:.84rem}
   .giant.more{display:flex;align-items:center;justify-content:center;text-align:center;background:#eef3ec;border-style:dashed}
 
+  /* on-ramps */
+  .ramps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
+  .ramp{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+  .ramp .ic{font-size:1.7rem}
+  .ramp h3{margin:.35em 0 .15em;font-size:1.08rem}
+  .ramp .who{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--amber)}
+  .ramp p{margin:.1em 0 .9em;color:var(--slate);font-size:.92rem;flex:1}
+  .ramp .go{font-weight:700;color:var(--garden-deep)}
+  .ramp .back{margin-top:.7em;font-size:.8rem;color:var(--slate);border-top:1px dashed var(--line);padding-top:.6em}
+  .ramp .back b{color:var(--ink)}
+
   /* garden / gamification */
   .garden{background:linear-gradient(180deg,#f0efe4,#f6f4ec)}
   .badges{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:28px}
@@ -107,7 +118,7 @@
   .footrow{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap}
 
   @media(max-width:860px){
-    .qgrid,.giants,.badges{grid-template-columns:1fr 1fr}
+    .qgrid,.giants,.badges,.ramps{grid-template-columns:1fr 1fr}
     .twocol,.sleep{grid-template-columns:1fr}
     .hero-art{display:none}
     .board .row{grid-template-columns:34px 1fr auto}
@@ -123,6 +134,7 @@
       <div class="brand">SIM<b>y</b>City</div>
       <div>
         <a href="#questions">What it answers</a> &nbsp;
+        <a href="#onramp">For you</a> &nbsp;
         <a href="#how">How it works</a> &nbsp;
         <a href="#giants">Giants</a> &nbsp;
         <a href="#garden">Contribute</a> &nbsp;
@@ -190,6 +202,67 @@
         <p>The same parcel looks different to a developer, a resident, an environmentalist, and the city.
           We hold those in tension instead of one score. <code>simy perspectives</code></p>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ON-RAMPS ===================== -->
+<section id="onramp">
+  <div class="wrap">
+    <div class="eyebrow">Find your on-ramp</div>
+    <h2>One map. Six reasons to come back.</h2>
+    <p class="sub">Whether you just drove past an empty lot and wondered, or you do this for a living —
+      there's a door for you, and a reason to return. <a href="https://github.com/jodeit/simy_city/blob/main/docs/personas.md">More on each →</a></p>
+    <div class="ramps">
+
+      <div class="ramp">
+        <div class="ic">🚗</div><div class="who">The Dreamer</div>
+        <h3>"There's an empty lot I drive past…"</h3>
+        <p>Drop your dream on it — a café, homes, a park — and see in seconds whether it'd fly, and what's missing.</p>
+        <a class="go" href="explore.html">Dream it on the map →</a>
+        <div class="back"><b>Why you'll be back:</b> save &amp; share scenarios; watch a place change over time.</div>
+      </div>
+
+      <div class="ramp">
+        <div class="ic">🏠</div><div class="who">The Property Owner</div>
+        <h3>"What's my land actually good for?"</h3>
+        <p>Test uses on your own parcel against real demand, infrastructure, and constraints — before you call anyone.</p>
+        <a class="go" href="explore.html">See what fits your land →</a>
+        <div class="back"><b>Why you'll be back:</b> re-check as roads, rooftops, and demand shift around you.</div>
+      </div>
+
+      <div class="ramp">
+        <div class="ic">🏗️</div><div class="who">The Real-Estate Developer</div>
+        <h3>"I know this — let me add my own data."</h3>
+        <p>Overlay your private comps and sites on the public model. Your data stays in your browser; the public layer does the rest.</p>
+        <a class="go" href="explore.html">Bring your own data (private) →</a>
+        <div class="back"><b>Why you'll be back:</b> your private layer + a public model that keeps getting richer.</div>
+      </div>
+
+      <div class="ramp">
+        <div class="ic">📊</div><div class="who">The Analyst / Dev Officer</div>
+        <h3>"I'm always adding new data points."</h3>
+        <p>The model is open YAML. Add a dataset, a threshold, a land use — every addition sharpens everyone's answers, including yours.</p>
+        <a class="go" href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml">Add a data point →</a>
+        <div class="back"><b>Why you'll be back:</b> the model compounds — your contributions keep paying off.</div>
+      </div>
+
+      <div class="ramp">
+        <div class="ic">💻</div><div class="who">The Developer</div>
+        <h3>"This needs love. Should be Next.js, tbh."</h3>
+        <p>Maybe you're right. It's young, static, and honest — the architecture is still up for grabs. Come set it.</p>
+        <a class="go" href="https://github.com/jodeit/simy_city/blob/main/docs/personas.md#-the-developer">Shape the stack →</a>
+        <div class="back"><b>Why you'll be back:</b> early enough to leave a real fingerprint on it.</div>
+      </div>
+
+      <div class="ramp">
+        <div class="ic">📣</div><div class="who">The Community Advocate</div>
+        <h3>"I need to make the case at city hall."</h3>
+        <p>Run the scenario, get the stakeholder breakdown and the trade-offs, and export a council-ready summary in one click.</p>
+        <a class="go" href="explore.html">Make the case →</a>
+        <div class="back"><b>Why you'll be back:</b> monitor your neighborhood; turn every proposal into evidence.</div>
+      </div>
+
     </div>
   </div>
 </section>

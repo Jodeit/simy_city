@@ -125,6 +125,7 @@ To publish it: in the repo's **Settings → Pages**, set *Source = GitHub Action
 | Interactive explorer | `web/explore.html` | click-a-map demo: drop a use, see needs/standoffs/should-we, live OSM |
 | Model compiler | `tools/build_model_json.py` | YAML → `web/model.json`/`.js` (single source of truth for the viz) |
 | Landing page | `web/index.html` | visual tour for collaborators (GitHub Pages-ready) |
+| Personas / on-ramps | `docs/personas.md` | the value + contribution path for each kind of visitor |
 | Prior art | `docs/prior-art.md` | the open-source giants we build on, credited |
 | Research doc | `docs/data-sources.md` | the public-data landscape, narrated |
 | Feedback loops | `docs/feedback-loops.md` | chicken-and-egg standoffs, explained |
