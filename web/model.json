@@ -283,6 +283,31 @@
       "docs_url": "https://apps.nationalmap.gov/epqs/",
       "relevance": "Point-elevation API used to estimate parcel slope live in the explorer. Hill Country grading cost scales with slope \u2014 a core developer concern.\n"
     },
+    "web_basemaps": {
+      "id": "web_basemaps",
+      "name": "Web Basemaps (OSM / OpenTopoMap / Esri World Imagery)",
+      "category": "basemap",
+      "layers": [
+        "transportation",
+        "environment"
+      ],
+      "auth": "none",
+      "docs_url": "https://leafletjs.com/",
+      "relevance": "The explorer's switchable base maps \u2014 street, topographic (read the Hill Country terrain at a glance), and satellite \u2014 plus the TCAD parcel-line overlay rendered as map images (works even where the parcel JSON API is CORS-restricted).\n"
+    },
+    "realestate_listings": {
+      "id": "realestate_listings",
+      "name": "Real-Estate Listings / On-Market Status",
+      "category": "economy",
+      "layers": [
+        "demand",
+        "absorption",
+        "competition"
+      ],
+      "auth": "registration",
+      "docs_url": "https://www.nar.realtor/data-privacy-security/mls-data-access",
+      "relevance": "Whether a parcel is actually FOR SALE is often the most decisive signal \u2014 but there is no free, openly-licensed live feed. The explorer links out to portal searches for the parcel address and supports overlaying a private IDX/MLS feed via Bring-Your-Own-Data. A licensed feed is the path to a true on-market map layer.\n"
+    },
     "overture_buildings": {
       "id": "overture_buildings",
       "name": "Overture Maps / Microsoft Building Footprints",

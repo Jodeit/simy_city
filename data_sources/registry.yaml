@@ -539,6 +539,53 @@ sources:
     docs_url: https://apps.nationalmap.gov/epqs/
     connector_status: partial
 
+  - id: web_basemaps
+    name: Web Basemaps (OSM / OpenTopoMap / Esri World Imagery)
+    provider: OpenStreetMap, OpenTopoMap, Esri
+    category: basemap
+    layers: [transportation, environment]
+    coverage: Global
+    access:
+      type: scrape          # raster XYZ tiles consumed directly by the map
+      base_url: https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer
+      auth: none
+      formats: [png, jpg]
+      rate_limit: "fair use per provider; no key"
+    key_fields: [street, topographic, satellite]
+    update_frequency: continuous
+    license: "OSM ODbL · OpenTopoMap CC-BY-SA · Esri World Imagery (attribution)"
+    relevance_78738: >
+      The explorer's switchable base maps — street, topographic (read the Hill
+      Country terrain at a glance), and satellite — plus the TCAD parcel-line
+      overlay rendered as map images (works even where the parcel JSON API is
+      CORS-restricted).
+    docs_url: https://leafletjs.com/
+    connector_status: done
+
+  - id: realestate_listings
+    name: Real-Estate Listings / On-Market Status
+    provider: "MLS / IDX / portals (Zillow, Redfin, Realtor)"
+    category: economy
+    layers: [demand, absorption, competition]
+    coverage: US
+    access:
+      type: scrape          # no free/open API; portal deep-links + private BYO feeds
+      base_url: https://www.zillow.com/
+      auth: registration
+      formats: [html]
+      rate_limit: "no free public API; respect each portal's ToS"
+    key_fields: [list_price, status, days_on_market]
+    update_frequency: continuous
+    license: "Proprietary / licensed (MLS/IDX). Not redistributable."
+    relevance_78738: >
+      Whether a parcel is actually FOR SALE is often the most decisive signal —
+      but there is no free, openly-licensed live feed. The explorer links out to
+      portal searches for the parcel address and supports overlaying a private
+      IDX/MLS feed via Bring-Your-Own-Data. A licensed feed is the path to a true
+      on-market map layer.
+    docs_url: https://www.nar.realtor/data-privacy-security/mls-data-access
+    connector_status: none
+
   # ---- BUILDINGS / DENSITY ---------------------------------------------------
   - id: overture_buildings
     name: Overture Maps / Microsoft Building Footprints

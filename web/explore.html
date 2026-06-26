@@ -92,9 +92,9 @@
     <span class="hint">Click the map to drop it · <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
   </header>
   <div style="position:relative"><div id="map"></div>
-    <div class="legend">📍 Click a property to identify the <b>parcel</b> (real boundary + county record where available)
-      and test a use on it. Default view: <b>78738</b> (Lake Travis, TX).<br>
-      Orange outline = parcel · green circle ≈ trade-area / service radius (drive-time proxy).</div>
+    <div class="legend">📍 Click a property to identify the <b>parcel</b> and test a use on it · switch
+      <b>base map / parcel lines</b> top-right. Default view: <b>78738</b> (Lake Travis, TX).<br>
+      Orange outline = selected parcel · green circle ≈ trade-area / service radius (drive-time proxy).</div>
   </div>
   <aside id="panel">
     <div class="empty" id="empty">
@@ -200,9 +200,46 @@ function selectUse(id){
   document.querySelectorAll("#uses .ubtn").forEach(b=>b.classList.toggle("active",b.dataset.use===id));
 }
 
-map=L.map("map",{zoomControl:true}).setView([30.327,-97.949],12); // 78738
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  {maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+// A tiny ArcGIS "dynamic export" tile layer: the county MapServer renders parcel
+// images per tile. Images don't need CORS, so the parcel basemap shows up even
+// where the JSON query is blocked. Falls back invisibly per failed tile.
+const ArcGISDynamic=L.GridLayer.extend({
+  createTile:function(coords){
+    const t=document.createElement("img"); t.width=t.height=256; t.alt="";
+    const nw=this._map.unproject(L.point(coords.x*256,coords.y*256),coords.z);
+    const se=this._map.unproject(L.point((coords.x+1)*256,(coords.y+1)*256),coords.z);
+    const p1=L.CRS.EPSG3857.project(nw),p2=L.CRS.EPSG3857.project(se);
+    const bbox=[Math.min(p1.x,p2.x),Math.min(p1.y,p2.y),Math.max(p1.x,p2.x),Math.max(p1.y,p2.y)].join(",");
+    const o=this.options;
+    t.src=o.base+"/export?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&dpi=96&format=png32&transparent=true&f=image"+(o.lyrs?("&layers=show:"+o.lyrs):"");
+    t.onerror=function(){t.style.visibility="hidden";};
+    return t;
+  }
+});
+const arcgisDynamic=(base,opts)=>new ArcGISDynamic(Object.assign({base,tileSize:256,opacity:0.9,maxZoom:21},opts||{}));
+
+// ---- base maps (all free, no API key) ----
+const baseStreet=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {maxZoom:19,attribution:'&copy; OpenStreetMap'});
+const baseTopo=L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+  {maxZoom:17,subdomains:"abc",attribution:'&copy; OpenTopoMap (CC-BY-SA)'});
+const baseSat=L.layerGroup([
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19,attribution:'Imagery &copy; Esri, Maxar, USDA'}),
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+    {maxZoom:19}),
+]);
+
+// ---- overlays ----
+const parcelTiles=arcgisDynamic("https://taxmaps.traviscountytx.gov/arcgis/rest/services/Parcels/MapServer",
+  {opacity:0.85,attribution:'Parcels &copy; TCAD / Travis County'});
+
+map=L.map("map",{zoomControl:true,layers:[baseStreet,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
+L.control.layers(
+  {"Street":baseStreet,"Topographic":baseTopo,"Satellite":baseSat},
+  {"TCAD parcel lines":parcelTiles},
+  {position:"topright",collapsed:false}
+).addTo(map);
 map.on("click",e=>analyze(e.latlng));
 
 function analyze(latlng){
@@ -499,9 +536,13 @@ function showParcel(geo,src,seq){
     ? `current use <b>${esc(land)}</b> · TX counties don't zone — legal zoning applies only inside a city/ETJ`
     : `TX counties don't zone — check the city/ETJ if incorporated`;
   const ownerType = owner ? classifyOwner(owner) : "";
-  const avail = owner
-    ? `owner: <b>${esc(owner)}</b>${ownerType?` (${ownerType})`:""} — “for sale” isn't public (MLS is licensed); overlay your pipeline via <a href="#" onclick="document.getElementById('byoOpen').click();return false;">＋ your data</a>`
-    : `owner unknown here — overlay your pipeline via ＋ your data`;
+  const addrQ = encodeURIComponent(situs ? (situs+", Travis County, TX")
+    : (lastLatLng?`${lastLatLng.lat.toFixed(5)},${lastLatLng.lng.toFixed(5)}`:""));
+  const listings = `<a href="https://www.zillow.com/homes/${addrQ}_rb/" target="_blank" rel="noopener">Zillow ↗</a> · `+
+    `<a href="https://www.realtor.com/realestateandhomes-search/${addrQ}" target="_blank" rel="noopener">Realtor ↗</a> · `+
+    `<a href="https://www.google.com/search?q=${addrQ}+for+sale" target="_blank" rel="noopener">Google ↗</a>`;
+  const avail = `${owner?`owner <b>${esc(owner)}</b>${ownerType?` (${ownerType})`:""}<br>`:""}`+
+    `check if listed: ${listings}<br><span class="src">no free live MLS exists — these search the portals. Have IDX/MLS access? overlay it privately via <a href="#" onclick="document.getElementById('byoOpen').click();return false;">＋ your data</a></span>`;
 
   const dev=`<div class="block"><h3>Developer checklist</h3><div class="dev">
     <div class="drow"><span>🗻 Topography</span><b id="devTopo" class="loading">estimating slope…</b></div>
