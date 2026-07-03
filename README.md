@@ -4,13 +4,13 @@
 
 **A SimCity for the real world — built on public data, tended like a community garden.**
 
--> 🗺️ **Try it:** the [**interactive explorer**](https://jodeit.github.io/simy_city/explore.html) — click a spot on the map,
+> 🗺️ **Try it:** the [**interactive explorer**](https://jodeit.github.io/simy_city/explore.html) — click a spot on the map,
 > drop a development (data center, Costco, Chipotle, housing), and watch the model check what it
 > needs, what it induces, the standoffs in the way, and whether it *should* be built. Runs entirely
 > in your browser on live OpenStreetMap data.
 > Once GitHub Pages is enabled it'll be live at **https://jodeit.github.io/simy_city/explore.html**.
 >
--> 🌱 **New here?** The [landing page](https://jodeit.github.io/simy_city/index.html) gives the guided tour and how to claim a plot.
+> 🌱 **New here?** The [landing page](https://jodeit.github.io/simy_city/index.html) gives the guided tour and how to claim a plot.
 
 The name is a play on words: **SimCity** (the simulation) + **"my / our city"**
 — because this is meant to be tended by a community, not run by one owner. The
