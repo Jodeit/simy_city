@@ -177,12 +177,19 @@ const AMENITY_USES=new Set(["warehouse_club","fast_casual"]);
 const LAYER_COLOR={power:"#e8843c",water:"#3a8fb7",broadband:"#2f9e44",transportation:"#5b6b6a",
   parcel:"#8a6d3b",environment:"#6b8f3a",entitlement:"#8a6d3b",demand:"#2f9e44",competition:"#b3541e",
   education:"#3a8fb7",health:"#b3306b",safety:"#b33030",habitat:"#1f7a33",land_cover:"#6b8f3a",carbon:"#444"};
-// per-use: trade-area radius (m) + the live OSM probe that gives real local context
-const USE_PROBE={
-  data_center:   {radius:8000,  label:"Nearest power substation (OSM)", q:'nwr["power"="substation"]', big:12000},
-  warehouse_club:{radius:15000, label:"Nearest warehouse club (OSM)",  q:'nwr["shop"="wholesale"];nwr["name"~"Costco|Sam.s Club|BJ.s",i]', big:30000},
-  fast_casual:   {radius:8000,  label:"Nearest fast-casual (OSM)",     q:'nwr["name"~"Chipotle",i];nwr["amenity"="fast_food"]', big:25000},
-  residential_subdivision:{radius:5000, label:"Nearest school (OSM)",  q:'nwr["amenity"="school"]', big:9000},
+// Per-use LIVE demand read from OpenStreetMap: a trade-area radius, the real
+// number a use needs (rooftops as a household proxy), and what to count as
+// competition/context. This is what turns "needs ~100k households" into a real,
+// checkable verdict — the answer to "why isn't there a Costco here?"
+const USE_DEMAND={
+  warehouse_club:{ radius:15000, roofNeed:100000, needLabel:"the ~100k-rooftop trade area a warehouse club needs",
+    compQ:'nwr["shop"="wholesale"];nwr["name"~"Costco|Sam.s Club|BJ.s",i]', compLabel:"warehouse clubs" },
+  fast_casual:{ radius:6000, roofNeed:9000, needLabel:"the rooftop/daytime base a fast-casual chain needs",
+    compQ:'nwr["amenity"="fast_food"]', compLabel:"fast-food outlets" },
+  residential_subdivision:{ radius:5000, roofNeed:0, needLabel:"",
+    compQ:'nwr["amenity"="school"]', compLabel:"schools" },
+  data_center:{ radius:8000, roofNeed:0, needLabel:"",
+    compQ:'nwr["power"="substation"]', compLabel:"power substations" },
 };
 
 // Parcel sources, county-by-county (there is no single free national parcel API
@@ -314,13 +321,12 @@ function analyze(latlng){
   lastLatLng=latlng;
   const seq=++reqSeq;
   if(mode==="build"){
-    const use=MODEL.land_uses[current], probe=USE_PROBE[current];
-    ring=L.circle(latlng,{radius:probe.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
+    const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
+    ring=L.circle(latlng,{radius:cfg.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
     res.innerHTML=renderBuild(use,latlng);
     fillTools(latlng);
     runParcel(latlng,seq);
-    const lv=document.getElementById("liveval"); if(lv)lv.innerHTML='<span class="loading">querying OpenStreetMap…</span>';
-    runProbe(latlng,probe,seq);
+    runDemand(latlng,seq);
   }else{
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
@@ -412,9 +418,13 @@ function renderBuild(use,latlng){
   }
   h+=`</div>`;
 
-  // LIVE PROBE placeholder
-  h+=`<div class="block"><h3>${USE_PROBE[current].label}</h3><div class="live" id="liveval"></div>
-      <div class="src">live from OpenStreetMap · the M1 connectors will turn this into capacity numbers</div></div>`;
+  // LIVE demand read (real counts from OpenStreetMap)
+  h+=`<div class="block"><h3>Live area read — real demand</h3>
+      <div class="verdict" id="demandVerdict" style="display:none"></div>
+      <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
+      <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
+      <div class="src">live counts within the ${(USE_DEMAND[current].radius/1000)}-km trade area (OpenStreetMap) ·
+        rooftops proxy household demand</div></div>`;
 
   // INDUCES
   const ind=use.induces||{};
@@ -499,38 +509,58 @@ function findStandoffs(present){
 const COST={low:0,medium:1,high:2};
 function cheapest(edges){return edges.reduce((a,b)=>COST[(b.breaker_cost||"high")]<COST[(a.breaker_cost||"high")]?b:a);}
 
-/* ---- live OSM probe via Overpass ---- */
-function runProbe(latlng,probe,seq){
-  const {lat,lng}=latlng;
-  const parts=probe.q.split(";").filter(Boolean).map(q=>`${q}(around:${probe.big},${lat},${lng});`).join("");
-  const ql=`[out:json][timeout:25];(${parts});out center 60;`;
-  const endpoints=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
-  tryOverpass(endpoints,ql,latlng,probe,seq);
+/* ---- LIVE demand read via Overpass (real counts → real verdict) ---- */
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+function overpass(ql,seq,ok,fail){
+  (function attempt(eps){
+    if(seq!==reqSeq)return;
+    if(!eps.length){if(fail)fail();return;}
+    fetch(eps[0],{method:"POST",body:"data="+encodeURIComponent(ql)})
+      .then(r=>r.ok?r.json():Promise.reject(r.status))
+      .then(d=>{if(seq===reqSeq)ok(d);})
+      .catch(()=>attempt(eps.slice(1)));
+  })(OVERPASS.slice());
 }
-function tryOverpass(eps,ql,latlng,probe,seq){
-  if(seq!==reqSeq)return;
-  if(!eps.length){setLive('<span class="loading">couldn’t reach OpenStreetMap right now — the model above still works.</span>');return;}
-  fetch(eps[0],{method:"POST",body:ql})
-    .then(r=>r.ok?r.json():Promise.reject(r.status))
-    .then(d=>{if(seq===reqSeq)showProbe(d,latlng,probe);})
-    .catch(()=>tryOverpass(eps.slice(1),ql,latlng,probe,seq));
+function countOf(d){ // parse Overpass `out count`
+  const c=(d.elements||[]).find(e=>e.type==="count");
+  if(c&&c.tags)return parseInt(c.tags.total||c.tags.ways||c.tags.nodes||"0",10);
+  return (d.elements||[]).length||null;
 }
-function showProbe(d,latlng,probe){
-  const els=(d.elements||[]).map(e=>{
-    const la=e.lat??e.center?.lat, lo=e.lon??e.center?.lon;
-    return (la&&lo)?{name:(e.tags&&(e.tags.name||e.tags.operator))||"(unnamed)",lat:la,lon:lo,km:haversine(latlng.lat,latlng.lng,la,lo)}:null;
-  }).filter(Boolean).sort((a,b)=>a.km-b.km);
-  if(!els.length){setLive("<b>none found</b> within ~"+(probe.big/1000)+" km. For some uses that's a green light; for retail it may mean too little demand here.");return;}
-  const within=els.filter(e=>e.km*1000<=probe.radius).length;
-  const n=els[0];
-  if(probeLayer)probeLayer.remove();
-  probeLayer=L.layerGroup(els.slice(0,30).map(e=>
-    L.circleMarker([e.lat,e.lon],{radius:5,color:"#16201f",weight:1,fillColor:"#d9a441",fillOpacity:.9})
-      .bindPopup(`${e.name} — ${e.km.toFixed(1)} km`))).addTo(map);
-  setLive(`Nearest: <b>${n.name}</b> — ${n.km.toFixed(1)} km away.<br>
-    ${within} within the ${(probe.radius/1000)}-km ring · ${els.length} within ${(probe.big/1000)} km.`);
+function setHTML(id,html){const el=document.getElementById(id);if(el){el.classList.remove("loading");el.innerHTML=html;}}
+
+function runDemand(latlng,seq){
+  const cfg=USE_DEMAND[current], lat=latlng.lat, lng=latlng.lng;
+  // 1) rooftops in the trade area — fast server-side count (household proxy)
+  overpass(`[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`,
+    seq, d=>{ const c=countOf(d);
+      setHTML("roofVal", c==null?"rooftop count unavailable"
+        : `🏠 <b>~${c.toLocaleString()}</b> rooftops within ${(cfg.radius/1000)} km <span class="src">(household proxy)</span>`);
+      if(cfg.roofNeed) renderDemandVerdict(c,cfg);
+    }, ()=>setHTML("roofVal",'<span class="loading">couldn’t reach OpenStreetMap — model above still works.</span>'));
+  // 2) competitors / context with nearest
+  const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
+  overpass(`[out:json][timeout:25];(${parts});out center 60;`, seq, d=>{
+    const els=(d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
+      return (la&&lo)?{name:(e.tags&&(e.tags.name||e.tags.operator))||"(unnamed)",lat:la,lon:lo,km:haversine(lat,lng,la,lo)}:null;})
+      .filter(Boolean).sort((a,b)=>a.km-b.km);
+    if(probeLayer)probeLayer.remove();
+    if(els.length)probeLayer=L.layerGroup(els.slice(0,40).map(e=>
+      L.circleMarker([e.lat,e.lon],{radius:5,color:"#16201f",weight:1,fillColor:"#d9a441",fillOpacity:.9})
+        .bindPopup(`${esc(e.name)} — ${e.km.toFixed(1)} km`))).addTo(map);
+    setHTML("compVal", els.length
+      ? `📍 <b>${els.length}</b> ${esc(cfg.compLabel)} in range · nearest <b>${esc(els[0].name)}</b> ${els[0].km.toFixed(1)} km`
+      : `📍 no ${esc(cfg.compLabel)} in range`);
+  }, ()=>setHTML("compVal",""));
 }
-function setLive(html){const el=document.getElementById("liveval");if(el)el.innerHTML=html;}
+function renderDemandVerdict(c,cfg){
+  const el=document.getElementById("demandVerdict"); if(!el||c==null)return;
+  el.style.display="block";
+  const ratio=c/cfg.roofNeed, pass=ratio>=0.85;
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML= pass
+    ? `✓ ~${c.toLocaleString()} rooftops clears ${cfg.needLabel} — demand supports it`
+    : `✗ ~${c.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${cfg.needLabel} (${Math.round(ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`;
+}
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
