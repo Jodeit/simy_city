@@ -761,7 +761,17 @@ function applyHash(){
   return false;
 }
 
-wireBYO(); loadBYO(); applyHash();
+function wireCTA(){
+  const b=document.getElementById('ctaTry');
+  if(!b) return;
+  b.onclick=()=>{
+    selectUse('data_center');
+    const p=document.querySelector('#empty p');
+    if(p) p.innerHTML='Now click on the map to drop the Data center and run the analysis.';
+  };
+}
+
+wireBYO(); loadBYO(); wireCTA(); applyHash();
 </script>
 </body>
 </html>
