@@ -81,30 +81,69 @@
   .modal .btnp{background:var(--garden);color:#06210d;border:none;font-weight:700;padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
   .modal .btng{background:none;border:1px solid var(--line);padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
   .privacy{font-size:.76rem;color:var(--garden-deep);background:#e7f3e9;border-radius:8px;padding:6px 9px;margin-top:8px}
-  @media(max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 52vh auto}#panel{border-left:none;border-top:1px solid var(--line)}}
+  /* mode switch */
+  .modes{display:flex;gap:0;background:#1f2c2a;border:1px solid #38514c;border-radius:10px;overflow:hidden}
+  .mbtn{font:inherit;font-size:.85rem;font-weight:700;border:none;background:transparent;color:#cfe6d3;padding:.45em .9em;cursor:pointer}
+  .mbtn.active{background:var(--garden);color:#06210d}
+  /* use selector card (side panel, "test a use" mode) */
+  .usebar{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:12px}
+  .usebar .lbl{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);margin-bottom:7px}
+  .usebar .chips{display:flex;gap:6px;flex-wrap:wrap}
+  /* explore-mode CTA cards on empty state */
+  .paths{display:grid;gap:12px;margin-top:14px}
+  .path{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--card);cursor:pointer;box-shadow:var(--shadow)}
+  .path:hover{border-color:var(--garden)}
+  .path .ic{font-size:1.5rem}
+  .path b{display:block;margin:.3em 0 .1em;font-size:1.05rem}
+  .path span{color:var(--slate);font-size:.9rem}
+  /* "what could go here" fit list */
+  .fitrow{display:flex;align-items:center;gap:9px;margin:7px 0;font-size:.9rem}
+  .fitbadge{flex:0 0 auto;font-size:.72rem;font-weight:800;border-radius:999px;padding:.12em .55em}
+  .fitbadge.y{background:#e7f3e9;color:var(--garden-deep)} .fitbadge.n{background:#fdecec;color:#b33030}
+  .fitrow .fl{flex:1} .fitrow .fl small{display:block;color:var(--slate);font-size:.78rem}
+  .testbtn{font:inherit;font-size:.76rem;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--garden-deep);border-radius:8px;padding:.25em .6em;cursor:pointer;white-space:nowrap}
+  .testbtn:hover{border-color:var(--garden)}
+  @media(max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 52vh auto}#panel{border-left:none;border-top:1px solid var(--line)}
+    header{flex-wrap:wrap}.hint{display:none}}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
     <span class="brand">SIM<b>y</b>City <span style="font-weight:500;color:#9fc6a5">Explorer</span></span>
-    <div class="uses" id="uses"></div>
-    <span class="hint">Click the map to drop it · <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
+    <div class="modes" id="modes">
+      <button class="mbtn active" data-mode="explore">🔎 Explore properties</button>
+      <button class="mbtn" data-mode="build">🎯 Test a use</button>
+    </div>
+    <span class="hint"><a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
   </header>
   <div style="position:relative"><div id="map"></div>
-    <div class="legend">📍 Click a property to identify the <b>parcel</b> and test a use on it · switch
-      <b>base map / parcel lines</b> top-right. Default view: <b>78738</b> (Lake Travis, TX).<br>
-      Orange outline = selected parcel · green circle ≈ trade-area / service radius (drive-time proxy).</div>
+    <div class="legend" id="legend"></div>
   </div>
   <aside id="panel">
+    <div id="useBar" class="usebar" style="display:none">
+      <div class="lbl">What do you want to build?</div>
+      <div class="chips" id="uses"></div>
+    </div>
     <div class="empty" id="empty">
-      <h2>Would it work here?</h2>
-      <p>Pick a development up top (try <b>Data center</b>), then <kbd>click</kbd> a spot on the map.</p>
-      <p>SIMyCity identifies the <b>actual parcel</b> (boundary + county record, where wired), then checks what the
-        use <b>needs nearby</b>, what it would <b>induce</b>, the <b>standoffs</b> in the way, and whether stakeholders
-        think it <b>should</b> be built — using live county parcel + OpenStreetMap data plus an open model you can edit.</p>
-      <p class="src">Everything here runs in your browser. The thresholds live in
-        <code>data_sources/layers.yaml</code> — change one and this changes.</p>
+      <h2>Find your next move.</h2>
+      <p class="src">Real parcels, real public data — running entirely in your browser. Pick a lane:</p>
+      <div class="paths">
+        <div class="path" id="pathExplore">
+          <div class="ic">🔎</div>
+          <b>I'm scouting for opportunity</b>
+          <span>Click any property to see what it is, what it's worth, whether it's <b>for sale</b>,
+            the developer red-flags (slope, MUD, flood), and <b>what it's best suited for</b>. No use case needed.</span>
+        </div>
+        <div class="path" id="pathBuild">
+          <div class="ic">🎯</div>
+          <b>I have a use in mind</b>
+          <span>Pick a use — data center, warehouse club, fast-casual, housing — then click parcels to
+            test the <b>fit</b>: what it needs nearby, what it induces, and whether it <b>should</b> be built.</span>
+        </div>
+      </div>
+      <p class="src" style="margin-top:14px">Switch lanes anytime up top. The model is open YAML you can edit —
+        change a threshold and this changes.</p>
     </div>
     <div id="result" style="display:none"></div>
   </aside>
@@ -177,12 +216,37 @@ const DISTRICT_SOURCES=[
 ];
 
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
+let mode="explore"; // "explore" (scout) | "build" (test a use)
 let reqSeq=0; // bumped each click; async callbacks bail if they're stale
 
 // model.js sets window.SIMY_MODEL (works on file:// and Pages); fall back to fetch.
-if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;initUses();}
-else{fetch("model.json").then(r=>r.json()).then(m=>{MODEL=m;initUses();});}
+if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;boot();}
+else{fetch("model.json").then(r=>r.json()).then(m=>{MODEL=m;boot();});}
 
+function boot(){ initUses(); initModes(); setLegend(); }
+
+function initModes(){
+  document.querySelectorAll("#modes .mbtn").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+  const pe=document.getElementById("pathExplore"), pb=document.getElementById("pathBuild");
+  if(pe)pe.onclick=()=>setMode("explore");
+  if(pb)pb.onclick=()=>setMode("build");
+}
+function applyModeUI(m){
+  mode=m;
+  document.querySelectorAll("#modes .mbtn").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
+  document.getElementById("useBar").style.display = m==="build" ? "block" : "none";
+  setLegend();
+}
+function setMode(m){
+  applyModeUI(m);
+  if(lastLatLng) analyze(lastLatLng);           // re-evaluate the selected parcel in the new lane
+}
+function setLegend(){
+  const el=document.getElementById("legend"); if(!el)return;
+  el.innerHTML = mode==="build"
+    ? `🎯 <b>Test a use:</b> pick a use at right, then click parcels. Orange = parcel · green circle ≈ trade area.`
+    : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
+}
 function initUses(){
   const order=["data_center","warehouse_club","fast_casual","residential_subdivision"];
   const el=document.getElementById("uses");
@@ -245,27 +309,46 @@ map.on("click",e=>analyze(e.latlng));
 function analyze(latlng){
   document.getElementById("empty").style.display="none";
   const res=document.getElementById("result");res.style.display="block";
-  const use=MODEL.land_uses[current], probe=USE_PROBE[current];
   if(marker)marker.remove(); if(ring)ring.remove(); if(probeLayer)probeLayer.remove();
   marker=L.marker(latlng).addTo(map);
-  ring=L.circle(latlng,{radius:probe.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
-
   lastLatLng=latlng;
   const seq=++reqSeq;
-  res.innerHTML=render(use,latlng);
+  if(mode==="build"){
+    const use=MODEL.land_uses[current], probe=USE_PROBE[current];
+    ring=L.circle(latlng,{radius:probe.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
+    res.innerHTML=renderBuild(use,latlng);
+    fillTools(latlng);
+    runParcel(latlng,seq);
+    const lv=document.getElementById("liveval"); if(lv)lv.innerHTML='<span class="loading">querying OpenStreetMap…</span>';
+    runProbe(latlng,probe,seq);
+  }else{
+    res.innerHTML=renderExplore(latlng);
+    fillTools(latlng);
+    runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
+  }
   writeHash(latlng);
-  fillTools(latlng);
-  runParcel(latlng,seq);
-  document.getElementById("liveval").innerHTML='<span class="loading">querying OpenStreetMap…</span>';
-  runProbe(latlng,probe,seq);
+}
+
+function renderExplore(latlng){
+  let h=`<h2>This property</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}</div>`;
+  h+=`<div class="toolbar" id="tools"></div>`;
+  h+=`<div class="block" id="parcelBlock"><h3>Parcel / property</h3>
+      <div id="parcelVal" class="loading">identifying parcel…</div></div>`;
+  h+=`<div class="block"><h3>What could go here?</h3>
+      <div id="fitVal" class="loading">assessing fit from size &amp; terrain…</div>
+      <div class="src">physical fit only (lot size, slope, flood). Market &amp; infrastructure are
+        checked in <b>Test a use</b>.</div></div>`;
+  return h;
 }
 
 /* ---- shareable permalink + "make the case" ---- */
 function permalink(latlng){
-  return location.href.split("#")[0]+`#use=${current}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`;
+  const u=mode==="build"?`&use=${current}`:"";
+  return location.href.split("#")[0]+`#mode=${mode}${u}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`;
 }
 function writeHash(latlng){
-  try{history.replaceState(null,"",`#use=${current}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`);}catch(e){}
+  const u=mode==="build"?`&use=${current}`:"";
+  try{history.replaceState(null,"",`#mode=${mode}${u}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`);}catch(e){}
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function buildCaseText(use,latlng){
@@ -283,18 +366,24 @@ function buildCaseText(use,latlng){
 }
 function fillTools(latlng){
   const el=document.getElementById("tools"); if(!el)return;
-  const use=MODEL.land_uses[current], link=permalink(latlng), txt=buildCaseText(use,latlng);
-  el.innerHTML=
-    `<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`+
-    `<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
-    `<textarea readonly id="caseTxt">${esc(txt)}</textarea>`+
-    `<div class="row"><button class="toolbtn" id="caseCopy">Copy text</button>`+
-    `<a class="toolbtn" id="caseMail" href="#">Email it</a>`+
-    `<span class="ok" id="toolMsg"></span></div></details>`;
+  const link=permalink(latlng);
+  let h=`<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`;
+  if(mode==="build"){
+    const txt=buildCaseText(MODEL.land_uses[current],latlng);
+    h+=`<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
+       `<textarea readonly id="caseTxt">${esc(txt)}</textarea>`+
+       `<div class="row"><button class="toolbtn" id="caseCopy">Copy text</button>`+
+       `<a class="toolbtn" id="caseMail" href="#">Email it</a>`+
+       `<span class="ok" id="toolMsg"></span></div></details>`;
+  }
+  el.innerHTML=h;
   document.getElementById("shareBtn").onclick=()=>copy(link,"link copied — share it");
-  document.getElementById("caseCopy").onclick=()=>copy(txt,"copied");
-  document.getElementById("caseMail").href=
-    `mailto:?subject=${encodeURIComponent("SIMyCity: "+use.label+" — should we build it here?")}&body=${encodeURIComponent(txt)}`;
+  if(mode==="build"){
+    const txt=buildCaseText(MODEL.land_uses[current],latlng);
+    document.getElementById("caseCopy").onclick=()=>copy(txt,"copied");
+    document.getElementById("caseMail").href=
+      `mailto:?subject=${encodeURIComponent("SIMyCity: "+MODEL.land_uses[current].label+" — should we build it here?")}&body=${encodeURIComponent(txt)}`;
+  }
 }
 function copy(text,msg){
   const done=()=>{const m=document.getElementById("toolMsg");if(m){m.textContent="✓ "+msg;setTimeout(()=>m.textContent="",2500);}};
@@ -302,7 +391,7 @@ function copy(text,msg){
   else{const t=document.getElementById("caseTxt");if(t){t.select();document.execCommand("copy");}done();}
 }
 
-function render(use,latlng){
+function renderBuild(use,latlng){
   const label=use.label;
   let h=`<h2>${label}</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)} — testing this site</div>`;
   h+=`<div class="toolbar" id="tools"></div>`;
@@ -557,6 +646,29 @@ function showParcel(geo,src,seq){
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`;
 
   if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq);}
+  if(mode==="explore"){const acN=(acres!=null&&!isNaN(+acres))?+acres:null; fillFit(acN);}
+}
+
+// "What could go here?" — rank land uses by physical fit (lot size). Each row
+// bridges into the deep "Test a use" analysis. Market/infra are checked there.
+function fillFit(acres){
+  const el=document.getElementById("fitVal"); if(!el)return;
+  const rows=Object.keys(MODEL.land_uses).map(id=>{
+    const u=MODEL.land_uses[id];
+    const need=(u.requires&&u.requires.parcel&&u.requires.parcel.min_buildable_acres)||0;
+    let ok=null,reason;
+    if(acres==null){reason=`needs ~${need} ac; this parcel's size is unlisted`;}
+    else if(acres>=need){ok=true; reason=`fits — ${acres.toFixed(2)} ac ≥ ${need} ac minimum`;}
+    else{ok=false; reason=`too small — needs ${need} ac (has ${acres.toFixed(2)})`;}
+    return {id,label:u.label.replace(/\s*\(.*\)/,""),ok,need,reason};
+  }).sort((a,b)=> a.ok===b.ok ? a.need-b.need : (a.ok?-1:1));
+  el.innerHTML=rows.map(r=>{
+    const badge=r.ok==null?`<span class="fitbadge">?</span>`
+      :r.ok?`<span class="fitbadge y">FITS</span>`:`<span class="fitbadge n">TOO SMALL</span>`;
+    return `<div class="fitrow">${badge}<div class="fl">${esc(r.label)}<small>${esc(r.reason)}</small></div>`+
+      `<button class="testbtn" data-use="${r.id}">Test →</button></div>`;
+  }).join("");
+  el.querySelectorAll(".testbtn").forEach(btn=>btn.onclick=()=>{selectUse(btn.dataset.use); setMode("build");});
 }
 
 function classifyOwner(name){
@@ -643,8 +755,9 @@ function applyHash(){
   const h=location.hash.replace(/^#/,""); if(!h)return false;
   const q={}; h.split("&").forEach(kv=>{const[k,v]=kv.split("=");q[k]=v;});
   const lat=parseFloat(q.lat), lng=parseFloat(q.lng);
+  if(q.mode==="build"||q.mode==="explore")applyModeUI(q.mode);
   if(q.use&&MODEL.land_uses[q.use])selectUse(q.use);
-  if(isFinite(lat)&&isFinite(lng)){map.setView([lat,lng],13);analyze(L.latLng(lat,lng));return true;}
+  if(isFinite(lat)&&isFinite(lng)){map.setView([lat,lng],15);analyze(L.latLng(lat,lng));return true;}
   return false;
 }
 
