@@ -103,14 +103,36 @@
   .fitrow .fl{flex:1} .fitrow .fl small{display:block;color:var(--slate);font-size:.78rem}
   .testbtn{font:inherit;font-size:.76rem;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--garden-deep);border-radius:8px;padding:.25em .6em;cursor:pointer;white-space:nowrap}
   .testbtn:hover{border-color:var(--garden)}
-  @media(max-width:760px){#app{grid-template-columns:1fr;grid-template-rows:auto 52vh auto}#panel{border-left:none;border-top:1px solid var(--line)}
-    header{flex-wrap:wrap}.hint{display:none}}
+  /* ---------- mobile ---------- */
+  @media(max-width:760px){
+    /* one column: header / map / scrollable panel. dvh handles mobile URL bars. */
+    #app{grid-template-columns:1fr;grid-template-rows:auto 44dvh minmax(0,1fr);height:100dvh}
+    header{grid-column:1}                     /* desktop spans 1/3 → would create a phantom 2nd column */
+    #panel{border-left:none;border-top:1px solid var(--line);padding:12px 12px 84px;min-height:0}
+    header{padding:8px 10px;gap:8px;flex-wrap:nowrap}
+    .brand{font-size:.92rem;white-space:nowrap}
+    .brand .exp{display:none}                 /* hide the word "Explorer" */
+    .modes{margin-left:auto}
+    .mbtn{font-size:.76rem;padding:.42em .55em;white-space:nowrap}
+    .hint{display:none}
+    .legend{left:8px;right:8px;bottom:8px;font-size:.7rem;padding:5px 8px;line-height:1.35}
+    .paths{grid-template-columns:1fr}
+    .path{padding:13px}
+    .usebar .chips{gap:5px}
+    .ubtn{font-size:.78rem;padding:.38em .55em}
+    .drow{flex-direction:column;gap:2px}
+    .drow>b{text-align:left;font-weight:600}
+    .prow b{max-width:60%;overflow-wrap:anywhere}
+    textarea,input{font-size:16px}            /* stop iOS auto-zoom on focus */
+    .casebox textarea{height:110px}
+    .leaflet-control-layers{font-size:.8rem}
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <span class="brand">SIM<b>y</b>City <span style="font-weight:500;color:#9fc6a5">Explorer</span></span>
+    <span class="brand">SIM<b>y</b>City <span class="exp" style="font-weight:500;color:#9fc6a5">Explorer</span></span>
     <div class="modes" id="modes">
       <button class="mbtn active" data-mode="explore">🔎 Explore properties</button>
       <button class="mbtn" data-mode="build">🎯 Test a use</button>
@@ -305,16 +327,19 @@ const baseSat=L.layerGroup([
 const parcelTiles=arcgisDynamic("https://taxmaps.traviscountytx.gov/arcgis/rest/services/Parcels/MapServer",
   {opacity:0.85,attribution:'Parcels &copy; TCAD / Travis County'});
 
-map=L.map("map",{zoomControl:true,layers:[baseStreet,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
+const IS_MOBILE=window.matchMedia("(max-width:760px)").matches;
+map=L.map("map",{zoomControl:!IS_MOBILE,layers:[baseStreet,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
 L.control.layers(
   {"Street":baseStreet,"Topographic":baseTopo,"Satellite":baseSat},
   {"TCAD parcel lines":parcelTiles},
-  {position:"topright",collapsed:false}
+  {position:"topright",collapsed:IS_MOBILE}   // expanded control would eat the small map
 ).addTo(map);
 map.on("click",e=>analyze(e.latlng));
 
 function analyze(latlng){
   document.getElementById("empty").style.display="none";
+  if(IS_MOBILE){const lg=document.getElementById("legend");if(lg)lg.style.display="none";} // free up the small map
+  const panel=document.getElementById("panel"); if(panel)panel.scrollTop=0;               // new result starts at top
   const res=document.getElementById("result");res.style.display="block";
   if(marker)marker.remove(); if(ring)ring.remove(); if(probeLayer)probeLayer.remove();
   marker=L.marker(latlng).addTo(map);
