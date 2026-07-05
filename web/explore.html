@@ -4,6 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>SIMyCity Explorer — drop a development, see what it needs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316201f'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' fill='%2374c476'%3ES%3C/text%3E%3C/svg%3E"/>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
 <style>
   :root{--garden:#2f9e44;--garden-deep:#1f7a33;--leaf:#74c476;--amber:#d9a441;--water:#3a8fb7;
@@ -55,7 +56,9 @@
   .drow>span{color:var(--slate);white-space:nowrap;flex:0 0 auto}
   .drow>b{text-align:right;font-weight:600}
   .drow a{color:var(--garden-deep)}
-  .loading{color:var(--slate);font-style:italic;font-size:.85rem}
+  .loading{color:var(--slate);font-style:italic;font-size:.85rem;animation:pulse 1.3s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+  .unavail{color:#9a6f1c;background:#fdeed6;border-radius:7px;padding:.2em .55em;font-size:.85rem;display:inline-block}
   .standoff{font-size:.85rem;background:#fff;border:1px dashed var(--amber);border-radius:10px;padding:9px 10px;margin:7px 0}
   .standoff b{color:#9a6f1c}
   .tinker{background:#16201f;color:#dcebd9;color:#e7f0e8;border-radius:13px;padding:13px;margin-top:14px;font-size:.86rem}
@@ -555,16 +558,17 @@ function countOf(d){ // parse Overpass `out count`
   return (d.elements||[]).length||null;
 }
 function setHTML(id,html){const el=document.getElementById(id);if(el){el.classList.remove("loading");el.innerHTML=html;}}
+function errHTML(t){return `<span class="unavail">⚠ ${t}</span>`;}
 
 function runDemand(latlng,seq){
   const cfg=USE_DEMAND[current], lat=latlng.lat, lng=latlng.lng;
   // 1) rooftops in the trade area — fast server-side count (household proxy)
   overpass(`[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`,
     seq, d=>{ const c=countOf(d);
-      setHTML("roofVal", c==null?"rooftop count unavailable"
+      setHTML("roofVal", c==null?errHTML("rooftop count unavailable")
         : `🏠 <b>~${c.toLocaleString()}</b> rooftops within ${(cfg.radius/1000)} km <span class="src">(household proxy)</span>`);
       if(cfg.roofNeed) renderDemandVerdict(c,cfg);
-    }, ()=>setHTML("roofVal",'<span class="loading">couldn’t reach OpenStreetMap — model above still works.</span>'));
+    }, ()=>setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works.")));
   // 2) competitors / context with nearest
   const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
   overpass(`[out:json][timeout:25];(${parts});out center 60;`, seq, d=>{
@@ -578,7 +582,7 @@ function runDemand(latlng,seq){
     setHTML("compVal", els.length
       ? `📍 <b>${els.length}</b> ${esc(cfg.compLabel)} in range · nearest <b>${esc(els[0].name)}</b> ${els[0].km.toFixed(1)} km`
       : `📍 no ${esc(cfg.compLabel)} in range`);
-  }, ()=>setHTML("compVal",""));
+  }, ()=>setHTML("compVal",errHTML("competitor scan unavailable")));
 }
 function renderDemandVerdict(c,cfg){
   const el=document.getElementById("demandVerdict"); if(!el||c==null)return;
@@ -626,10 +630,10 @@ function runParcel(latlng,seq){
   const el=document.getElementById("parcelVal"); if(!el)return;
   const src=PARCEL_SOURCES.find(s=>inBbox(latlng,s.bbox));
   if(!src){
-    el.innerHTML=`No parcel layer wired for this spot yet. Property boundaries are published
+    setHTML("parcelVal", `No parcel layer wired for this spot yet. Property boundaries are published
       <b>county-by-county</b>, so coverage grows as people add their county
       (<a href="https://github.com/jodeit/simy_city/blob/main/web/explore.html" target="_blank" rel="noopener">how to add one</a>).
-      Mapped today: <b>Travis County, TX</b> — try the 78738 area.`;
+      Mapped today: <b>Travis County, TX</b> — try the 78738 area.`);
     return;
   }
   tryParcel(src.urls.slice(),latlng,src,false,seq);
@@ -638,9 +642,9 @@ function tryParcel(urls,latlng,src,sawEmpty,seq){
   if(seq!==reqSeq)return;                 // a newer click superseded this one
   const el=document.getElementById("parcelVal"); if(!el)return;
   if(!urls.length){
-    el.innerHTML=sawEmpty
+    setHTML("parcelVal", sawEmpty
       ? `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel (road, right-of-way, or water). Try clicking a building.`
-      : `<span class="loading">couldn’t reach the county parcel service just now — the analysis below still works.</span>`;
+      : errHTML("couldn’t reach the county parcel service just now — the analysis below still works."));
     return;
   }
   arcgisPointQuery(urls[0],latlng,true).then(feats=>{
@@ -650,10 +654,9 @@ function tryParcel(urls,latlng,src,sawEmpty,seq){
   }).catch(()=>tryParcel(urls.slice(1),latlng,src,sawEmpty,seq)); // CORS/network → try next host
 }
 function showParcel(geo,src,seq){
-  const el=document.getElementById("parcelVal");
   const f=geo&&geo.features&&geo.features[0];
-  if(!f){el.innerHTML=`Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel
-    (likely a road, right-of-way, or water).`;return;}
+  if(!f){setHTML("parcelVal", `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel
+    (likely a road, right-of-way, or water).`);return;}
   const a=f.properties||{};
   if(f.geometry){
     parcelLayer=L.geoJSON({type:"Feature",properties:f.properties||{},geometry:f.geometry},
@@ -699,9 +702,9 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
   </div></div>`;
 
-  el.innerHTML=`<div class="parcel">${rows}</div>
+  setHTML("parcelVal", `<div class="parcel">${rows}</div>
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
-    <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`;
+    <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
   if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq);}
   if(mode==="explore"){const acN=(acres!=null&&!isNaN(+acres))?+acres:null; fillFit(acN);}
@@ -720,12 +723,12 @@ function fillFit(acres){
     else{ok=false; reason=`too small — needs ${need} ac (has ${acres.toFixed(2)})`;}
     return {id,label:u.label.replace(/\s*\(.*\)/,""),ok,need,reason};
   }).sort((a,b)=> a.ok===b.ok ? a.need-b.need : (a.ok?-1:1));
-  el.innerHTML=rows.map(r=>{
+  setHTML("fitVal", rows.map(r=>{
     const badge=r.ok==null?`<span class="fitbadge">?</span>`
       :r.ok?`<span class="fitbadge y">FITS</span>`:`<span class="fitbadge n">TOO SMALL</span>`;
     return `<div class="fitrow">${badge}<div class="fl">${esc(r.label)}<small>${esc(r.reason)}</small></div>`+
       `<button class="testbtn" data-use="${r.id}">Test →</button></div>`;
-  }).join("");
+  }).join(""));
   el.querySelectorAll(".testbtn").forEach(btn=>btn.onclick=()=>{selectUse(btn.dataset.use); setMode("build");});
 }
 
@@ -748,30 +751,29 @@ function runTopo(latlng,seq){
       return (isFinite(v)&&v>-1000)?v:null;
     }).catch(()=>null)
   )).then(els=>{
-    if(seq!==reqSeq)return; const b=document.getElementById("devTopo"); if(!b)return;
+    if(seq!==reqSeq)return; if(!document.getElementById("devTopo"))return;
     const ok=els.filter(v=>v!=null);
-    if(ok.length<3){b.innerHTML='<span class="loading">elevation unavailable here</span>';return;}
+    if(ok.length<3){setHTML("devTopo",errHTML("elevation unavailable here"));return;}
     const range=Math.max(...ok)-Math.min(...ok), slope=range/78*100; // % over ~78 m
     const band=slope<5?["flat","easy to develop","#2f9e44"]:slope<15?["moderate","some grading cost","#d9a441"]:["steep","high grading cost / cut-fill","#b35a1e"];
-    b.innerHTML=`<span style="color:${band[2]}">~${slope.toFixed(0)}% slope (${band[0]})</span> · ${band[1]} · ${ok[0].toFixed(0)} m elev`;
+    setHTML("devTopo",`<span style="color:${band[2]}">~${slope.toFixed(0)}% slope (${band[0]})</span> · ${band[1]} · ${ok[0].toFixed(0)} m elev`);
   });
 }
 
 /* MUD / water district membership at the point */
 function runDistricts(latlng,seq){
   const src=DISTRICT_SOURCES.find(s=>inBbox(latlng,s.bbox));
-  const b=()=>document.getElementById("devDist");
-  if(!src){if(b())b().innerHTML='not wired for this area — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">add a districts layer</a>';return;}
+  if(!src){if(document.getElementById("devDist"))setHTML("devDist",'not wired for this area — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">add a districts layer</a>');return;}
   tryDistrict(src.urls.slice(),latlng,seq,false);
 }
 function tryDistrict(urls,latlng,seq,responded){
-  if(seq!==reqSeq)return; const b=document.getElementById("devDist"); if(!b)return;
-  if(!urls.length){b.innerHTML=responded?'none here (likely a city/retail water provider, not a MUD)':'<span class="loading">district service unreachable</span>';return;}
+  if(seq!==reqSeq)return; if(!document.getElementById("devDist"))return;
+  if(!urls.length){setHTML("devDist", responded?'none here (likely a city/retail water provider, not a MUD)':errHTML("district service unreachable"));return;}
   arcgisPointQuery(urls[0],latlng,false).then(feats=>{
     if(seq!==reqSeq)return;
     const f=feats[0];
     if(f){const nm=pick(f.properties||{},["DISTRICT_N","DIST_NAME","NAME","DISTRICT","WATER_DIST","DISTRICT_NAME","CCN_NAME","UTILITY","LABEL"]);
-      b.innerHTML=nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`;}
+      setHTML("devDist", nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`);}
     else tryDistrict(urls.slice(1),latlng,seq,true);
   }).catch(()=>tryDistrict(urls.slice(1),latlng,seq,responded));
 }
