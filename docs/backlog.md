@@ -26,12 +26,12 @@ Ground rules for each run:
       induced school load vs nearby school count.
 - [ ] **FEMA flood check.** Add a FEMA NFHL flood-zone query on parcel click
       (floodway/100-yr) and a flood overlay toggle. Registry already lists `fema_nfhl`.
-- [x] **Loading & empty polish (partial).** Fixed a real bug where parcel,
+- [x] **Loading & empty polish.** Fixed a real bug where parcel,
       fit-list, topography, and MUD/district results stayed stuck in the grey
       italic "loading" style forever (the class was never cleared once data
       arrived); added a distinct amber "unavailable" style for genuine fetch
-      failures vs. a pulsing animation for in-progress loads; added a favicon.
-      Remaining: tighter mobile side-panel layout.
+      failures vs. a pulsing animation for in-progress loads; added a favicon;
+      tightened the mobile side-panel spacing.
 
 ## Next (breadth)
 - [ ] **More parcel counties.** Generalize `PARCEL_SOURCES` beyond Travis — add

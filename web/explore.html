@@ -114,7 +114,7 @@
     /* one column: header / map / scrollable panel. dvh handles mobile URL bars. */
     #app{grid-template-columns:1fr;grid-template-rows:auto 44dvh minmax(0,1fr);height:100dvh}
     header{grid-column:1}                     /* desktop spans 1/3 → would create a phantom 2nd column */
-    #panel{border-left:none;border-top:1px solid var(--line);padding:12px 12px 84px;min-height:0}
+    #panel{border-left:none;border-top:1px solid var(--line);padding:10px 11px 44px;min-height:0}
     header{padding:8px 10px;gap:8px;flex-wrap:nowrap}
     .brand{font-size:.92rem;white-space:nowrap}
     .brand .exp{display:none}                 /* hide the word "Explorer" */
@@ -132,6 +132,23 @@
     textarea,input{font-size:16px}            /* stop iOS auto-zoom on focus */
     .casebox textarea{height:110px}
     .leaflet-control-layers{font-size:.8rem}
+    /* tighter side panel: less chrome, more content per screen */
+    #panel h2{font-size:1.02rem}
+    .where{margin-bottom:8px}
+    .block{padding:9px 10px;margin:8px 0;border-radius:11px}
+    .block h3{margin-bottom:6px;font-size:.68rem}
+    .req,.lean{margin:5px 0}
+    .prow{padding:2px 0;font-size:.85rem}
+    .dev{gap:4px}
+    .drow{font-size:.84rem}
+    .verdict{padding:7px;font-size:.86rem}
+    .usebar{padding:9px 10px;margin-bottom:9px}
+    .toolbar{margin:0 0 4px}
+    .empty p{font-size:.9rem}
+    .paths{gap:9px}
+    .path{padding:12px}
+    .path b{font-size:1rem}
+    .tinker{padding:11px;font-size:.82rem}
   }
 </style>
 </head>
