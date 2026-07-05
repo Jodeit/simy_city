@@ -33,6 +33,14 @@ jobs:
         run: |
           pip install pyyaml
           python tools/build_model_json.py
+      # Gate: never publish a broken build. If the model is invalid or tests fail
+      # (e.g. an autonomous push regressed something), this fails BEFORE deploy so
+      # the live site keeps the last-good version.
+      - name: Validate model & run tests
+        run: |
+          pip install -e ".[dev]"
+          python -m simy_city.cli validate
+          python -m pytest -q
       # enablement:true creates/enables the Pages site via the workflow token on
       # first run — so no manual "Settings → Pages" step is needed.
       - uses: actions/configure-pages@v5
