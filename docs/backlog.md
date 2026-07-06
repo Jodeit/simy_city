@@ -47,8 +47,12 @@ Ground rules for each run:
       tract (keyless if the API allows low-volume; else document the key path).
       Replace the rooftop *proxy* with real household counts where available.
 - [ ] **Compare parcels.** Pin several parcels and compare their reads side by side.
-- [ ] **JS model unit tests in CI.** Port the mocked node checks (perspectives,
-      standoffs, fit, demand parsing) into a committed test run in CI.
+- [x] **JS model unit tests in CI.** Extracted the pure logic (perspectives,
+      standoffs, demand/parcel parsing) from `web/explore.html` into a shared
+      `web/logic.js` (loaded as a plain `<script>` in the browser, `require()`d
+      in tests — no build step), added `tests/js/model-logic.test.mjs` (Node's
+      built-in test runner, 23 cases incl. an integration check against the
+      real compiled `model.json`), and wired `node --test tests/js` into CI.
 
 ## Polish / stretch
 - [ ] Slope/contour overlay (USGS) toggle.
