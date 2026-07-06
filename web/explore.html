@@ -213,12 +213,14 @@
 
 <script src="vendor/leaflet/leaflet.js"></script>
 <script src="model.js"></script>
+<script src="logic.js"></script>
 <script>
 // vendored marker icons (so the app is fully self-contained on GitHub Pages)
 L.Icon.Default.prototype.options.imagePath = "vendor/leaflet/images/";
 L.Icon.Default.imagePath = "vendor/leaflet/images/";
-const SEVERITY={low:1,medium:2,high:3,none:0};
-const AMENITY_USES=new Set(["warehouse_club","fast_casual"]);
+// SEVERITY / AMENITY_USES / evaluate / isContested / findStandoffs / cheapest /
+// countOf / haversine / inBbox / pick now live in logic.js (shared with the
+// Node test suite in tests/js/) and are loaded as globals above.
 const LAYER_COLOR={power:"#e8843c",water:"#3a8fb7",broadband:"#2f9e44",transportation:"#5b6b6a",
   parcel:"#8a6d3b",environment:"#6b8f3a",entitlement:"#8a6d3b",demand:"#2f9e44",competition:"#b3541e",
   education:"#3a8fb7",health:"#b3306b",safety:"#b33030",habitat:"#1f7a33",land_cover:"#6b8f3a",carbon:"#444"};
@@ -408,8 +410,8 @@ function writeHash(latlng){
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function buildCaseText(use,latlng){
-  const views=evaluate(use), contested=isContested(views);
-  const sos=findStandoffs().filter(s=>s.cycle.includes(currentKey()));
+  const views=evaluate(MODEL,use,currentKey()), contested=isContested(views);
+  const sos=findStandoffs(MODEL).filter(s=>s.cycle.includes(currentKey()));
   let t=`SIMyCity — "${use.label}" @ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}\n`;
   t+=`Verdict: ${contested?"CONTESTED — a real values trade-off":"stakeholders broadly aligned"}.\n\n`;
   t+=`Should we build it? By stakeholder:\n`;
@@ -488,7 +490,7 @@ function renderBuild(use,latlng){
   }
 
   // SHOULD WE — perspectives
-  const views=evaluate(use), contested=isContested(views);
+  const views=evaluate(MODEL,use,currentKey()), contested=isContested(views);
   h+=`<div class="block"><h3>Should we? — by stakeholder</h3>`;
   views.forEach(v=>{
     const pos=v.leaning==="favorable"?{l:"55%",w:"30%",c:"#2f9e44"}
@@ -500,7 +502,7 @@ function renderBuild(use,latlng){
   h+=`<div class="verdict ${contested?'contested':'aligned'}">${contested?'⚖️ CONTESTED — a real values trade-off':'✓ stakeholders broadly aligned'}</div></div>`;
 
   // STANDOFFS involving this use
-  const sos=findStandoffs().filter(s=>s.cycle.includes(currentKey()));
+  const sos=findStandoffs(MODEL).filter(s=>s.cycle.includes(currentKey()));
   if(sos.length){
     h+=`<div class="block"><h3>Chicken-and-egg standoffs in the way</h3>`;
     sos.forEach(s=>{
@@ -525,40 +527,6 @@ function specText(spec){
   return Object.entries(spec).map(([k,v])=>`${k}: ${v}`).join(" · ");
 }
 
-/* ---- perspectives (port of simy_city/perspectives.py) ---- */
-function evaluate(use){
-  const impacts=use.impacts||{}, induced=use.induces||{};
-  return Object.entries(MODEL.stakeholders).map(([sid,cfg])=>{
-    let score=0; const reasons=[];
-    if(cfg.pro_build){score+=2;reasons.push("wants development to happen");}
-    (cfg.opposes_impacts||[]).forEach(d=>{const s=SEVERITY[(impacts[d]||"none")]||0;if(s){score-=s;reasons.push(`${d}=${impacts[d]}`);}});
-    if((cfg.opposes_structure||[]).includes("induces")){const n=Object.keys(induced).length;if(n){score-=n;reasons.push(`${n} induced service(s) to fund`);}}
-    if(cfg.amenity_seeker && AMENITY_USES.has(currentKey())){score+=2;reasons.push("adds a local amenity");}
-    const leaning=score>1?"favorable":score<=-4?"opposed":"mixed";
-    return {stakeholder:sid,label:cfg.label,leaning,reasons:reasons.length?reasons:["no strongly weighted factors"]};
-  });
-}
-function isContested(views){const s=new Set(views.map(v=>v.leaning));return s.has("favorable")&&s.has("opposed");}
-
-/* ---- standoffs (port of simy_city/standoffs.py) ---- */
-function findStandoffs(present){
-  present=present||new Set();
-  const adj={};
-  MODEL.enabling_edges.forEach(e=>{if(present.has(e.from)||present.has(e.to))return;(adj[e.from]=adj[e.from]||[]).push(e);});
-  const out=[], seen=new Set();
-  function dfs(start,node,pn,pe){
-    (adj[node]||[]).forEach(e=>{
-      if(e.to===start&&pe.length>=1){const key=[...pn].sort().join("|");if(!seen.has(key)){seen.add(key);out.push({cycle:[...pn,start],edges:[...pe,e]});}return;}
-      if(pn.includes(e.to))return;
-      dfs(start,e.to,[...pn,e.to],[...pe,e]);
-    });
-  }
-  Object.keys(adj).forEach(u=>dfs(u,u,[u],[]));
-  return out;
-}
-const COST={low:0,medium:1,high:2};
-function cheapest(edges){return edges.reduce((a,b)=>COST[(b.breaker_cost||"high")]<COST[(a.breaker_cost||"high")]?b:a);}
-
 /* ---- LIVE demand read via Overpass (real counts → real verdict) ---- */
 const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
 function overpass(ql,seq,ok,fail){
@@ -570,11 +538,6 @@ function overpass(ql,seq,ok,fail){
       .then(d=>{if(seq===reqSeq)ok(d);})
       .catch(()=>attempt(eps.slice(1)));
   })(OVERPASS.slice());
-}
-function countOf(d){ // parse Overpass `out count`
-  const c=(d.elements||[]).find(e=>e.type==="count");
-  if(c&&c.tags)return parseInt(c.tags.total||c.tags.ways||c.tags.nodes||"0",10);
-  return (d.elements||[]).length||null;
 }
 function setHTML(id,html){const el=document.getElementById(id);if(el){el.classList.remove("loading");el.innerHTML=html;}}
 function errHTML(t){return `<span class="unavail">⚠ ${t}</span>`;}
@@ -612,19 +575,8 @@ function renderDemandVerdict(c,cfg){
     ? `✓ ~${c.toLocaleString()} rooftops clears ${cfg.needLabel} — demand supports it`
     : `✗ ~${c.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${cfg.needLabel} (${Math.round(ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`;
 }
-function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
-  const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 
 /* ---- parcel identification (real property boundary + county record) ---- */
-function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
-function pick(a,keys){
-  if(!a)return null;
-  for(const k of keys){if(a[k]!==undefined&&a[k]!==null&&a[k]!=="")return a[k];}
-  const low={};for(const k in a)low[k.toLowerCase()]=a[k];
-  for(const k of keys){const v=low[k.toLowerCase()];if(v!==undefined&&v!==null&&v!=="")return v;}
-  return null;
-}
 // One robust ArcGIS point query for both FeatureServer and (older) MapServer:
 // geometry is sent as JSON with an explicit wkid so the server reprojects our
 // lat/lng to the layer's CRS (parcels are usually stored in State Plane feet —

@@ -22,3 +22,12 @@ jobs:
         run: simy validate
       - name: Tests
         run: pytest -q
+      - name: Rebuild model from YAML (for JS model tests)
+        run: |
+          pip install pyyaml
+          python tools/build_model_json.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JS model-logic tests (perspectives / standoffs / demand parsing)
+        run: node --test tests/js/*.test.mjs
