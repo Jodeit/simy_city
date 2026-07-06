@@ -266,6 +266,8 @@ const DISTRICT_SOURCES=[
     bbox:[-98.17,30.02,-97.37,30.63],
     urls:["https://gis.traviscountytx.gov/server1/rest/services/Services_and_Facilities/Water_Providers/MapServer/2"] },
 ];
+// FEMA National Flood Hazard Layer — nationwide coverage, no bbox needed.
+const FLOOD_SOURCE="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"; // Flood Hazard Zones
 
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
 let mode="explore"; // "explore" (scout) | "build" (test a use)
@@ -714,6 +716,7 @@ function showParcel(geo,src,seq){
   const dev=`<div class="block"><h3>Developer checklist</h3><div class="dev">
     <div class="drow"><span>🗻 Topography</span><b id="devTopo" class="loading">estimating slope…</b></div>
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
+    <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -723,7 +726,7 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
-  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq);}
+  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
   if(mode==="explore"){const acN=(acres!=null&&!isNaN(+acres))?+acres:null; fillFit(acN);}
 }
 
@@ -793,6 +796,27 @@ function tryDistrict(urls,latlng,seq,responded){
       setHTML("devDist", nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`);}
     else tryDistrict(urls.slice(1),latlng,seq,true);
   }).catch(()=>tryDistrict(urls.slice(1),latlng,seq,responded));
+}
+
+/* FEMA flood hazard zone at the point — flash floods are the hard developability
+   constraint in Hill Country creek/lake country (Flash Flood Alley). */
+function runFlood(latlng,seq){
+  if(!document.getElementById("devFlood"))return;
+  arcgisPointQuery(FLOOD_SOURCE,latlng,false).then(feats=>{
+    if(seq!==reqSeq)return; if(!document.getElementById("devFlood"))return;
+    const f=feats[0];
+    if(!f){setHTML("devFlood",'no FEMA flood-zone data published here (unmapped area) — confirm with the county floodplain office');return;}
+    const a=f.properties||{};
+    const zone=pick(a,["FLD_ZONE","ZONE"])||"?";
+    const subty=pick(a,["ZONE_SUBTY","ZONE_SUBTYPE"])||"";
+    const sfha=pick(a,["SFHA_TF"]);
+    const label=`Zone ${esc(zone)}${subty?` (${esc(subty)})`:""}`;
+    let color,note;
+    if(/floodway/i.test(subty)){color="#b3306b";note="FLOODWAY — building/fill generally prohibited without a no-rise study";}
+    else if(sfha==="T"||/^(A|AE|AH|AO|AR|A99|V|VE)$/i.test(zone)){color="#b35a1e";note="Special Flood Hazard Area (100-yr) — flood insurance required, elevation/permit rules apply";}
+    else{color="#2f9e44";note="outside the 100-yr floodplain — minimal mapped flood hazard";}
+    setHTML("devFlood",`<span style="color:${color}">${label}</span> · ${note}`);
+  }).catch(()=>{if(seq===reqSeq&&document.getElementById("devFlood"))setHTML("devFlood",errHTML("FEMA flood service unreachable"));});
 }
 
 /* ---- bring-your-own-data (private, client-side only) ---- */

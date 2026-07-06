@@ -332,7 +332,7 @@ window.SIMY_MODEL = {
       ],
       "auth": "none",
       "docs_url": "https://www.fema.gov/flood-maps/national-flood-hazard-layer",
-      "relevance": "Hill Country = flash-flood country (Flash Flood Alley). Floodway/100-yr zones are a hard developability constraint on any parcel near a creek or the lake.\n"
+      "relevance": "Hill Country = flash-flood country (Flash Flood Alley). Floodway/100-yr zones are a hard developability constraint on any parcel near a creek or the lake. Wired live in the explorer's developer checklist (point query against the nationwide Flood Hazard Zones layer, no county-by-county work needed).\n"
     },
     "usgs_3dep": {
       "id": "usgs_3dep",

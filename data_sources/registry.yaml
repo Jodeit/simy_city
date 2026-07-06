@@ -618,7 +618,7 @@ sources:
     coverage: US
     access:
       type: rest_geojson
-      base_url: https://hazards.fema.gov/arcgis/rest/services
+      base_url: https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28
       auth: none
       formats: [geojson, wms]
       rate_limit: "ArcGIS fair use"
@@ -628,9 +628,11 @@ sources:
     relevance_78738: >
       Hill Country = flash-flood country (Flash Flood Alley). Floodway/100-yr
       zones are a hard developability constraint on any parcel near a creek or
-      the lake.
+      the lake. Wired live in the explorer's developer checklist (point query
+      against the nationwide Flood Hazard Zones layer, no county-by-county work
+      needed).
     docs_url: https://www.fema.gov/flood-maps/national-flood-hazard-layer
-    connector_status: none
+    connector_status: partial
 
   - id: usgs_3dep
     name: USGS 3DEP Elevation / The National Map

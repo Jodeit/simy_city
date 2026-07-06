@@ -24,8 +24,11 @@ Ground rules for each run:
       data_center: a true PASS/SHORT from nearest-substation distance + parcel
       acreage (≥10 ac) + water-district presence, not rooftops. residential: infer
       induced school load vs nearby school count.
-- [ ] **FEMA flood check.** Add a FEMA NFHL flood-zone query on parcel click
-      (floodway/100-yr) and a flood overlay toggle. Registry already lists `fema_nfhl`.
+- [x] **FEMA flood check.** Added a live FEMA NFHL flood-zone point query to the
+      developer checklist (floodway / 100-yr Special Flood Hazard Area / outside
+      floodplain), same pattern as the topography/MUD checks. A flood *overlay
+      toggle* (visual layer on the map, not just the point read) is still open —
+      moved to Next.
 - [x] **Loading & empty polish.** Fixed a real bug where parcel,
       fit-list, topography, and MUD/district results stayed stuck in the grey
       italic "loading" style forever (the class was never cleared once data
@@ -34,6 +37,10 @@ Ground rules for each run:
       tightened the mobile side-panel spacing.
 
 ## Next (breadth)
+- [ ] **FEMA flood overlay toggle.** The developer checklist now shows a live
+      point read of the FEMA flood zone (see Now, done); add a visual map
+      overlay (WMS/tile layer) so floodway/100-yr zones are visible before
+      you even click, not just after.
 - [ ] **More parcel counties.** Generalize `PARCEL_SOURCES` beyond Travis — add
       2–3 big metros with open ArcGIS parcel layers (each is one config entry).
 - [ ] **Census ACS demographics.** Pull real households/income/age for the click's
