@@ -15,6 +15,20 @@ Ground rules for each run:
   docs/tests-only progress.
 
 ## Now (high value)
+- [x] **Real data_center verdict.** data_center previously showed no PASS/FAIL
+      at all (rooftops don't matter for siting a data center). Added a real
+      three-gate PASS/SHORT — nearest power substation ≤5 km (from the
+      existing live Overpass competitor scan), parcel acreage ≥10 ac (from
+      the existing county parcel read), and presence inside a mapped water
+      district (from the existing MUD/water-district checklist check) — all
+      three legs reuse data the app was already fetching, combined into one
+      verdict once all three resolve. Verified in headless Chromium: page
+      loads clean, clicking a parcel with `data_center` selected doesn't
+      throw, and directly driving the render function through PASS / SHORT /
+      unknown-data states produces correct verdict text and CSS classes with
+      zero console errors. Outbound network to Overpass/ArcGIS is blocked
+      from this sandbox, so a live end-to-end substation/parcel/district
+      fetch on the real site is a good human spot-check.
 - [x] **Satellite-first + resilient parcel overlay endpoint.** Satellite is now
       the default base layer (parcels on top) — most intuitive for "look at this
       lot" before diving into data. The parcel *tile* overlay (`ArcGISDynamic`)
@@ -27,10 +41,14 @@ Ground rules for each run:
       `/export`-capable services (per `PARCEL_SOURCES`) and that the change is
       JS-error-free end to end (load + simulated map click) in headless Chromium.
       Worth a human spot-check on the live site.
-- [ ] **Real verdicts for the other uses.** fast_casual: use a daytime/POI proxy;
-      data_center: a true PASS/SHORT from nearest-substation distance + parcel
-      acreage (≥10 ac) + water-district presence, not rooftops. residential: infer
-      induced school load vs nearby school count.
+- [ ] **Real verdict for fast_casual.** Currently reuses the plain rooftop
+      threshold (see `USE_DEMAND.fast_casual`). Blend in a daytime/POI proxy
+      (nearby offices, retail, workplaces — not just rooftops) since
+      fast-casual lunch traffic comes from daytime population too.
+- [ ] **Real verdict for residential_subdivision.** Infer induced school-age
+      load from parcel size (assumed density → units → est. school-age kids)
+      vs. nearby school count/capacity, instead of showing no verdict at all
+      (`USE_DEMAND.residential_subdivision.roofNeed` is currently 0).
 - [x] **FEMA flood check.** Added a live FEMA NFHL flood-zone point query to the
       developer checklist (floodway / 100-yr Special Flood Hazard Area / outside
       floodplain), same pattern as the topography/MUD checks. A flood *overlay
