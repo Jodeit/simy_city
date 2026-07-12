@@ -15,11 +15,18 @@ Ground rules for each run:
   docs/tests-only progress.
 
 ## Now (high value)
-- [ ] **Satellite-first option + confirm parcel overlay endpoint.** Verify the
-      `taxmaps.traviscountytx.gov` parcel export renders; if not, swap to
-      `gis.traviscountytx.gov`/`geo.traviscountytx.gov` MapServer. Consider making
-      Satellite the default base with parcels on top (most intuitive for "look at
-      this lot").
+- [x] **Satellite-first + resilient parcel overlay endpoint.** Satellite is now
+      the default base layer (parcels on top) — most intuitive for "look at this
+      lot" before diving into data. The parcel *tile* overlay (`ArcGISDynamic`)
+      previously hardcoded a single host (`taxmaps.traviscountytx.gov`); it now
+      tries `geo.traviscountytx.gov`'s TCAD MapServer per-tile if the primary
+      host errors, matching the fallback the point-query already had. Outbound
+      network to these hosts is blocked from this sandbox (proxy policy — see
+      `/root/.ccr/README.md`), so live rendering of the fallback host couldn't be
+      confirmed this run; verified instead that both hosts are real MapServer
+      `/export`-capable services (per `PARCEL_SOURCES`) and that the change is
+      JS-error-free end to end (load + simulated map click) in headless Chromium.
+      Worth a human spot-check on the live site.
 - [ ] **Real verdicts for the other uses.** fast_casual: use a daytime/POI proxy;
       data_center: a true PASS/SHORT from nearest-substation distance + parcel
       acreage (≥10 ac) + water-district presence, not rooftops. residential: infer

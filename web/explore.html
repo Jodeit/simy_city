@@ -331,12 +331,19 @@ const ArcGISDynamic=L.GridLayer.extend({
     const p1=L.CRS.EPSG3857.project(nw),p2=L.CRS.EPSG3857.project(se);
     const bbox=[Math.min(p1.x,p2.x),Math.min(p1.y,p2.y),Math.max(p1.x,p2.x),Math.max(p1.y,p2.y)].join(",");
     const o=this.options;
-    t.src=o.base+"/export?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&dpi=96&format=png32&transparent=true&f=image"+(o.lyrs?("&layers=show:"+o.lyrs):"");
-    t.onerror=function(){t.style.visibility="hidden";};
+    const bases=o.bases||[o.base];
+    const urlFor=base=>base+"/export?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&dpi=96&format=png32&transparent=true&f=image"+(o.lyrs?("&layers=show:"+o.lyrs):"");
+    let i=0;
+    t.src=urlFor(bases[i]);
+    t.onerror=function(){
+      i++;
+      if(i<bases.length)t.src=urlFor(bases[i]);   // this host is down/CORS-blocked → try the next county host
+      else t.style.visibility="hidden";
+    };
     return t;
   }
 });
-const arcgisDynamic=(base,opts)=>new ArcGISDynamic(Object.assign({base,tileSize:256,opacity:0.9,maxZoom:21},opts||{}));
+const arcgisDynamic=(bases,opts)=>new ArcGISDynamic(Object.assign({bases:Array.isArray(bases)?bases:[bases],tileSize:256,opacity:0.9,maxZoom:21},opts||{}));
 
 // ---- base maps (all free, no API key) ----
 const baseStreet=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -351,13 +358,19 @@ const baseSat=L.layerGroup([
 ]);
 
 // ---- overlays ----
-const parcelTiles=arcgisDynamic("https://taxmaps.traviscountytx.gov/arcgis/rest/services/Parcels/MapServer",
-  {opacity:0.85,attribution:'Parcels &copy; TCAD / Travis County'});
+// Parcel tile export: try each MapServer host in order per-tile, falling back
+// silently (CORS block / outage on one host shouldn't blank the overlay).
+const parcelTiles=arcgisDynamic([
+    "https://taxmaps.traviscountytx.gov/arcgis/rest/services/Parcels/MapServer",
+    "https://geo.traviscountytx.gov/arcgis/rest/services/TNR/TCAD/MapServer",
+  ],{opacity:0.85,attribution:'Parcels &copy; TCAD / Travis County'});
 
 const IS_MOBILE=window.matchMedia("(max-width:760px)").matches;
-map=L.map("map",{zoomControl:!IS_MOBILE,layers:[baseStreet,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
+// Satellite-first: seeing the actual lot (trees, buildings, driveways) is the
+// most intuitive starting point for "what is this place" before diving into data.
+map=L.map("map",{zoomControl:!IS_MOBILE,layers:[baseSat,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
 L.control.layers(
-  {"Street":baseStreet,"Topographic":baseTopo,"Satellite":baseSat},
+  {"Satellite":baseSat,"Street":baseStreet,"Topographic":baseTopo},
   {"TCAD parcel lines":parcelTiles},
   {position:"topright",collapsed:IS_MOBILE}   // expanded control would eat the small map
 ).addTo(map);
