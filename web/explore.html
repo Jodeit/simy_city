@@ -238,6 +238,12 @@ const USE_DEMAND={
   data_center:{ radius:8000, roofNeed:0, needLabel:"",
     compQ:'nwr["power"="substation"]', compLabel:"power substations" },
 };
+// data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
+// lives near a data center by design): nearest substation + parcel size +
+// water-district presence, the three site-selection gates that actually
+// decide whether a hyperscaler can build here.
+const DC_SUB_KM=5, DC_MIN_ACRES=10;
+let dcState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -390,9 +396,11 @@ function analyze(latlng){
     ring=L.circle(latlng,{radius:cfg.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
     res.innerHTML=renderBuild(use,latlng);
     fillTools(latlng);
+    dcState = current==="data_center" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
+    dcState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -484,12 +492,14 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  h+=`<div class="block"><h3>Live area read — real demand</h3>
+  const isDC=current==="data_center";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
       <div class="src">live counts within the ${(USE_DEMAND[current].radius/1000)}-km trade area (OpenStreetMap) ·
-        rooftops proxy household demand</div></div>`;
+        ${isDC?"grid interconnect + parcel size + water district decide the verdict, not rooftops"
+              :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
   const ind=use.induces||{};
@@ -577,7 +587,14 @@ function runDemand(latlng,seq){
     setHTML("compVal", els.length
       ? `📍 <b>${els.length}</b> ${esc(cfg.compLabel)} in range · nearest <b>${esc(els[0].name)}</b> ${els[0].km.toFixed(1)} km`
       : `📍 no ${esc(cfg.compLabel)} in range`);
-  }, ()=>setHTML("compVal",errHTML("competitor scan unavailable")));
+    if(current==="data_center"&&dcState&&dcState.seq===seq){
+      dcState.subKm = els.length ? els[0].km : null;
+      maybeRenderDCVerdict(seq);
+    }
+  }, ()=>{
+    setHTML("compVal",errHTML("competitor scan unavailable"));
+    if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
+  });
 }
 function renderDemandVerdict(c,cfg){
   const el=document.getElementById("demandVerdict"); if(!el||c==null)return;
@@ -587,6 +604,36 @@ function renderDemandVerdict(c,cfg){
   el.innerHTML= pass
     ? `✓ ~${c.toLocaleString()} rooftops clears ${cfg.needLabel} — demand supports it`
     : `✗ ~${c.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${cfg.needLabel} (${Math.round(ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`;
+}
+// data_center's real siting verdict — waits for all three legs (substation
+// distance from runDemand, acreage from showParcel, water-district presence
+// from runDistricts) before rendering once, in whatever order they resolve.
+function maybeRenderDCVerdict(seq){
+  if(current!=="data_center"||mode!=="build"||!dcState||dcState.seq!==seq)return;
+  const s=dcState;
+  const haveSub = s.subKm!==undefined || s.subErr;
+  if(!(haveSub && s.acres!==undefined && s.mud!==undefined))return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  const subOk = !s.subErr && s.subKm!=null && s.subKm<=DC_SUB_KM;
+  const acresOk = s.acres!=null && s.acres>=DC_MIN_ACRES;
+  const mudOk = s.mud===true;
+  const pass = subOk && acresOk && mudOk;
+  const legs=[
+    subOk?`✓ substation ${s.subKm.toFixed(1)} km away (≤${DC_SUB_KM} km)`
+      : s.subErr?`? substation distance unavailable`
+      : s.subKm==null?`✗ no substation within ${(USE_DEMAND.data_center.radius/1000)} km`
+      : `✗ nearest substation ${s.subKm.toFixed(1)} km away (need ≤${DC_SUB_KM} km)`,
+    acresOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${DC_MIN_ACRES} ac)`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${DC_MIN_ACRES} ac)`,
+    mudOk?`✓ inside a mapped water district — utility water/sewer available`
+      : s.mud===false?`✗ no water district here — would need a private well or a long utility extension`
+      : `? water-district coverage unknown for this area`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — clears the power, land &amp; water gates for a data center"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
 /* ---- parcel identification (real property boundary + county record) ---- */
@@ -692,7 +739,9 @@ function showParcel(geo,src,seq){
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
   if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
-  if(mode==="explore"){const acN=(acres!=null&&!isNaN(+acres))?+acres:null; fillFit(acN);}
+  const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
+  if(mode==="explore"){fillFit(acN);}
+  if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
 }
 
 // "What could go here?" — rank land uses by physical fit (lot size). Each row
@@ -748,17 +797,31 @@ function runTopo(latlng,seq){
 /* MUD / water district membership at the point */
 function runDistricts(latlng,seq){
   const src=DISTRICT_SOURCES.find(s=>inBbox(latlng,s.bbox));
-  if(!src){if(document.getElementById("devDist"))setHTML("devDist",'not wired for this area — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">add a districts layer</a>');return;}
+  if(!src){
+    if(document.getElementById("devDist"))setHTML("devDist",'not wired for this area — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">add a districts layer</a>');
+    resolveDCMud(null,seq);
+    return;
+  }
   tryDistrict(src.urls.slice(),latlng,seq,false);
+}
+function resolveDCMud(value,seq){
+  if(current!=="data_center"||!dcState||dcState.seq!==seq)return;
+  dcState.mud=value;
+  maybeRenderDCVerdict(seq);
 }
 function tryDistrict(urls,latlng,seq,responded){
   if(seq!==reqSeq)return; if(!document.getElementById("devDist"))return;
-  if(!urls.length){setHTML("devDist", responded?'none here (likely a city/retail water provider, not a MUD)':errHTML("district service unreachable"));return;}
+  if(!urls.length){
+    setHTML("devDist", responded?'none here (likely a city/retail water provider, not a MUD)':errHTML("district service unreachable"));
+    resolveDCMud(responded?false:null,seq);
+    return;
+  }
   arcgisPointQuery(urls[0],latlng,false).then(feats=>{
     if(seq!==reqSeq)return;
     const f=feats[0];
     if(f){const nm=pick(f.properties||{},["DISTRICT_N","DIST_NAME","NAME","DISTRICT","WATER_DIST","DISTRICT_NAME","CCN_NAME","UTILITY","LABEL"]);
-      setHTML("devDist", nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`);}
+      setHTML("devDist", nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`);
+      resolveDCMud(true,seq);}
     else tryDistrict(urls.slice(1),latlng,seq,true);
   }).catch(()=>tryDistrict(urls.slice(1),latlng,seq,responded));
 }
