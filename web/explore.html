@@ -272,6 +272,10 @@ const DISTRICT_SOURCES=[
 const FLOOD_SOURCE="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"; // Flood Hazard Zones
 
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
+// data_center's real PASS/SHORT gates (power + land + water, not rooftops — see
+// maybeRenderDCVerdict). Filled in by three independent async reads keyed to the
+// click's seq so a stale response from a superseded click can't corrupt it.
+let dcCheck={seq:-1};
 let mode="explore"; // "explore" (scout) | "build" (test a use)
 let reqSeq=0; // bumped each click; async callbacks bail if they're stale
 
@@ -385,6 +389,7 @@ function analyze(latlng){
   marker=L.marker(latlng).addTo(map);
   lastLatLng=latlng;
   const seq=++reqSeq;
+  if(current==="data_center")dcCheck={seq};
   if(mode==="build"){
     const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
     ring=L.circle(latlng,{radius:cfg.radius,color:"#2f9e44",weight:1.5,fillColor:"#74c476",fillOpacity:.07}).addTo(map);
@@ -577,7 +582,10 @@ function runDemand(latlng,seq){
     setHTML("compVal", els.length
       ? `📍 <b>${els.length}</b> ${esc(cfg.compLabel)} in range · nearest <b>${esc(els[0].name)}</b> ${els[0].km.toFixed(1)} km`
       : `📍 no ${esc(cfg.compLabel)} in range`);
-  }, ()=>setHTML("compVal",errHTML("competitor scan unavailable")));
+    if(current==="data_center"&&dcCheck.seq===seq){dcCheck.subst=els.length?els[0].km:null; maybeRenderDCVerdict(seq);}
+  }, ()=>{ setHTML("compVal",errHTML("competitor scan unavailable"));
+    if(current==="data_center"&&dcCheck.seq===seq){dcCheck.subst="unavailable"; maybeRenderDCVerdict(seq);}
+  });
 }
 function renderDemandVerdict(c,cfg){
   const el=document.getElementById("demandVerdict"); if(!el||c==null)return;
@@ -587,6 +595,34 @@ function renderDemandVerdict(c,cfg){
   el.innerHTML= pass
     ? `✓ ~${c.toLocaleString()} rooftops clears ${cfg.needLabel} — demand supports it`
     : `✗ ~${c.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${cfg.needLabel} (${Math.round(ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`;
+}
+// Data centers aren't gated by nearby households — they're gated by power,
+// land, and water. Fires after all three async reads land (substation distance
+// from Overpass, acreage from the county parcel record, MUD/water-district
+// presence from the ArcGIS district query); each is independently "unknown"-safe
+// so a source outage degrades to "can't tell" rather than a false SHORT.
+function maybeRenderDCVerdict(seq){
+  if(seq!==reqSeq||seq!==dcCheck.seq)return;
+  if(dcCheck.subst===undefined||dcCheck.acres===undefined||dcCheck.water===undefined)return;
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  const substKnown=dcCheck.subst!=="unavailable", substOk=typeof dcCheck.subst==="number";
+  const acresKnown=dcCheck.acres!==null, acresOk=acresKnown&&dcCheck.acres>=10;
+  const waterKnown=dcCheck.water!=="unavailable", waterOk=dcCheck.water===true;
+  const items=[
+    {ok:substKnown?substOk:null, text:!substKnown?"⚡ substation distance unavailable"
+      :substOk?`⚡ substation ${dcCheck.subst.toFixed(1)} km away`:"⚡ no substation within 8 km"},
+    {ok:acresKnown?acresOk:null, text:!acresKnown?"📐 parcel acreage unlisted"
+      :acresOk?`📐 ${dcCheck.acres.toFixed(1)} ac ≥ 10 ac min`:`📐 ${dcCheck.acres.toFixed(1)} ac — below 10 ac min`},
+    {ok:waterKnown?waterOk:null, text:!waterKnown?"💧 water-district check unavailable"
+      :waterOk?"💧 inside a MUD/water district":"💧 no water district found nearby"},
+  ];
+  const known=items.filter(i=>i.ok!==null);
+  const pass=known.length>0&&known.every(i=>i.ok);
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ ":"✗ ")+items.map(i=>i.text).join(" · ")+
+    (pass?" — power, land &amp; water infra all check out"
+      :"<br><b>that infra gap — not rooftops — is what actually gates a data center site</b>");
 }
 
 /* ---- parcel identification (real property boundary + county record) ---- */
@@ -691,8 +727,10 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
+  const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
+  if(current==="data_center"&&dcCheck.seq===seq){dcCheck.acres=acN; maybeRenderDCVerdict(seq);}
   if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
-  if(mode==="explore"){const acN=(acres!=null&&!isNaN(+acres))?+acres:null; fillFit(acN);}
+  if(mode==="explore"){fillFit(acN);}
 }
 
 // "What could go here?" — rank land uses by physical fit (lot size). Each row
@@ -748,17 +786,27 @@ function runTopo(latlng,seq){
 /* MUD / water district membership at the point */
 function runDistricts(latlng,seq){
   const src=DISTRICT_SOURCES.find(s=>inBbox(latlng,s.bbox));
-  if(!src){if(document.getElementById("devDist"))setHTML("devDist",'not wired for this area — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">add a districts layer</a>');return;}
+  if(!src){
+    if(document.getElementById("devDist"))setHTML("devDist",'not wired for this area — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">add a districts layer</a>');
+    if(current==="data_center"&&dcCheck.seq===seq){dcCheck.water="unavailable"; maybeRenderDCVerdict(seq);}
+    return;
+  }
   tryDistrict(src.urls.slice(),latlng,seq,false);
 }
 function tryDistrict(urls,latlng,seq,responded){
   if(seq!==reqSeq)return; if(!document.getElementById("devDist"))return;
-  if(!urls.length){setHTML("devDist", responded?'none here (likely a city/retail water provider, not a MUD)':errHTML("district service unreachable"));return;}
+  if(!urls.length){
+    setHTML("devDist", responded?'none here (likely a city/retail water provider, not a MUD)':errHTML("district service unreachable"));
+    if(current==="data_center"&&dcCheck.seq===seq){dcCheck.water=responded?false:"unavailable"; maybeRenderDCVerdict(seq);}
+    return;
+  }
   arcgisPointQuery(urls[0],latlng,false).then(feats=>{
     if(seq!==reqSeq)return;
     const f=feats[0];
     if(f){const nm=pick(f.properties||{},["DISTRICT_N","DIST_NAME","NAME","DISTRICT","WATER_DIST","DISTRICT_NAME","CCN_NAME","UTILITY","LABEL"]);
-      setHTML("devDist", nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`);}
+      setHTML("devDist", nm?`<b>${esc(nm)}</b> — MUD/district debt &amp; taxes apply`:`inside a water district — bond debt &amp; taxes may apply`);
+      if(current==="data_center"&&dcCheck.seq===seq){dcCheck.water=true; maybeRenderDCVerdict(seq);}
+    }
     else tryDistrict(urls.slice(1),latlng,seq,true);
   }).catch(()=>tryDistrict(urls.slice(1),latlng,seq,responded));
 }

@@ -27,10 +27,21 @@ Ground rules for each run:
       `/export`-capable services (per `PARCEL_SOURCES`) and that the change is
       JS-error-free end to end (load + simulated map click) in headless Chromium.
       Worth a human spot-check on the live site.
-- [ ] **Real verdicts for the other uses.** fast_casual: use a daytime/POI proxy;
-      data_center: a true PASS/SHORT from nearest-substation distance + parcel
-      acreage (≥10 ac) + water-district presence, not rooftops. residential: infer
-      induced school load vs nearby school count.
+- [x] **Data center: real PASS/SHORT verdict.** The "Live area read" verdict for
+      `data_center` no longer piggybacks on the rooftop check (data centers don't
+      care about nearby households). It now composes the three signals that
+      actually gate a site — nearest power substation distance (live Overpass,
+      reused from the existing competitor scan), parcel acreage ≥10 ac (from the
+      county parcel record), and MUD/water-district presence (live ArcGIS point
+      query, reused from the existing developer-checklist district check) — via
+      `maybeRenderDCVerdict()`, keyed to the click's request sequence so a
+      superseded click can't render a stale verdict, and each source degrades to
+      "unavailable" rather than a false SHORT if its fetch fails.
+- [ ] **Fast-casual: daytime/POI proxy verdict.** Blend a daytime-population/POI
+      density signal in with rooftops for `fast_casual` instead of rooftops alone.
+- [ ] **Residential: school-load verdict.** For `residential_subdivision`, infer
+      induced school-age population from parcel acreage/density and compare it
+      to the nearby school count (already fetched as the competitor/context read).
 - [x] **FEMA flood check.** Added a live FEMA NFHL flood-zone point query to the
       developer checklist (floodway / 100-yr Special Flood Hazard Area / outside
       floodplain), same pattern as the topography/MUD checks. A flood *overlay
