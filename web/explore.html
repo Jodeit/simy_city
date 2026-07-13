@@ -238,7 +238,12 @@ const USE_DEMAND={
     // lunch drive) into the demand read instead of judging on rooftops alone.
     daytimeRadius:3000, daytimeQ:'nwr["office"];nwr["shop"];nwr["craft"]', daytimeLabel:"nearby offices/shops/workplaces" },
   residential_subdivision:{ radius:5000, roofNeed:0, needLabel:"",
-    compQ:'nwr["amenity"="school"]', compLabel:"schools" },
+    compQ:'nwr["amenity"="school"]', compLabel:"schools",
+    // Real verdict: infer induced school-age load from parcel size (assumed
+    // density → est. homes → ~0.5 students/home, same heuristic documented in
+    // data_sources/layers.yaml's `induces.education` note) vs. nearby school
+    // count as a capacity-headroom proxy — see subdivisionSchoolLoad().
+    minAcres:5, unitsPerAcre:4, studentsPerHome:.5, studentsPerSchool:600 },
   data_center:{ radius:8000, roofNeed:0, needLabel:"",
     compQ:'nwr["power"="substation"]', compLabel:"power substations" },
 };
@@ -254,6 +259,10 @@ let dcState=null;
 // legs before rendering once.
 const FC_DAYTIME_WEIGHT=20;
 let fcState=null;
+// residential_subdivision's real siting verdict — waits for the parcel
+// acreage (from showParcel) and nearby school count (from runDemand's compQ
+// leg, already fetched) before rendering once.
+let subdivState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -408,11 +417,13 @@ function analyze(latlng){
     fillTools(latlng);
     dcState = current==="data_center" ? {seq} : null;
     fcState = current==="fast_casual" ? {seq} : null;
+    subdivState = current==="residential_subdivision" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
     dcState=null;
     fcState=null;
+    subdivState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -504,14 +515,15 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isSubdiv=current==="residential_subdivision";
+  h+=`<div class="block"><h3>Live area read — ${(isDC||isSubdiv)?"siting check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
       <div class="src">live counts within the ${(USE_DEMAND[current].radius/1000)}-km trade area (OpenStreetMap) ·
         ${isDC?"grid interconnect + parcel size + water district decide the verdict, not rooftops"
               :isFC?"rooftops + nearby offices/shops (daytime population) blend into the verdict"
+              :isSubdiv?"parcel size (est. new homes/students) + nearby school count decide the verdict, not rooftops"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -616,9 +628,14 @@ function runDemand(latlng,seq){
       dcState.subKm = els.length ? els[0].km : null;
       maybeRenderDCVerdict(seq);
     }
+    if(current==="residential_subdivision"&&subdivState&&subdivState.seq===seq){
+      subdivState.schoolCount = els.length;
+      maybeRenderSubdivVerdict(seq);
+    }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
     if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
+    if(current==="residential_subdivision"&&subdivState&&subdivState.seq===seq){ subdivState.schoolErr=true; maybeRenderSubdivVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -651,6 +668,30 @@ function maybeRenderFCVerdict(seq){
     ? `✓ ~${Math.round(b.effective).toLocaleString()} effective demand units clears ${esc(cfg.needLabel)}`
     : `✗ ~${Math.round(b.effective).toLocaleString()} effective demand units vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(b.ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`)
     +`<br><span style="font-weight:400;font-size:.85em">${s.roofs.toLocaleString()} rooftops · ${dtTxt}</span>`;
+}
+// residential_subdivision's real siting verdict — waits for the parcel
+// acreage (showParcel) and nearby school count (runDemand's compQ leg, the
+// same schools scan already shown in compVal) before rendering once.
+function maybeRenderSubdivVerdict(seq){
+  if(current!=="residential_subdivision"||mode!=="build"||!subdivState||subdivState.seq!==seq)return;
+  const s=subdivState, cfg=USE_DEMAND.residential_subdivision;
+  const haveSchool = s.schoolCount!==undefined || s.schoolErr;
+  if(!(haveSchool && s.acres!==undefined))return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.acres==null){ el.style.display="none"; return; } // no parcel acreage — nothing to estimate from
+  const load=subdivisionSchoolLoad(s.acres, s.schoolErr?null:s.schoolCount, cfg);
+  const pass = load.pass===true;
+  const legs=[
+    load.acreOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${cfg.minAcres} ac buildable)`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${cfg.minAcres} ac)`,
+    load.schoolOk===null?`? nearby school capacity unknown`
+      : load.schoolOk?`✓ ~${Math.round(load.students)} est. school-age kids fits ~${Math.round(load.capacity).toLocaleString()} nearby school capacity`
+      : `✗ ~${Math.round(load.students)} est. school-age kids vs ~${Math.round(load.capacity).toLocaleString()} nearby capacity (${(s.schoolCount||0)} school${s.schoolCount===1?"":"s"})`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — parcel size and nearby school capacity both check out"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 // data_center's real siting verdict — waits for all three legs (substation
 // distance from runDemand, acreage from showParcel, water-district presence
@@ -789,6 +830,7 @@ function showParcel(geo,src,seq){
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
+  if(current==="residential_subdivision"&&subdivState&&subdivState.seq===seq){ subdivState.acres=acN; maybeRenderSubdivVerdict(seq); }
 }
 
 // "What could go here?" — rank land uses by physical fit (lot size). Each row

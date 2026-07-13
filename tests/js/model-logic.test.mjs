@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
-  countOf, haversine, inBbox, pick, blendedDemand,
+  countOf, haversine, inBbox, pick, blendedDemand, subdivisionSchoolLoad,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -165,6 +165,50 @@ test("blendedDemand: pass threshold is 85% of need, same as the rooftop-only ver
   const justOver = blendedDemand(7650, 0, 20, 9000);  // 85.0%
   assert.equal(justUnder.pass, false);
   assert.equal(justOver.pass, true);
+});
+
+// ---- subdivision school load (residential_subdivision: parcel size → induced
+// school-age load vs. nearby school capacity) ----
+
+const SUBDIV_CFG = { minAcres: 5, unitsPerAcre: 4, studentsPerHome: .5, studentsPerSchool: 600 };
+
+test("subdivisionSchoolLoad: null acres means no verdict yet", () => {
+  assert.equal(subdivisionSchoolLoad(null, 3, SUBDIV_CFG), null);
+});
+
+test("subdivisionSchoolLoad: unknown school count is unresolved, not a fail", () => {
+  const l = subdivisionSchoolLoad(10, null, SUBDIV_CFG);
+  assert.equal(l.acreOk, true);
+  assert.equal(l.schoolOk, null);
+  assert.equal(l.pass, null);
+});
+
+test("subdivisionSchoolLoad: parcel under min buildable acres fails regardless of school capacity", () => {
+  const l = subdivisionSchoolLoad(2, 5, SUBDIV_CFG);
+  assert.equal(l.acreOk, false);
+  assert.equal(l.pass, false);
+});
+
+test("subdivisionSchoolLoad: small parcel's induced load fits nearby school capacity", () => {
+  const l = subdivisionSchoolLoad(10, 1, SUBDIV_CFG); // 40 homes, 20 students vs 600 capacity
+  assert.equal(l.homes, 40);
+  assert.equal(l.students, 20);
+  assert.equal(l.schoolOk, true);
+  assert.equal(l.pass, true);
+});
+
+test("subdivisionSchoolLoad: large parcel's induced load can outstrip nearby school capacity", () => {
+  const l = subdivisionSchoolLoad(500, 1, SUBDIV_CFG); // 2000 homes, 1000 students vs 600 capacity
+  assert.equal(l.students, 1000);
+  assert.equal(l.schoolOk, false);
+  assert.equal(l.pass, false);
+});
+
+test("subdivisionSchoolLoad: zero nearby schools with real induced load is a fail, not a divide-by-zero", () => {
+  const l = subdivisionSchoolLoad(10, 0, SUBDIV_CFG);
+  assert.equal(l.capacity, 0);
+  assert.equal(l.ratio, Infinity);
+  assert.equal(l.schoolOk, false);
 });
 
 // ---- parcel helpers (inBbox / pick) ----
