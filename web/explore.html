@@ -232,7 +232,11 @@ const USE_DEMAND={
   warehouse_club:{ radius:15000, roofNeed:100000, needLabel:"the ~100k-rooftop trade area a warehouse club needs",
     compQ:'nwr["shop"="wholesale"];nwr["name"~"Costco|Sam.s Club|BJ.s",i]', compLabel:"warehouse clubs" },
   fast_casual:{ radius:6000, roofNeed:9000, needLabel:"the rooftop/daytime base a fast-casual chain needs",
-    compQ:'nwr["amenity"="fast_food"]', compLabel:"fast-food outlets" },
+    compQ:'nwr["amenity"="fast_food"]', compLabel:"fast-food outlets",
+    // Lunch traffic comes from workers and shoppers too, not just nearby homes —
+    // blend a daytime-population proxy (offices/shops/workplaces within an easy
+    // lunch drive) into the demand read instead of judging on rooftops alone.
+    daytimeRadius:3000, daytimeQ:'nwr["office"];nwr["shop"];nwr["craft"]', daytimeLabel:"nearby offices/shops/workplaces" },
   residential_subdivision:{ radius:5000, roofNeed:0, needLabel:"",
     compQ:'nwr["amenity"="school"]', compLabel:"schools" },
   data_center:{ radius:8000, roofNeed:0, needLabel:"",
@@ -244,6 +248,12 @@ const USE_DEMAND={
 // decide whether a hyperscaler can build here.
 const DC_SUB_KM=5, DC_MIN_ACRES=10;
 let dcState=null;
+// fast_casual's blended verdict: each nearby office/shop/workplace counts as
+// this many rooftop-equivalent demand units (a documented heuristic, same
+// spirit as roofNeed itself) — waits for both the rooftop and daytime-POI
+// legs before rendering once.
+const FC_DAYTIME_WEIGHT=20;
+let fcState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -397,10 +407,12 @@ function analyze(latlng){
     res.innerHTML=renderBuild(use,latlng);
     fillTools(latlng);
     dcState = current==="data_center" ? {seq} : null;
+    fcState = current==="fast_casual" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
     dcState=null;
+    fcState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -492,13 +504,14 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center";
+  const isDC=current==="data_center", isFC=current==="fast_casual";
   h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
       <div class="src">live counts within the ${(USE_DEMAND[current].radius/1000)}-km trade area (OpenStreetMap) ·
         ${isDC?"grid interconnect + parcel size + water district decide the verdict, not rooftops"
+              :isFC?"rooftops + nearby offices/shops (daytime population) blend into the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -572,8 +585,20 @@ function runDemand(latlng,seq){
     seq, d=>{ const c=countOf(d);
       setHTML("roofVal", c==null?errHTML("rooftop count unavailable")
         : `🏠 <b>~${c.toLocaleString()}</b> rooftops within ${(cfg.radius/1000)} km <span class="src">(household proxy)</span>`);
-      if(cfg.roofNeed) renderDemandVerdict(c,cfg);
-    }, ()=>setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works.")));
+      if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=c; maybeRenderFCVerdict(seq); }
+      else if(cfg.roofNeed) renderDemandVerdict(c,cfg);
+    }, ()=>{
+      setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works."));
+      if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=null; maybeRenderFCVerdict(seq); }
+    });
+  // 1b) fast_casual only: daytime population proxy (offices/shops/workplaces) —
+  // lunch traffic comes from workers and shoppers too, not just nearby homes.
+  if(current==="fast_casual"&&cfg.daytimeQ){
+    const dparts=cfg.daytimeQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.daytimeRadius},${lat},${lng});`).join("");
+    overpass(`[out:json][timeout:25];(${dparts});out count;`, seq, d=>{
+      if(fcState&&fcState.seq===seq){ fcState.daytime=countOf(d); maybeRenderFCVerdict(seq); }
+    }, ()=>{ if(fcState&&fcState.seq===seq){ fcState.daytime=null; fcState.daytimeErr=true; maybeRenderFCVerdict(seq); } });
+  }
   // 2) competitors / context with nearest
   const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
   overpass(`[out:json][timeout:25];(${parts});out center 60;`, seq, d=>{
@@ -604,6 +629,28 @@ function renderDemandVerdict(c,cfg){
   el.innerHTML= pass
     ? `✓ ~${c.toLocaleString()} rooftops clears ${cfg.needLabel} — demand supports it`
     : `✗ ~${c.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${cfg.needLabel} (${Math.round(ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`;
+}
+// fast_casual's blended verdict: rooftops (household proxy) plus a daytime-
+// population proxy (nearby offices/shops/workplaces), so an office-park or
+// retail-heavy spot with few homes nearby can still clear the bar. Waits for
+// both legs (rooftops always resolves; daytime resolves or errors) before
+// rendering once.
+function maybeRenderFCVerdict(seq){
+  if(current!=="fast_casual"||mode!=="build"||!fcState||fcState.seq!==seq)return;
+  const s=fcState, cfg=USE_DEMAND.fast_casual;
+  if(s.roofs===undefined)return; // still waiting on the rooftop leg
+  if(s.daytime===undefined&&!s.daytimeErr)return; // still waiting on the daytime leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.roofs==null){ el.style.display="none"; return; } // no read at all — nothing to show
+  const b=blendedDemand(s.roofs,s.daytime,FC_DAYTIME_WEIGHT,cfg.roofNeed);
+  el.style.display="block";
+  el.className="verdict "+(b.pass?"aligned":"contested");
+  const dtTxt = s.daytimeErr ? "daytime-POI count unavailable"
+    : `~${(s.daytime||0).toLocaleString()} ${esc(cfg.daytimeLabel)}`;
+  el.innerHTML = (b.pass
+    ? `✓ ~${Math.round(b.effective).toLocaleString()} effective demand units clears ${esc(cfg.needLabel)}`
+    : `✗ ~${Math.round(b.effective).toLocaleString()} effective demand units vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(b.ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`)
+    +`<br><span style="font-weight:400;font-size:.85em">${s.roofs.toLocaleString()} rooftops · ${dtTxt}</span>`;
 }
 // data_center's real siting verdict — waits for all three legs (substation
 // distance from runDemand, acreage from showParcel, water-district presence

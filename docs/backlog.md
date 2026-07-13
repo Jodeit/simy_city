@@ -41,10 +41,13 @@ Ground rules for each run:
       `/export`-capable services (per `PARCEL_SOURCES`) and that the change is
       JS-error-free end to end (load + simulated map click) in headless Chromium.
       Worth a human spot-check on the live site.
-- [ ] **Real verdict for fast_casual.** Currently reuses the plain rooftop
-      threshold (see `USE_DEMAND.fast_casual`). Blend in a daytime/POI proxy
-      (nearby offices, retail, workplaces — not just rooftops) since
-      fast-casual lunch traffic comes from daytime population too.
+- [x] **Real verdict for fast_casual.** Blended a daytime-population proxy
+      (nearby offices/shops/workplaces within a 3 km lunch-drive radius, live
+      via Overpass) into the rooftop demand read (`blendedDemand()` in
+      `web/logic.js`) so an office-park or retail-heavy spot with few homes
+      nearby can still clear the bar, instead of judging on rooftops alone.
+      Waits for both legs before rendering one verdict, same pattern as the
+      data_center siting check. Added unit tests for the blend math.
 - [ ] **Real verdict for residential_subdivision.** Infer induced school-age
       load from parcel size (assumed density → units → est. school-age kids)
       vs. nearby school count/capacity, instead of showing no verdict at all

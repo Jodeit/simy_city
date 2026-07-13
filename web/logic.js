@@ -49,6 +49,21 @@ function countOf(d){ // parse Overpass `out count`
   if(c&&c.tags)return parseInt(c.tags.total||c.tags.ways||c.tags.nodes||"0",10);
   return (d.elements||[]).length||null;
 }
+// Blend a rooftop (household) count with a daytime-population proxy (nearby
+// offices/shops/workplaces) into one "effective demand" figure, compared
+// against the same roofNeed threshold a pure-rooftop read would use. Lunch
+// traffic for a fast-casual chain comes from workers and shoppers, not just
+// nearby homes, so a daytime-only area (e.g. an office park) can still clear
+// the bar even with few rooftops in range. `weight` is the rooftop-equivalent
+// value of one daytime POI (office/shop/craft node) — a documented heuristic,
+// same as roofNeed itself. Returns null (no verdict) until roofs is known.
+function blendedDemand(roofs,daytime,weight,need){
+  if(roofs==null)return null;
+  const dt=daytime==null?0:daytime;
+  const effective=roofs+weight*dt;
+  const ratio=effective/need;
+  return {effective,ratio,pass:ratio>=0.85};
+}
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
@@ -66,5 +81,5 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand};
 }

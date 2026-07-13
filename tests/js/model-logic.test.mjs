@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
-  countOf, haversine, inBbox, pick,
+  countOf, haversine, inBbox, pick, blendedDemand,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -137,6 +137,34 @@ test("haversine: distance from a point to itself is zero", () => {
 test("haversine: Austin to Houston is roughly 233 km", () => {
   const km = haversine(30.267, -97.743, 29.760, -95.369);
   assert.ok(km > 220 && km < 245, `expected ~233km, got ${km}`);
+});
+
+// ---- blended demand (fast_casual: rooftops + daytime-POI proxy) ----
+
+test("blendedDemand: null roofs means no verdict yet", () => {
+  assert.equal(blendedDemand(null, 10, 20, 9000), null);
+});
+
+test("blendedDemand: missing daytime count treated as zero, matches rooftop-only ratio", () => {
+  const b = blendedDemand(9000, null, 20, 9000);
+  assert.equal(b.effective, 9000);
+  assert.equal(b.ratio, 1);
+  assert.equal(b.pass, true);
+});
+
+test("blendedDemand: daytime POIs can push a rooftop-short area over the bar", () => {
+  const short = blendedDemand(3000, 0, 20, 9000);
+  assert.equal(short.pass, false); // 3000/9000 well under 0.85
+  const withDaytime = blendedDemand(3000, 400, 20, 9000); // +8000 effective units
+  assert.equal(withDaytime.effective, 11000);
+  assert.equal(withDaytime.pass, true);
+});
+
+test("blendedDemand: pass threshold is 85% of need, same as the rooftop-only verdict", () => {
+  const justUnder = blendedDemand(7649, 0, 20, 9000); // 84.99%
+  const justOver = blendedDemand(7650, 0, 20, 9000);  // 85.0%
+  assert.equal(justUnder.pass, false);
+  assert.equal(justOver.pass, true);
 });
 
 // ---- parcel helpers (inBbox / pick) ----
