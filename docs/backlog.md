@@ -48,10 +48,24 @@ Ground rules for each run:
       nearby can still clear the bar, instead of judging on rooftops alone.
       Waits for both legs before rendering one verdict, same pattern as the
       data_center siting check. Added unit tests for the blend math.
-- [ ] **Real verdict for residential_subdivision.** Infer induced school-age
-      load from parcel size (assumed density → units → est. school-age kids)
-      vs. nearby school count/capacity, instead of showing no verdict at all
-      (`USE_DEMAND.residential_subdivision.roofNeed` is currently 0).
+- [x] **Real verdict for residential_subdivision.** Added a real PASS/SHORT
+      siting check (`subdivisionSchoolLoad()` in `web/logic.js`): parcel
+      acreage (already fetched) → assumed units/acre → assumed students/home
+      (the ~0.5 students/home heuristic already documented in
+      `data_sources/layers.yaml`'s `induces.education` note) is weighed
+      against nearby school count (the `amenity=school` scan the app was
+      already running for `compVal`) as a capacity-headroom proxy, times an
+      assumed students/school figure — both assumptions documented inline
+      since OSM doesn't reliably carry real school enrollment/capacity. Waits
+      for both legs before rendering one verdict, same pattern as
+      data_center/fast_casual. Added 6 unit tests for the load math. Verified
+      in headless Chromium: explore.html/index.html load with zero JS errors,
+      and directly driving `maybeRenderSubdivVerdict` through PASS / SHORT
+      (undersized parcel), SHORT (no nearby schools), no-data, and
+      school-fetch-error states all produced correct verdict text and CSS
+      classes. Outbound network to Overpass is blocked from this sandbox, so
+      a live end-to-end school-count fetch on the real site is a good human
+      spot-check.
 - [x] **FEMA flood check.** Added a live FEMA NFHL flood-zone point query to the
       developer checklist (floodway / 100-yr Special Flood Hazard Area / outside
       floodplain), same pattern as the topography/MUD checks. A flood *overlay

@@ -67,6 +67,24 @@ function blendedDemand(roofs,daytime,weight,need){
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+// Infer a residential subdivision's induced school-age load from parcel size
+// (acres → assumed units/acre → assumed students/home, the ~0.5 students/home
+// heuristic documented in data_sources/layers.yaml's `induces.education` note)
+// and weigh it against nearby school count as a capacity-headroom proxy (OSM
+// doesn't reliably carry school enrollment/capacity, so an assumed
+// students/school figure is documented in `cfg` rather than faked as precise).
+// Returns null until acres is known; schoolOk/pass are null (unresolved,
+// rendered as "unknown") when schoolCount itself couldn't be read.
+function subdivisionSchoolLoad(acres,schoolCount,cfg){
+  if(acres==null)return null;
+  const homes=acres*cfg.unitsPerAcre, students=homes*cfg.studentsPerHome;
+  const acreOk=acres>=cfg.minAcres;
+  if(schoolCount==null)return {homes,students,acreOk,capacity:null,ratio:null,schoolOk:null,pass:null};
+  const capacity=schoolCount*cfg.studentsPerSchool;
+  const ratio=capacity>0?students/capacity:(students>0?Infinity:0);
+  const schoolOk=ratio<=1;
+  return {homes,students,acreOk,capacity,ratio,schoolOk,pass:acreOk&&schoolOk};
+}
 
 /* ---- parcel lookup helpers ---- */
 function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
@@ -81,5 +99,5 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,subdivisionSchoolLoad};
 }
