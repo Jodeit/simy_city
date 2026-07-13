@@ -254,6 +254,12 @@ let dcState=null;
 // legs before rendering once.
 const FC_DAYTIME_WEIGHT=20;
 let fcState=null;
+// residential_subdivision's induced-school-load verdict: parcel acreage projects
+// to homes (density assumption) to school-age kids (0.5 students/home, matching
+// the induces.education note in layers.yaml), compared against a capacity proxy
+// from nearby schools — waits for both the acreage and school-count legs.
+const RES_UNITS_PER_ACRE=3, RES_STUDENTS_PER_HOME=0.5, RES_SEATS_PER_SCHOOL=750;
+let resState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -408,11 +414,13 @@ function analyze(latlng){
     fillTools(latlng);
     dcState = current==="data_center" ? {seq} : null;
     fcState = current==="fast_casual" ? {seq} : null;
+    resState = current==="residential_subdivision" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
     dcState=null;
     fcState=null;
+    resState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -504,14 +512,15 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
       <div class="src">live counts within the ${(USE_DEMAND[current].radius/1000)}-km trade area (OpenStreetMap) ·
         ${isDC?"grid interconnect + parcel size + water district decide the verdict, not rooftops"
               :isFC?"rooftops + nearby offices/shops (daytime population) blend into the verdict"
+              :isRes?"parcel acreage (est. homes) vs. nearby school capacity decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -615,10 +624,14 @@ function runDemand(latlng,seq){
     if(current==="data_center"&&dcState&&dcState.seq===seq){
       dcState.subKm = els.length ? els[0].km : null;
       maybeRenderDCVerdict(seq);
+    } else if(current==="residential_subdivision"&&resState&&resState.seq===seq){
+      resState.schools = els.length;
+      maybeRenderResVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
     if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
+    else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; maybeRenderResVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -681,6 +694,31 @@ function maybeRenderDCVerdict(seq){
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — clears the power, land &amp; water gates for a data center"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// residential_subdivision's induced-school-load verdict — waits for the acreage
+// leg (showParcel) and the nearby-school-count leg (runDemand's compQ) before
+// projecting homes → school-age kids and comparing against a capacity proxy.
+function maybeRenderResVerdict(seq){
+  if(current!=="residential_subdivision"||mode!=="build"||!resState||resState.seq!==seq)return;
+  const s=resState;
+  if(s.acres===undefined||s.schools===undefined)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.acres==null){ el.style.display="none"; return; } // no parcel acreage — nothing to project from
+  const units=Math.round(s.acres*RES_UNITS_PER_ACRE);
+  const kids=units*RES_STUDENTS_PER_HOME;
+  el.style.display="block";
+  if(s.schools==null){
+    el.className="verdict contested";
+    el.innerHTML=`? ~${Math.round(kids)} induced school-age kids from an est. ${units.toLocaleString()} homes — nearby school capacity unavailable`;
+    return;
+  }
+  const capacity=s.schools*RES_SEATS_PER_SCHOOL;
+  const pass=capacity>=kids;
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass
+    ? `✓ ~${Math.round(kids)} induced school-age kids fit within the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)`
+    : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
+    +`<br><span style="font-weight:400;font-size:.85em">${units.toLocaleString()} est. homes @ ${RES_UNITS_PER_ACRE}/ac · ${RES_STUDENTS_PER_HOME} students/home</span>`;
 }
 
 /* ---- parcel identification (real property boundary + county record) ---- */
@@ -789,6 +827,7 @@ function showParcel(geo,src,seq){
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
+  if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
 }
 
 // "What could go here?" — rank land uses by physical fit (lot size). Each row

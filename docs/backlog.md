@@ -48,10 +48,19 @@ Ground rules for each run:
       nearby can still clear the bar, instead of judging on rooftops alone.
       Waits for both legs before rendering one verdict, same pattern as the
       data_center siting check. Added unit tests for the blend math.
-- [ ] **Real verdict for residential_subdivision.** Infer induced school-age
-      load from parcel size (assumed density → units → est. school-age kids)
-      vs. nearby school count/capacity, instead of showing no verdict at all
-      (`USE_DEMAND.residential_subdivision.roofNeed` is currently 0).
+- [x] **Real verdict for residential_subdivision.** Projects parcel acreage
+      (`showParcel`) into est. homes via a documented density assumption
+      (3 units/ac), then into school-age kids at 0.5 students/home (matching
+      the `induces.education` note already in `layers.yaml`), and compares
+      against a capacity proxy from the nearby-school count already fetched
+      via Overpass (750 seats/school) — same wait-for-both-legs pattern as the
+      data_center and fast_casual verdicts (`maybeRenderResVerdict`). Verified
+      in headless Chromium: both pages load and a map click doesn't throw, and
+      directly driving the render function through PASS / SHORT /
+      capacity-unavailable / no-acreage states produces correct verdict text
+      and CSS classes with zero console errors. Outbound network to
+      Overpass/ArcGIS is blocked from this sandbox, so a live end-to-end
+      acreage/school fetch on the real site is a good human spot-check.
 - [x] **FEMA flood check.** Added a live FEMA NFHL flood-zone point query to the
       developer checklist (floodway / 100-yr Special Flood Hazard Area / outside
       floodplain), same pattern as the topography/MUD checks. A flood *overlay
