@@ -107,9 +107,26 @@ Ground rules for each run:
       names, real APN/HCAD_NUM formats) couldn't be confirmed from this
       sandbox — outbound network to `*.arcgis.com`/county GIS hosts is
       blocked — so a live spot-check in each county is a good human follow-up.
-- [ ] **Census ACS demographics.** Pull real households/income/age for the click's
-      tract (keyless if the API allows low-volume; else document the key path).
-      Replace the rooftop *proxy* with real household counts where available.
+- [x] **Census ACS demographics.** Added a "Census tract" row to the developer
+      checklist: FCC's keyless Census Geocoder resolves the click to a tract
+      FIPS, then the Census ACS5 API (also keyless at low volume — a
+      `CENSUS_API_KEY` constant is wired in for when that runs out) pulls real
+      median household income, median age, avg household size, and tract
+      population, same wait-and-render pattern as topography/MUD/flood
+      (`runCensus` in `web/explore.html`). Extracted the pure FIPS-splitting
+      and ACS-row-parsing (incl. handling ACS's `-666666666` missing-data
+      sentinel) into `web/logic.js` with unit tests. Didn't substitute this
+      into the rooftop-proxy demand math (`roofNeed`) as originally scoped —
+      a tract (~1-4k people) is far smaller than the multi-km trade areas
+      warehouse_club/fast_casual use, so swapping a single-tract count in
+      would understate demand rather than improve it; it's shown as its own
+      real-data checklist line instead. Verified in headless Chromium: both
+      pages load clean; `runCensus` was driven directly through the
+      network-failure path (renders "unavailable", doesn't throw) and a
+      mocked successful FCC+ACS5 response (renders correct income/age/
+      household-size/population text) with zero console errors. Outbound
+      network to geo.fcc.gov/api.census.gov is blocked from this sandbox, so
+      a live end-to-end lookup on the real site is a good human spot-check.
 - [ ] **Compare parcels.** Pin several parcels and compare their reads side by side.
 - [x] **JS model unit tests in CI.** Extracted the pure logic (perspectives,
       standoffs, demand/parcel parsing) from `web/explore.html` into a shared

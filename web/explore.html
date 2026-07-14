@@ -317,6 +317,18 @@ const DISTRICT_SOURCES=[
 ];
 // FEMA National Flood Hazard Layer — nationwide coverage, no bbox needed.
 const FLOOD_SOURCE="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"; // Flood Hazard Zones
+// Census ACS 5-yr tract demographics — real households/income/age, nationwide,
+// no bbox needed. FCC's geocoder resolves lat/lng → tract FIPS (keyless, no
+// documented daily cap); the ACS5 API itself allows a small number of keyless
+// calls/day before it starts asking for a free key. If this checklist row
+// starts erroring out under real traffic, get a free key at
+// https://api.census.gov/data/key_signup.html and set CENSUS_API_KEY below —
+// every request already appends it when non-empty.
+const CENSUS_API_KEY="";
+const FCC_GEOCODER="https://geo.fcc.gov/api/census/area";
+const ACS_YEAR=2022;
+// pop, median household income, median age, avg household size
+const ACS_VARS=["B01003_001E","B19013_001E","B01002_001E","B25010_001E"];
 
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
 let mode="explore"; // "explore" (scout) | "build" (test a use)
@@ -849,6 +861,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>🗻 Topography</span><b id="devTopo" class="loading">estimating slope…</b></div>
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
+    <div class="drow"><span>📊 Census tract</span><b id="devCensus" class="loading">looking up tract…</b></div>
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -858,7 +871,7 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
-  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
+  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);}
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
@@ -966,6 +979,42 @@ function runFlood(latlng,seq){
     else{color="#2f9e44";note="outside the 100-yr floodplain — minimal mapped flood hazard";}
     setHTML("devFlood",`<span style="color:${color}">${label}</span> · ${note}`);
   }).catch(()=>{if(seq===reqSeq&&document.getElementById("devFlood"))setHTML("devFlood",errHTML("FEMA flood service unreachable"));});
+}
+
+/* Census ACS tract demographics — real income/age/household-size for the
+   click's tract, both APIs keyless at low volume (see CENSUS_API_KEY above).
+   A tract (~1-4k people) is far smaller than the multi-km trade areas the
+   rooftop demand read uses, so this is shown as its own real-data checklist
+   line rather than substituted into roofNeed math — swapping a tract count
+   into a 15 km warehouse_club trade area would understate demand, not fix it. */
+function runCensus(latlng,seq){
+  if(!document.getElementById("devCensus"))return;
+  fetch(`${FCC_GEOCODER}?lat=${latlng.lat}&lon=${latlng.lng}&format=json`)
+    .then(r=>r.ok?r.json():Promise.reject(r.status))
+    .then(j=>{
+      const block=j&&j.results&&j.results[0]&&j.results[0].block_fips;
+      const fips=tractFipsFromBlockFips(block);
+      if(!fips)return Promise.reject("no tract FIPS here");
+      const key=CENSUS_API_KEY?`&key=${CENSUS_API_KEY}`:"";
+      return fetch(`https://api.census.gov/data/${ACS_YEAR}/acs/acs5?get=${ACS_VARS.join(",")}`+
+        `&for=tract:${fips.tract}&in=state:${fips.state}+county:${fips.county}${key}`)
+        .then(r=>r.ok?r.json():Promise.reject(r.status))
+        .then(rows=>({fips,rows}));
+    })
+    .then(({fips,rows})=>{
+      if(seq!==reqSeq)return; if(!document.getElementById("devCensus"))return;
+      if(!rows||rows.length<2)return Promise.reject("no ACS row");
+      const v=parseAcsRow(rows[0],rows[1]);
+      const pop=v.B01003_001E, income=v.B19013_001E, age=v.B01002_001E, hh=v.B25010_001E;
+      if(pop==null&&income==null&&age==null&&hh==null){setHTML("devCensus",errHTML("no ACS data published for this tract"));return;}
+      const parts=[];
+      if(income!=null)parts.push(`median household income <b>$${income.toLocaleString()}</b>`);
+      if(age!=null)parts.push(`median age <b>${age.toFixed(0)}</b>`);
+      if(hh!=null)parts.push(`avg household size <b>${hh.toFixed(1)}</b>`);
+      if(pop!=null)parts.push(`tract population <b>${pop.toLocaleString()}</b>`);
+      setHTML("devCensus",`${parts.join(" · ")}<div class="src">Census ACS ${ACS_YEAR} 5-yr est. · tract ${fips.state}${fips.county}${fips.tract}</div>`);
+    })
+    .catch(()=>{if(seq===reqSeq&&document.getElementById("devCensus"))setHTML("devCensus",errHTML("Census data unavailable here"));});
 }
 
 /* ---- bring-your-own-data (private, client-side only) ---- */

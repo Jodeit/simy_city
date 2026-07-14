@@ -68,6 +68,29 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 
+/* ---- Census ACS tract lookup helpers ----
+   FCC's keyless Census Geocoder returns a 15-digit block FIPS
+   (state[2]+county[3]+tract[6]+block[4]); the Census ACS5 API keys tract-level
+   tables off state+county+tract. Both APIs work without a key at low volume. */
+function tractFipsFromBlockFips(block){
+  if(!block||block.length<11)return null;
+  return {state:block.slice(0,2),county:block.slice(2,5),tract:block.slice(5,11)};
+}
+// ACS uses large negative sentinels (e.g. -666666666) for missing/annotated
+// cells instead of leaving them blank — treat anything below -1,000,000 as absent.
+function cleanAcsValue(v){
+  if(v===null||v===undefined||v==="")return null;
+  const n=+v;
+  return (isFinite(n)&&n>-1000000)?n:null;
+}
+// ACS5 responses are `[[header,...],[value,...]]`; zip row 0 (variable codes)
+// with row 1 (values) into a cleaned {code: number|null} map.
+function parseAcsRow(headers,values){
+  const out={};
+  headers.forEach((k,i)=>{out[k]=cleanAcsValue(values&&values[i]);});
+  return out;
+}
+
 /* ---- parcel lookup helpers ---- */
 function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
 function pick(a,keys){
@@ -81,5 +104,6 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,
+    tractFipsFromBlockFips,cleanAcsValue,parseAcsRow};
 }
