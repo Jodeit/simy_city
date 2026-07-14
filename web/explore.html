@@ -280,6 +280,31 @@ const PARCEL_SOURCES=[
     record:(a)=>{const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID"]);
       return id?`https://traviscad.org/property-search/?prop_id=${encodeURIComponent(id)}`:"https://traviscad.org/property-search/";},
     source_label:"Travis Central Appraisal District",
+    county_state:"Travis County, TX",
+    zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
+  },
+  {
+    name:"Maricopa County Assessor (Maricopa County, AZ)",
+    urls:["https://gis.mcassessor.maricopa.gov/arcgis/rest/services/Parcels/MapServer/0"],
+    bbox:[-113.34,32.50,-111.03,34.05],
+    // APN accepts dashed or undashed formats, so pass the raw field value through.
+    record:(a)=>{const id=pick(a,["APN"]);
+      return id?`https://mcassessor.maricopa.gov/parcel/${encodeURIComponent(id)}`:"https://mcassessor.maricopa.gov/";},
+    source_label:"Maricopa County Assessor",
+    county_state:"Maricopa County, AZ",
+    zoning_note:"unlike TX, AZ counties do zone unincorporated land — check the county zoning ordinance, or the city/town if incorporated",
+  },
+  {
+    name:"Harris County Appraisal District (Harris County, TX)",
+    urls:["https://www.gis.hctx.net/arcgis/rest/services/HCAD/Parcels/MapServer/0"],
+    bbox:[-95.97,29.49,-94.91,30.17],
+    // HCAD's public record pages are keyed by an opaque per-account token, not
+    // the account number itself, so there's no plain deep-link — send people
+    // to the search page with the account number already in the parcel panel.
+    record:()=>"https://public.hcad.org/records/Real/",
+    source_label:"Harris County Appraisal District",
+    county_state:"Harris County, TX",
+    zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
   },
 ];
 
@@ -759,7 +784,7 @@ function runParcel(latlng,seq){
     setHTML("parcelVal", `No parcel layer wired for this spot yet. Property boundaries are published
       <b>county-by-county</b>, so coverage grows as people add their county
       (<a href="https://github.com/jodeit/simy_city/blob/main/web/explore.html" target="_blank" rel="noopener">how to add one</a>).
-      Mapped today: <b>Travis County, TX</b> — try the 78738 area.`);
+      Mapped today: <b>${PARCEL_SOURCES.map(s=>esc(s.name)).join(", ")}</b> — try the 78738 area (Travis County).`);
     return;
   }
   tryParcel(src.urls.slice(),latlng,src,false,seq);
@@ -789,12 +814,12 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name"]);
-  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR"]);
   let rows="";
   const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
@@ -809,10 +834,10 @@ function showParcel(geo,src,seq){
   // Derived now from parcel attrs; topography + MUD filled live; the rest are
   // honestly slotted as wire-able sources rather than faked.
   const owedZoning = land
-    ? `current use <b>${esc(land)}</b> · TX counties don't zone — legal zoning applies only inside a city/ETJ`
-    : `TX counties don't zone — check the city/ETJ if incorporated`;
+    ? `current use <b>${esc(land)}</b> · ${src.zoning_note}`
+    : src.zoning_note;
   const ownerType = owner ? classifyOwner(owner) : "";
-  const addrQ = encodeURIComponent(situs ? (situs+", Travis County, TX")
+  const addrQ = encodeURIComponent(situs ? (situs+", "+src.county_state)
     : (lastLatLng?`${lastLatLng.lat.toFixed(5)},${lastLatLng.lng.toFixed(5)}`:""));
   const listings = `<a href="https://www.zillow.com/homes/${addrQ}_rb/" target="_blank" rel="noopener">Zillow ↗</a> · `+
     `<a href="https://www.realtor.com/realestateandhomes-search/${addrQ}" target="_blank" rel="noopener">Realtor ↗</a> · `+

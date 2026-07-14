@@ -85,8 +85,28 @@ Ground rules for each run:
       makes) with zero console errors. Outbound network to
       hazards.fema.gov is blocked from this sandbox, so live tile rendering
       is a good human spot-check.
-- [ ] **More parcel counties.** Generalize `PARCEL_SOURCES` beyond Travis — add
-      2–3 big metros with open ArcGIS parcel layers (each is one config entry).
+- [x] **More parcel counties.** Generalized `PARCEL_SOURCES` beyond Travis —
+      added Maricopa County, AZ (Phoenix; `mcassessor.maricopa.gov` ArcGIS
+      MapServer, `APN`-keyed record deep-link) and Harris County, TX (Houston;
+      `gis.hctx.net` HCAD ArcGIS MapServer; HCAD's public record pages are
+      keyed by an opaque token rather than the account number, so that one
+      links to the search page instead of a per-parcel deep link). Extended
+      the parcel-attribute `pick()` field lists to cover each county's actual
+      field names (`APN`, `HCAD_NUM`/`acct_num`, `owner_name_1`, `land_use`,
+      `acreage`, `total_appraised_val`, etc.), and de-hardcoded the
+      Travis-only "TX counties don't zone" / "Travis County, TX" listing-search
+      text into a per-source `zoning_note`/`county_state` (Arizona counties,
+      unlike Texas, do zone unincorporated land — the old copy would've been
+      wrong for Maricopa). Verified in headless Chromium: both pages load
+      clean; `PARCEL_SOURCES`/`inBbox` correctly route sample coordinates in
+      all three counties (and correctly find no source for an out-of-coverage
+      point); `showParcel` was driven directly with mock Maricopa/Harris
+      ArcGIS attribute payloads (including an empty-attributes case) and
+      rendered correct fields, appraised-value formatting, and record links
+      with zero console errors. Live ArcGIS endpoint reachability (field
+      names, real APN/HCAD_NUM formats) couldn't be confirmed from this
+      sandbox — outbound network to `*.arcgis.com`/county GIS hosts is
+      blocked — so a live spot-check in each county is a good human follow-up.
 - [ ] **Census ACS demographics.** Pull real households/income/age for the click's
       tract (keyless if the API allows low-volume; else document the key path).
       Replace the rooftop *proxy* with real household counts where available.
