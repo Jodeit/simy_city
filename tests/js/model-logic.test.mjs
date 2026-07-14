@@ -12,6 +12,7 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
+  tractFipsFromBlockFips, cleanAcsValue, parseAcsRow,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -191,6 +192,34 @@ test("pick: skips empty-string / null / undefined values", () => {
 test("pick: returns null when nothing matches, and on a null object", () => {
   assert.equal(pick({ a: "1" }, ["b", "c"]), null);
   assert.equal(pick(null, ["a"]), null);
+});
+
+// ---- Census ACS tract lookup (tractFipsFromBlockFips / cleanAcsValue / parseAcsRow) ----
+
+test("tractFipsFromBlockFips: splits a 15-digit block FIPS into state/county/tract", () => {
+  // 484530017021009: TX(48) Travis County(453) tract 001702 block 1009
+  assert.deepEqual(tractFipsFromBlockFips("484530017021009"), { state: "48", county: "453", tract: "001702" });
+});
+
+test("tractFipsFromBlockFips: null on missing or too-short input", () => {
+  assert.equal(tractFipsFromBlockFips(null), null);
+  assert.equal(tractFipsFromBlockFips(""), null);
+  assert.equal(tractFipsFromBlockFips("1234"), null);
+});
+
+test("cleanAcsValue: passes through real numbers, nulls ACS's missing-data sentinel", () => {
+  assert.equal(cleanAcsValue("87500"), 87500);
+  assert.equal(cleanAcsValue("-666666666"), null);
+  assert.equal(cleanAcsValue(null), null);
+});
+
+test("parseAcsRow: zips ACS5's [headers, values] response shape into a cleaned map", () => {
+  const headers = ["B01003_001E", "B19013_001E", "state", "county", "tract"];
+  const values = ["3120", "-666666666", "48", "453", "001702"];
+  const row = parseAcsRow(headers, values);
+  assert.equal(row.B01003_001E, 3120);
+  assert.equal(row.B19013_001E, null); // sentinel for no data in this tract
+  assert.equal(row.tract, 1702); // non-numeric-looking codes still coerce through cleanAcsValue; callers keep FIPS as strings separately
 });
 
 // ---- integration: the real compiled model runs cleanly through evaluate/findStandoffs ----
