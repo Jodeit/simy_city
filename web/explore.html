@@ -387,13 +387,23 @@ const parcelTiles=arcgisDynamic([
     "https://geo.traviscountytx.gov/arcgis/rest/services/TNR/TCAD/MapServer",
   ],{opacity:0.85,attribution:'Parcels &copy; TCAD / Travis County'});
 
+// FEMA NFHL flood-zone overlay — same "Flood Hazard Zones" layer (28) as the
+// point-query developer-checklist read above, rendered as tiles so floodway /
+// 100-yr Special Flood Hazard Area is visible on the map before you click.
+// Nationwide coverage, no bbox restriction needed. Off by default (opt-in via
+// the layer switcher) since it's a dense overlay that isn't always relevant.
+const floodTiles=arcgisDynamic(
+  "https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer",
+  {opacity:0.55,lyrs:28,attribution:'FEMA NFHL'}
+);
+
 const IS_MOBILE=window.matchMedia("(max-width:760px)").matches;
 // Satellite-first: seeing the actual lot (trees, buildings, driveways) is the
 // most intuitive starting point for "what is this place" before diving into data.
 map=L.map("map",{zoomControl:!IS_MOBILE,layers:[baseSat,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
 L.control.layers(
   {"Satellite":baseSat,"Street":baseStreet,"Topographic":baseTopo},
-  {"TCAD parcel lines":parcelTiles},
+  {"TCAD parcel lines":parcelTiles,"FEMA flood zones":floodTiles},
   {position:"topright",collapsed:IS_MOBILE}   // expanded control would eat the small map
 ).addTo(map);
 map.on("click",e=>analyze(e.latlng));

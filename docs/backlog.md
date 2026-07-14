@@ -74,10 +74,17 @@ Ground rules for each run:
       tightened the mobile side-panel spacing.
 
 ## Next (breadth)
-- [ ] **FEMA flood overlay toggle.** The developer checklist now shows a live
-      point read of the FEMA flood zone (see Now, done); add a visual map
-      overlay (WMS/tile layer) so floodway/100-yr zones are visible before
-      you even click, not just after.
+- [x] **FEMA flood overlay toggle.** Added a visual map overlay for the same
+      FEMA NFHL "Flood Hazard Zones" layer (28) the developer checklist already
+      point-queries — rendered as ArcGIS export tiles via the existing
+      `arcgisDynamic` helper (same pattern as the TCAD parcel-line overlay),
+      registered in the Leaflet layer switcher as "FEMA flood zones", off by
+      default (opt-in toggle; nationwide coverage, no bbox needed). Verified
+      in headless Chromium: page loads clean, the layer toggles on/off via
+      `map.addLayer`/`removeLayer` (same call the layer-control checkbox
+      makes) with zero console errors. Outbound network to
+      hazards.fema.gov is blocked from this sandbox, so live tile rendering
+      is a good human spot-check.
 - [ ] **More parcel counties.** Generalize `PARCEL_SOURCES` beyond Travis — add
       2–3 big metros with open ArcGIS parcel layers (each is one config entry).
 - [ ] **Census ACS demographics.** Pull real households/income/age for the click's
