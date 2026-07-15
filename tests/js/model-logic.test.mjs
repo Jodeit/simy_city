@@ -12,6 +12,7 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
+  parseFccBlockFips, parseAcsTractRow,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -191,6 +192,43 @@ test("pick: skips empty-string / null / undefined values", () => {
 test("pick: returns null when nothing matches, and on a null object", () => {
   assert.equal(pick({ a: "1" }, ["b", "c"]), null);
   assert.equal(pick(null, ["a"]), null);
+});
+
+// ---- Census tract demographics (parseFccBlockFips / parseAcsTractRow) ----
+
+test("parseFccBlockFips: splits a 15-digit block FIPS into state/county/tract", () => {
+  const json = { results: [{ block_fips: "484539511001042" }] };
+  assert.deepEqual(parseFccBlockFips(json), { state: "48", county: "453", tract: "951100" });
+});
+
+test("parseFccBlockFips: missing/short block_fips or no results is null", () => {
+  assert.equal(parseFccBlockFips({ results: [] }), null);
+  assert.equal(parseFccBlockFips({ results: [{ block_fips: "123" }] }), null);
+  assert.equal(parseFccBlockFips({}), null);
+});
+
+test("parseAcsTractRow: reads households/median income/median age from the [headers,row] shape", () => {
+  const json = [
+    ["NAME", "B11001_001E", "B19013_001E", "B01002_001E", "state", "county", "tract"],
+    ["Census Tract 12.34, Travis County, Texas", "2345", "78901", "34.5", "48", "453", "951100"],
+  ];
+  assert.deepEqual(parseAcsTractRow(json), { households: 2345, medianIncome: 78901, medianAge: 34.5 });
+});
+
+test("parseAcsTractRow: treats Census's large-negative suppression sentinel as missing", () => {
+  const json = [
+    ["NAME", "B11001_001E", "B19013_001E", "B01002_001E"],
+    ["Tract X", "-666666666", "50000", "-666666666"],
+  ];
+  const d = parseAcsTractRow(json);
+  assert.equal(d.households, null);
+  assert.equal(d.medianIncome, 50000);
+  assert.equal(d.medianAge, null);
+});
+
+test("parseAcsTractRow: malformed/short response is null", () => {
+  assert.equal(parseAcsTractRow(null), null);
+  assert.equal(parseAcsTractRow([["NAME"]]), null);
 });
 
 // ---- integration: the real compiled model runs cleanly through evaluate/findStandoffs ----

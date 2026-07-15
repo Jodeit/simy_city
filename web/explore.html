@@ -317,6 +317,13 @@ const DISTRICT_SOURCES=[
 ];
 // FEMA National Flood Hazard Layer — nationwide coverage, no bbox needed.
 const FLOOD_SOURCE="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"; // Flood Hazard Zones
+// Census tract demographics: FCC's keyless block lookup (lat/lng → tract FIPS),
+// then the Census ACS 5-yr API (also keyless at low volume; a key only raises
+// the rate limit — see https://api.census.gov/data/key_signup.html if this
+// starts 429ing). Try the newest published vintage first, falling back to
+// older ones since a brand-new year isn't published everywhere immediately.
+const FCC_BLOCK_API="https://geo.fcc.gov/api/census/area";
+const ACS_YEARS=[2023,2022,2021];
 
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
 let mode="explore"; // "explore" (scout) | "build" (test a use)
@@ -849,6 +856,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>🗻 Topography</span><b id="devTopo" class="loading">estimating slope…</b></div>
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
+    <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -858,7 +866,7 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
-  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
+  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);}
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
@@ -966,6 +974,43 @@ function runFlood(latlng,seq){
     else{color="#2f9e44";note="outside the 100-yr floodplain — minimal mapped flood hazard";}
     setHTML("devFlood",`<span style="color:${color}">${label}</span> · ${note}`);
   }).catch(()=>{if(seq===reqSeq&&document.getElementById("devFlood"))setHTML("devFlood",errHTML("FEMA flood service unreachable"));});
+}
+
+/* Census tract demographics at the point — real households/median income/
+   median age for the clicked parcel's own tract (due-diligence market
+   context, not a substitute for the multi-km trade-area rooftop read above:
+   a single tract is far smaller than a fast-casual/warehouse-club trade area). */
+function runCensus(latlng,seq){
+  if(!document.getElementById("devCensus"))return;
+  fetch(`${FCC_BLOCK_API}?lat=${latlng.lat}&lon=${latlng.lng}&format=json`)
+    .then(r=>r.ok?r.json():Promise.reject(r.status))
+    .then(j=>{
+      if(seq!==reqSeq)return;
+      const fips=parseFccBlockFips(j);
+      if(!fips){setHTML("devCensus",errHTML("tract lookup unavailable here"));return;}
+      tryAcsYear(ACS_YEARS.slice(),fips,seq);
+    })
+    .catch(()=>{if(seq===reqSeq&&document.getElementById("devCensus"))setHTML("devCensus",errHTML("tract lookup service unreachable"));});
+}
+function tryAcsYear(years,fips,seq){
+  if(seq!==reqSeq)return; if(!document.getElementById("devCensus"))return;
+  if(!years.length){setHTML("devCensus",errHTML("ACS data unavailable for this tract"));return;}
+  const y=years[0];
+  fetch(`https://api.census.gov/data/${y}/acs/acs5?get=NAME,B11001_001E,B19013_001E,B01002_001E&for=tract:${fips.tract}&in=state:${fips.state}+county:${fips.county}`)
+    .then(r=>r.ok?r.json():Promise.reject(r.status))
+    .then(j=>{
+      if(seq!==reqSeq)return;
+      const d=parseAcsTractRow(j);
+      const parts=[];
+      if(d){
+        if(d.households!=null)parts.push(`<b>${Math.round(d.households).toLocaleString()}</b> households`);
+        if(d.medianIncome!=null)parts.push(`median income <b>$${Math.round(d.medianIncome).toLocaleString()}</b>`);
+        if(d.medianAge!=null)parts.push(`median age <b>${d.medianAge}</b>`);
+      }
+      if(!parts.length){tryAcsYear(years.slice(1),fips,seq);return;}
+      setHTML("devCensus",parts.join(" · ")+` <span class="src">(ACS ${y} 5-yr, this tract only)</span>`);
+    })
+    .catch(()=>tryAcsYear(years.slice(1),fips,seq));
 }
 
 /* ---- bring-your-own-data (private, client-side only) ---- */

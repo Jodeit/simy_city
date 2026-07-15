@@ -107,9 +107,24 @@ Ground rules for each run:
       names, real APN/HCAD_NUM formats) couldn't be confirmed from this
       sandbox — outbound network to `*.arcgis.com`/county GIS hosts is
       blocked — so a live spot-check in each county is a good human follow-up.
-- [ ] **Census ACS demographics.** Pull real households/income/age for the click's
-      tract (keyless if the API allows low-volume; else document the key path).
-      Replace the rooftop *proxy* with real household counts where available.
+- [x] **Census ACS demographics.** Added a real "Census tract (ACS)" row to the
+      developer checklist: a keyless FCC block lookup (`geo.fcc.gov/api/census/area`)
+      turns the clicked lat/lng into a tract FIPS, then the keyless (at low
+      volume) Census ACS 5-yr API pulls that tract's households, median
+      household income, and median age (`tryAcsYear` falls back across
+      2023→2021 vintages, same multi-source-fallback pattern as the district/
+      parcel lookups). This is real per-tract demographic context, not a
+      replacement for the multi-km rooftop trade-area read above it — a single
+      census tract is much smaller than a warehouse-club/fast-casual trade
+      area, so summing ACS tracts across a multi-km radius (a real "replace
+      the rooftop proxy" project) is left as a larger follow-up. Added pure
+      parsing-helper unit tests (`parseFccBlockFips`, `parseAcsTractRow`,
+      including the Census large-negative suppression-sentinel case) and
+      verified in headless Chromium with mocked `fetch`: the success path,
+      an all-years-empty ACS response, and an unreachable FCC lookup all
+      render correct text with zero console errors. Outbound network to
+      `geo.fcc.gov`/`api.census.gov` is blocked from this sandbox, so a live
+      spot-check on the real site is a good human follow-up.
 - [ ] **Compare parcels.** Pin several parcels and compare their reads side by side.
 - [x] **JS model unit tests in CI.** Extracted the pure logic (perspectives,
       standoffs, demand/parcel parsing) from `web/explore.html` into a shared

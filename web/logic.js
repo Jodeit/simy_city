@@ -68,6 +68,26 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 
+/* ---- Census tract demographics (FCC block lookup → ACS 5-yr point read) ---- */
+// FCC's keyless block API turns lat/lng into a 15-digit block FIPS
+// (state[2]+county[3]+tract[6]+block[4]); the first 11 digits are what the
+// Census ACS API needs to fetch that tract's row.
+function parseFccBlockFips(json){
+  const r=json&&json.results&&json.results[0];
+  const block=r&&r.block_fips!=null?String(r.block_fips):null;
+  if(!block||block.length<11)return null;
+  return {state:block.slice(0,2),county:block.slice(2,5),tract:block.slice(5,11)};
+}
+// Census ACS API returns [headers[], row[]] for a single-tract query. Values
+// use large-negative sentinels (e.g. -666666666) for suppressed/unavailable
+// estimates, which we treat the same as missing.
+function parseAcsTractRow(json){
+  if(!Array.isArray(json)||json.length<2)return null;
+  const header=json[0],row=json[1];
+  const num=key=>{const i=header.indexOf(key);if(i<0)return null;const v=parseFloat(row[i]);return (isFinite(v)&&v>-1e8)?v:null;};
+  return {households:num("B11001_001E"),medianIncome:num("B19013_001E"),medianAge:num("B01002_001E")};
+}
+
 /* ---- parcel lookup helpers ---- */
 function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
 function pick(a,keys){
@@ -81,5 +101,5 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow};
 }
