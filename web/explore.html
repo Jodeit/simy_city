@@ -317,6 +317,10 @@ const DISTRICT_SOURCES=[
 ];
 // FEMA National Flood Hazard Layer — nationwide coverage, no bbox needed.
 const FLOOD_SOURCE="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28"; // Flood Hazard Zones
+// Census Bureau geocoder + ACS 5-yr detailed tables — both keyless at this
+// call volume (single point-lookups, not bulk), nationwide coverage.
+const CENSUS_GEOCODER="https://geocoding.geo.census.gov/geocoder/geographies/coordinates";
+const CENSUS_ACS="https://api.census.gov/data/2022/acs/acs5";
 
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
 let mode="explore"; // "explore" (scout) | "build" (test a use)
@@ -849,6 +853,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>🗻 Topography</span><b id="devTopo" class="loading">estimating slope…</b></div>
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
+    <div class="drow"><span>📊 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -858,7 +863,7 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
-  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
+  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);}
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
@@ -966,6 +971,37 @@ function runFlood(latlng,seq){
     else{color="#2f9e44";note="outside the 100-yr floodplain — minimal mapped flood hazard";}
     setHTML("devFlood",`<span style="color:${color}">${label}</span> · ${note}`);
   }).catch(()=>{if(seq===reqSeq&&document.getElementById("devFlood"))setHTML("devFlood",errHTML("FEMA flood service unreachable"));});
+}
+
+/* Census ACS demographics for the click's tract — geocode the point to a tract
+   FIPS code, then pull population/households/median age/median income from
+   the ACS 5-yr detailed tables. Both Census Bureau endpoints are keyless at
+   single-point call volumes. */
+function runCensus(latlng,seq){
+  if(!document.getElementById("devCensus"))return;
+  const geoUrl=`${CENSUS_GEOCODER}?x=${latlng.lng}&y=${latlng.lat}&benchmark=Public_AR_Current&vintage=Current_Current&layers=Census%20Tracts&format=json`;
+  fetch(geoUrl).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
+    if(seq!==reqSeq)return; if(!document.getElementById("devCensus"))return;
+    const t=parseCensusTract(j);
+    if(!t){setHTML("devCensus",'no Census tract found here (outside US coverage)');return;}
+    const geoid=`${t.state}${t.county}${t.tract}`;
+    const link=`https://data.census.gov/profile?g=1400000US${geoid}`;
+    const acsUrl=`${CENSUS_ACS}?get=B01003_001E,B19013_001E,B11001_001E,B01002_001E&for=tract:${t.tract}&in=state:${t.state}+county:${t.county}`;
+    fetch(acsUrl).then(r=>r.ok?r.json():Promise.reject()).then(rows=>{
+      if(seq!==reqSeq)return; if(!document.getElementById("devCensus"))return;
+      const acs=parseCensusACS(rows);
+      const parts=[];
+      if(acs){
+        if(acs.population!=null)parts.push(`pop ${Math.round(acs.population).toLocaleString()}`);
+        if(acs.households!=null)parts.push(`${Math.round(acs.households).toLocaleString()} households`);
+        if(acs.medianAge!=null)parts.push(`median age ${acs.medianAge.toFixed(0)}`);
+        if(acs.medianIncome!=null)parts.push(`median HH income $${Math.round(acs.medianIncome).toLocaleString()}`);
+      }
+      const label=esc(t.name||`tract ${geoid}`);
+      setHTML("devCensus", (parts.length?parts.join(" · "):"ACS data unavailable for this tract")+
+        `<br><span class="src">${label}, 2022 ACS 5-yr · <a href="${link}" target="_blank" rel="noopener">data.census.gov ↗</a></span>`);
+    }).catch(()=>{if(seq===reqSeq&&document.getElementById("devCensus"))setHTML("devCensus",errHTML("Census ACS service unreachable"));});
+  }).catch(()=>{if(seq===reqSeq&&document.getElementById("devCensus"))setHTML("devCensus",errHTML("Census geocoder unreachable"));});
 }
 
 /* ---- bring-your-own-data (private, client-side only) ---- */

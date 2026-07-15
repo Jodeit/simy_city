@@ -12,6 +12,7 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
+  parseCensusTract, parseCensusACS,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -191,6 +192,52 @@ test("pick: skips empty-string / null / undefined values", () => {
 test("pick: returns null when nothing matches, and on a null object", () => {
   assert.equal(pick({ a: "1" }, ["b", "c"]), null);
   assert.equal(pick(null, ["a"]), null);
+});
+
+// ---- Census geocoder / ACS parsing (parseCensusTract / parseCensusACS) ----
+
+test("parseCensusTract: reads state/county/tract FIPS from a geocoder response", () => {
+  const json = {
+    result: { geographies: { "Census Tracts": [
+      { STATE: "48", COUNTY: "453", TRACT: "001700", NAME: "Census Tract 17, Travis County, Texas" },
+    ] } },
+  };
+  assert.deepEqual(parseCensusTract(json), {
+    state: "48", county: "453", tract: "001700", name: "Census Tract 17, Travis County, Texas",
+  });
+});
+
+test("parseCensusTract: null when the point has no mapped tract", () => {
+  assert.equal(parseCensusTract({ result: { geographies: { "Census Tracts": [] } } }), null);
+  assert.equal(parseCensusTract({ result: { geographies: {} } }), null);
+  assert.equal(parseCensusTract(null), null);
+});
+
+test("parseCensusACS: reads population/income/households/age from an ACS5 row", () => {
+  const rows = [
+    ["B01003_001E", "B19013_001E", "B11001_001E", "B01002_001E", "state", "county", "tract"],
+    ["4523", "78421", "1823", "34.5", "48", "453", "001700"],
+  ];
+  assert.deepEqual(parseCensusACS(rows), {
+    population: 4523, medianIncome: 78421, households: 1823, medianAge: 34.5,
+  });
+});
+
+test("parseCensusACS: negative sentinel values (not available) become null", () => {
+  const rows = [
+    ["B01003_001E", "B19013_001E", "B11001_001E", "B01002_001E"],
+    ["4523", "-666666666", "1823", "-666666666"],
+  ];
+  const acs = parseCensusACS(rows);
+  assert.equal(acs.medianIncome, null);
+  assert.equal(acs.medianAge, null);
+  assert.equal(acs.population, 4523);
+});
+
+test("parseCensusACS: missing/malformed response is null, not a partial object", () => {
+  assert.equal(parseCensusACS(null), null);
+  assert.equal(parseCensusACS([]), null);
+  assert.equal(parseCensusACS([["header"]]), null); // no data row
 });
 
 // ---- integration: the real compiled model runs cleanly through evaluate/findStandoffs ----

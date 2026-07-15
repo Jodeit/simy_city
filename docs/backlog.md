@@ -107,9 +107,22 @@ Ground rules for each run:
       names, real APN/HCAD_NUM formats) couldn't be confirmed from this
       sandbox — outbound network to `*.arcgis.com`/county GIS hosts is
       blocked — so a live spot-check in each county is a good human follow-up.
-- [ ] **Census ACS demographics.** Pull real households/income/age for the click's
-      tract (keyless if the API allows low-volume; else document the key path).
-      Replace the rooftop *proxy* with real household counts where available.
+- [x] **Census ACS demographics.** Added a live "Census tract (ACS)" row to the
+      developer checklist — geocodes the click to a tract FIPS via the Census
+      Bureau's keyless geocoder, then pulls population, households, median age,
+      and median household income from the ACS 5-yr detailed tables (also
+      keyless at single-point call volumes), same wire-up pattern as the
+      FEMA flood/MUD checks, with a `data.census.gov` deep link. Extracted the
+      response parsing (`parseCensusTract`, `parseCensusACS`) into `web/logic.js`
+      for unit testing, incl. the ACS negative-sentinel-means-missing quirk.
+      Verified in headless Chromium: both pages load clean, and driving
+      `showParcel()` with a mock parcel payload (real ArcGIS/geocoder network
+      is blocked from this sandbox) builds the checklist and calls
+      `runCensus()` with zero console/page errors. Outbound network to
+      `geocoding.geo.census.gov`/`api.census.gov` is blocked here, so a live
+      spot-check on the real site is a good human follow-up. Using ACS
+      households as an alternative to the rooftop-count demand proxy (e.g. in
+      `blendedDemand`) is a natural follow-on, left for a future item.
 - [ ] **Compare parcels.** Pin several parcels and compare their reads side by side.
 - [x] **JS model unit tests in CI.** Extracted the pure logic (perspectives,
       standoffs, demand/parcel parsing) from `web/explore.html` into a shared
