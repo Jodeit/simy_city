@@ -68,6 +68,32 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
 
+/* ---- Census geocoder / ACS parsing helpers ---- */
+// Parse the Census Bureau geocoder's "coordinates" response into the tract's
+// FIPS codes, or null if the point falls outside mapped Census geography.
+function parseCensusTract(json){
+  const tracts=json&&json.result&&json.result.geographies&&json.result.geographies["Census Tracts"];
+  const t=tracts&&tracts[0];
+  if(!t)return null;
+  return {state:t.STATE,county:t.COUNTY,tract:t.TRACT,name:t.NAME};
+}
+// Parse an ACS 5-yr detailed-table response (array-of-arrays, header row
+// first) into named fields. The Census encodes "not available"/"not
+// computed" as large negative sentinels (e.g. -666666666) rather than
+// omitting the field, so treat any negative value as missing.
+function parseCensusACS(rows){
+  if(!Array.isArray(rows)||rows.length<2)return null;
+  const header=rows[0], data=rows[1];
+  const val=name=>{
+    const i=header.indexOf(name);
+    if(i<0)return null;
+    const v=parseFloat(data[i]);
+    return (isFinite(v)&&v>=0)?v:null;
+  };
+  return {population:val("B01003_001E"),medianIncome:val("B19013_001E"),
+    households:val("B11001_001E"),medianAge:val("B01002_001E")};
+}
+
 /* ---- parcel lookup helpers ---- */
 function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
 function pick(a,keys){
@@ -81,5 +107,5 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseCensusTract,parseCensusACS};
 }
