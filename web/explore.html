@@ -87,6 +87,16 @@
   .modal .btnp{background:var(--garden);color:#06210d;border:none;font-weight:700;padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
   .modal .btng{background:none;border:1px solid var(--line);padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
   .privacy{font-size:.76rem;color:var(--garden-deep);background:#e7f3e9;border-radius:8px;padding:6px 9px;margin-top:8px}
+  /* compare-parcels modal */
+  .modal .box.wide{max-width:860px}
+  .cmpScroll{overflow-x:auto;margin-top:8px}
+  .cmpTable{width:100%;border-collapse:collapse;font-size:.82rem}
+  .cmpTable th,.cmpTable td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  .cmpTable th{color:var(--slate);font-weight:600;white-space:nowrap}
+  .cmpTable td.lbl{color:var(--slate);white-space:nowrap}
+  .cmpX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:1rem;padding:0 4px}
+  .cmpX:hover{color:#b33030}
+  .cmpEmpty{color:var(--slate);font-size:.86rem}
   /* mode switch */
   .modes{display:flex;gap:0;background:#1f2c2a;border:1px solid #38514c;border-radius:10px;overflow:hidden}
   .mbtn{font:inherit;font-size:.85rem;font-weight:700;border:none;background:transparent;color:#cfe6d3;padding:.45em .9em;cursor:pointer}
@@ -160,7 +170,8 @@
       <button class="mbtn active" data-mode="explore">🔎 Explore properties</button>
       <button class="mbtn" data-mode="build">🎯 Test a use</button>
     </div>
-    <span class="hint"><a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
+    <span class="hint"><a href="#" id="compareOpen">⚖️ Compare (<span id="compareCount">0</span>)</a> ·
+      <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
   </header>
   <div id="mapwrap"><div id="map"></div>
     <div class="legend" id="legend"></div>
@@ -192,6 +203,20 @@
     </div>
     <div id="result" style="display:none"></div>
   </aside>
+</div>
+
+<div class="modal" id="compareModal">
+  <div class="box wide">
+    <h3>Compare pinned parcels</h3>
+    <p>Pin a parcel from its analysis (📌 in the toolbar) to line it up against others here — size,
+      value, and (in <b>Test a use</b>) the verdict.</p>
+    <div class="cmpScroll"><div id="compareBody"></div></div>
+    <div class="privacy">🔒 Stays in your browser (saved to local storage). Never uploaded, never leaves your device.</div>
+    <div class="actions">
+      <button class="btng" id="compareClear">Clear all</button>
+      <button class="btng" id="compareCancel">Close</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal" id="byoModal">
@@ -328,6 +353,10 @@ const ACS_YEARS=[2023,2022,2021];
 let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
 let mode="explore"; // "explore" (scout) | "build" (test a use)
 let reqSeq=0; // bumped each click; async callbacks bail if they're stale
+// Snapshot of the currently-displayed parcel, filled in by showParcel/runParcel
+// once resolved — the 📌 Pin button reads this rather than the DOM. `seq` lets
+// the pin button refuse a stale snapshot left over from a superseded click.
+let lastParcelSummary=null;
 
 // model.js sets window.SIMY_MODEL (works on file:// and Pages); fall back to fetch.
 if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;boot();}
@@ -508,7 +537,8 @@ function buildCaseText(use,latlng){
 function fillTools(latlng){
   const el=document.getElementById("tools"); if(!el)return;
   const link=permalink(latlng);
-  let h=`<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`;
+  let h=`<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`+
+    `<button class="toolbtn" id="pinBtn">📌 Pin to compare</button><span class="ok" id="pinMsg"></span>`;
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     h+=`<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
@@ -519,6 +549,11 @@ function fillTools(latlng){
   }
   el.innerHTML=h;
   document.getElementById("shareBtn").onclick=()=>copy(link,"link copied — share it");
+  document.getElementById("pinBtn").onclick=()=>{
+    const r=addPin();
+    const m=document.getElementById("pinMsg");
+    if(m){m.textContent=(r.ok?"✓ ":"⚠ ")+r.msg; setTimeout(()=>m.textContent="",2500);}
+  };
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     document.getElementById("caseCopy").onclick=()=>copy(txt,"copied");
@@ -792,6 +827,7 @@ function runParcel(latlng,seq){
       <b>county-by-county</b>, so coverage grows as people add their county
       (<a href="https://github.com/jodeit/simy_city/blob/main/web/explore.html" target="_blank" rel="noopener">how to add one</a>).
       Mapped today: <b>${PARCEL_SOURCES.map(s=>esc(s.name)).join(", ")}</b> — try the 78738 area (Travis County).`);
+    lastParcelSummary={seq,lat:latlng.lat,lng:latlng.lng,label:null};
     return;
   }
   tryParcel(src.urls.slice(),latlng,src,false,seq);
@@ -803,6 +839,7 @@ function tryParcel(urls,latlng,src,sawEmpty,seq){
     setHTML("parcelVal", sawEmpty
       ? `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel (road, right-of-way, or water). Try clicking a building.`
       : errHTML("couldn’t reach the county parcel service just now — the analysis below still works."));
+    lastParcelSummary={seq,lat:latlng.lat,lng:latlng.lng,label:null};
     return;
   }
   arcgisPointQuery(urls[0],latlng,true).then(feats=>{
@@ -814,7 +851,9 @@ function tryParcel(urls,latlng,src,sawEmpty,seq){
 function showParcel(geo,src,seq){
   const f=geo&&geo.features&&geo.features[0];
   if(!f){setHTML("parcelVal", `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel
-    (likely a road, right-of-way, or water).`);return;}
+    (likely a road, right-of-way, or water).`);
+    lastParcelSummary={seq,lat:lastLatLng.lat,lng:lastLatLng.lng,label:null};
+    return;}
   const a=f.properties||{};
   if(f.geometry){
     parcelLayer=L.geoJSON({type:"Feature",properties:f.properties||{},geometry:f.geometry},
@@ -871,6 +910,10 @@ function showParcel(geo,src,seq){
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
   if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
+  lastParcelSummary={seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
+    label: situs || (id?`Parcel ${id}`:null),
+    id, owner, situs, land, acres:acN,
+    value:(value!=null&&!isNaN(+value))?+value:null, county:src.source_label};
 }
 
 // "What could go here?" — rank land uses by physical fit (lot size). Each row
@@ -1045,6 +1088,64 @@ function wireBYO(){
   document.getElementById("byoClear").onclick=()=>{ta.value="";localStorage.removeItem(BYO_KEY);if(byoLayer)byoLayer.remove();};
 }
 
+/* ---- compare pinned parcels (private, client-side only) ---- */
+const PINS_KEY="simy_pins_v1";
+let pins=[];
+function loadPins(){
+  try{pins=JSON.parse(localStorage.getItem(PINS_KEY)||"[]");}catch(e){pins=[];}
+  updateCompareCount();
+}
+function savePins(){ localStorage.setItem(PINS_KEY,JSON.stringify(pins)); updateCompareCount(); renderCompare(); }
+function updateCompareCount(){ const el=document.getElementById("compareCount"); if(el)el.textContent=pins.length; }
+// Reads the already-resolved lastParcelSummary rather than re-fetching — pin
+// is instant and never makes a network call of its own.
+function addPin(){
+  if(!lastParcelSummary||lastParcelSummary.seq!==reqSeq)
+    return {ok:false,msg:"still identifying this parcel — try again in a second"};
+  if(pins.some(p=>Math.abs(p.lat-lastParcelSummary.lat)<1e-6&&Math.abs(p.lng-lastParcelSummary.lng)<1e-6))
+    return {ok:false,msg:"already pinned"};
+  if(pins.length>=6) return {ok:false,msg:"6 pins max — remove one to add another"};
+  const vEl=document.getElementById("demandVerdict");
+  const verdict=(mode==="build"&&vEl&&vEl.style.display!=="none")?vEl.textContent.trim():null;
+  const {seq,...snapshot}=lastParcelSummary;
+  pins.push({...snapshot, use:mode==="build"?useLabel(current):null, verdict});
+  savePins();
+  return {ok:true,msg:`pinned — ⚖️ Compare (${pins.length})`};
+}
+function removePin(i){ pins.splice(i,1); savePins(); }
+function renderCompare(){
+  const el=document.getElementById("compareBody"); if(!el)return;
+  if(!pins.length){el.innerHTML=`<p class="cmpEmpty">No pins yet. Analyze a parcel, then click 📌 <b>Pin to compare</b> in its toolbar.</p>`;return;}
+  const fmtAcres=a=>a!=null?a.toFixed(2)+" ac":"—";
+  const fmtVal=v=>v!=null?"$"+v.toLocaleString():"—";
+  const rows=[
+    ["", pins.map((p,i)=>`<button class="cmpX" title="remove" data-i="${i}">✕</button>`)],
+    ["Site", pins.map(p=>`<a href="#" class="cmpGo" data-lat="${p.lat}" data-lng="${p.lng}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`)],
+    ["Owner", pins.map(p=>esc(p.owner||"—"))],
+    ["Acreage", pins.map(p=>fmtAcres(p.acres))],
+    ["Appraised value", pins.map(p=>fmtVal(p.value))],
+    ["Land use", pins.map(p=>esc(p.land||"—"))],
+    ["County", pins.map(p=>esc(p.county||"—"))],
+    ["Testing", pins.map(p=>esc(p.use||"—"))],
+    ["Verdict", pins.map(p=>esc(p.verdict||"—"))],
+  ];
+  el.innerHTML=`<table class="cmpTable"><tbody>`+
+    rows.map(([label,cells])=>`<tr><td class="lbl">${label}</td>${cells.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")+
+    `</tbody></table>`;
+  el.querySelectorAll(".cmpX").forEach(b=>b.onclick=()=>removePin(+b.dataset.i));
+  el.querySelectorAll(".cmpGo").forEach(a=>a.onclick=e=>{e.preventDefault();
+    const lat=+a.dataset.lat,lng=+a.dataset.lng;
+    document.getElementById("compareModal").classList.remove("open");
+    map.setView([lat,lng],17); analyze(L.latLng(lat,lng));});
+}
+function wireCompare(){
+  const modal=document.getElementById("compareModal");
+  document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();modal.classList.add("open");};
+  document.getElementById("compareCancel").onclick=()=>modal.classList.remove("open");
+  modal.onclick=e=>{if(e.target===modal)modal.classList.remove("open");};
+  document.getElementById("compareClear").onclick=()=>{pins=[];savePins();};
+}
+
 /* ---- honor an incoming share link (#use=..&lat=..&lng=..) ---- */
 function applyHash(){
   const h=location.hash.replace(/^#/,""); if(!h)return false;
@@ -1066,7 +1167,7 @@ function wireCTA(){
   };
 }
 
-wireBYO(); loadBYO(); wireCTA(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); wireCTA(); applyHash();
 </script>
 </body>
 </html>

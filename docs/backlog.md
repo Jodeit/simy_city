@@ -125,7 +125,18 @@ Ground rules for each run:
       render correct text with zero console errors. Outbound network to
       `geo.fcc.gov`/`api.census.gov` is blocked from this sandbox, so a live
       spot-check on the real site is a good human follow-up.
-- [ ] **Compare parcels.** Pin several parcels and compare their reads side by side.
+- [x] **Compare parcels.** Added a 📌 "Pin to compare" button to every parcel
+      analysis (both Explore and Test-a-use modes), a header "⚖️ Compare (N)"
+      link, and a modal with a side-by-side table (address/owner, acreage,
+      appraised value, land use, county, and — in Test-a-use — the use and
+      its verdict text). Pins read the already-resolved `lastParcelSummary`
+      snapshot (no extra network calls), persist to `localStorage` (same
+      client-side-only privacy pattern as "bring your own data"), cap at 6,
+      reject duplicates/stale snapshots, and each row's site name re-navigates
+      the map back to that parcel. Verified in headless Chromium by driving
+      `addPin()`/`removePin()`/`renderCompare()` directly (duplicate + stale-seq
+      rejection, table render, clear-all → empty state) and by cycling all 4
+      land uses end to end — zero console/page errors.
 - [x] **JS model unit tests in CI.** Extracted the pure logic (perspectives,
       standoffs, demand/parcel parsing) from `web/explore.html` into a shared
       `web/logic.js` (loaded as a plain `<script>` in the browser, `require()`d
