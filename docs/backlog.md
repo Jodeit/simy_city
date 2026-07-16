@@ -46,7 +46,18 @@ Ground rules for each run:
 - [ ] **Census ACS demographics.** Pull real households/income/age for the click's
       tract (keyless if the API allows low-volume; else document the key path).
       Replace the rooftop *proxy* with real household counts where available.
-- [ ] **Compare parcels.** Pin several parcels and compare their reads side by side.
+- [x] **Compare parcels.** Added a 📌 pin button to the resolved-parcel card (both
+      Explore and Test-a-use modes) and a "Compare pinned parcels" panel in the
+      side panel showing each pin's address/owner/acreage/appraised value/land
+      use/county — plus the tested use and its live verdict text when pinned in
+      Test-a-use mode. Pins reuse the already-resolved parcel snapshot (no extra
+      network calls), persist to `localStorage` (client-side only, same privacy
+      model as "bring your own data"), dedupe by parcel ID (or rounded lat/lng
+      when a source has no stable ID), cap at 6 with a clear message instead of
+      silently dropping, and each entry re-centers the map and re-runs the
+      analysis on click. Verified with headless Chromium driving the pin/dedupe/
+      cap/remove/clear-all flow end to end against a mocked parcel response
+      (live ArcGIS network is blocked in this sandbox) — zero JS errors.
 - [x] **JS model unit tests in CI.** Extracted the pure logic (perspectives,
       standoffs, demand/parcel parsing) from `web/explore.html` into a shared
       `web/logic.js` (loaded as a plain `<script>` in the browser, `require()`d

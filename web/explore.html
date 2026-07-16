@@ -109,6 +109,13 @@
   .fitrow .fl{flex:1} .fitrow .fl small{display:block;color:var(--slate);font-size:.78rem}
   .testbtn{font:inherit;font-size:.76rem;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--garden-deep);border-radius:8px;padding:.25em .6em;cursor:pointer;white-space:nowrap}
   .testbtn:hover{border-color:var(--garden)}
+  /* pinned-parcel comparison */
+  .pincard{border-top:1px dashed var(--line);padding-top:8px;margin-top:8px}
+  .pincard:first-child{border-top:none;margin-top:0;padding-top:0}
+  .pinhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .pinhead b{font-size:.88rem}
+  .pinrm{font:inherit;background:none;border:none;color:#b33030;cursor:pointer;font-size:.85rem;padding:0}
+  .pingo{color:var(--garden-deep);font-size:.78rem;font-weight:600;text-decoration:none}
   /* ---------- mobile ---------- */
   @media(max-width:760px){
     /* one column: header / map / scrollable panel. dvh handles mobile URL bars. */
@@ -191,6 +198,7 @@
         change a threshold and this changes.</p>
     </div>
     <div id="result" style="display:none"></div>
+    <div class="block" id="pinsPanel" style="display:none"></div>
   </aside>
 </div>
 
@@ -674,9 +682,24 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
   </div></div>`;
 
+  const pin={lat:lastLatLng.lat,lng:lastLatLng.lng,src:src.source_label,
+    id:id||null,owner:owner||null,situs:situs||null,land:land||null,
+    acres:(acres!=null&&!isNaN(+acres))?(+acres).toFixed(2)+" ac":(acres||null),
+    value:(value!=null&&!isNaN(+value))?"$"+Number(value).toLocaleString():(value||null),
+    useLabel:mode==="build"?MODEL.land_uses[current].label:null, verdict:null};
+  const pinned=PINS.some(x=>pinKeyOf(x)===pinKeyOf(pin));
+
   setHTML("parcelVal", `<div class="parcel">${rows}</div>
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
-    <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
+    <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>
+    <button class="toolbtn" id="pinBtn"${pinned?" disabled":""}>${pinned?"📌 pinned":"📌 pin this parcel"}</button>${dev}`);
+
+  const pb=document.getElementById("pinBtn");
+  if(pb)pb.onclick=()=>{
+    const verdictEl=document.getElementById("demandVerdict");
+    pin.verdict=(mode==="build"&&verdictEl&&verdictEl.style.display!=="none")?verdictEl.textContent.trim():null;
+    addPin(pin);
+  };
 
   if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq);}
   if(mode==="explore"){const acN=(acres!=null&&!isNaN(+acres))?+acres:null; fillFit(acN);}
@@ -771,6 +794,51 @@ function runFlood(latlng,seq){
   }).catch(()=>{if(seq===reqSeq&&document.getElementById("devFlood"))setHTML("devFlood",errHTML("FEMA flood service unreachable"));});
 }
 
+/* ---- pin parcels & compare side by side (private, client-side only) ---- */
+const PIN_KEY="simy_pins_v1", PIN_MAX=6;
+let PINS=[];
+function pinKeyOf(p){return p.id?`${p.src}::${p.id}`:`${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;}
+function loadPins(){try{PINS=JSON.parse(localStorage.getItem(PIN_KEY)||"[]");}catch(e){PINS=[];} renderPins();}
+function savePins(){localStorage.setItem(PIN_KEY,JSON.stringify(PINS));}
+function addPin(p){
+  const k=pinKeyOf(p);
+  if(PINS.some(x=>pinKeyOf(x)===k))return;               // already pinned — button is disabled, but guard re-entry
+  if(PINS.length>=PIN_MAX){flashPinMsg(`up to ${PIN_MAX} pins — remove one to add another`);return;}
+  PINS.push(p); savePins(); renderPins(); flashPinMsg("📌 pinned");
+  const btn=document.getElementById("pinBtn"); if(btn){btn.disabled=true;btn.textContent="📌 pinned";}
+}
+function removePin(k){PINS=PINS.filter(x=>pinKeyOf(x)!==k); savePins(); renderPins();
+  const btn=document.getElementById("pinBtn"); if(btn&&lastLatLng){btn.disabled=false;btn.textContent="📌 pin this parcel";}
+}
+function flashPinMsg(msg){const el=document.getElementById("pinMsg"); if(!el)return;
+  el.textContent=msg; setTimeout(()=>{if(el.textContent===msg)el.textContent="";},2500);}
+function renderPins(){
+  const panel=document.getElementById("pinsPanel"); if(!panel)return;
+  if(!PINS.length){panel.style.display="none";panel.innerHTML="";return;}
+  panel.style.display="block";
+  let h=`<h3>📌 Compare pinned parcels <span class="src">(${PINS.length}/${PIN_MAX})</span> <span id="pinMsg" class="ok"></span></h3>`;
+  PINS.forEach(p=>{
+    const k=pinKeyOf(p);
+    h+=`<div class="pincard"><div class="pinhead">
+      <a href="#" class="pingo" data-lat="${p.lat}" data-lng="${p.lng}">↳ ${esc(p.situs||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>
+      <button class="pinrm" data-k="${esc(k)}" title="remove pin">✕ remove</button></div>
+      <div class="prow"><span>Owner</span><b>${esc(p.owner||"—")}</b></div>
+      <div class="prow"><span>Acreage</span><b>${esc(p.acres||"—")}</b></div>
+      <div class="prow"><span>Appraised value</span><b>${esc(p.value||"—")}</b></div>
+      <div class="prow"><span>Land use</span><b>${esc(p.land||"—")}</b></div>
+      <div class="prow"><span>County</span><b>${esc(p.src)}</b></div>
+      ${p.useLabel?`<div class="prow"><span>Tested as</span><b>${esc(p.useLabel)}${p.verdict?" — "+esc(p.verdict):""}</b></div>`:""}
+      </div>`;
+  });
+  h+=`<button class="toolbtn" id="pinClearAll" style="margin-top:8px">Clear all pins</button>`;
+  panel.innerHTML=h;
+  panel.querySelectorAll(".pingo").forEach(a=>a.onclick=e=>{e.preventDefault();
+    const lat=parseFloat(a.dataset.lat), lng=parseFloat(a.dataset.lng);
+    map.setView([lat,lng],17); analyze(L.latLng(lat,lng));});
+  panel.querySelectorAll(".pinrm").forEach(b=>b.onclick=()=>removePin(b.dataset.k));
+  document.getElementById("pinClearAll").onclick=()=>{PINS=[];savePins();renderPins();};
+}
+
 /* ---- bring-your-own-data (private, client-side only) ---- */
 const BYO_KEY="simy_byo_v1";
 function parseBYO(text){
@@ -824,7 +892,7 @@ function wireCTA(){
   };
 }
 
-wireBYO(); loadBYO(); wireCTA(); applyHash();
+wireBYO(); loadBYO(); wireCTA(); loadPins(); applyHash();
 </script>
 </body>
 </html>
