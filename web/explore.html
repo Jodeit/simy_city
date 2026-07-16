@@ -415,7 +415,12 @@ const ArcGISDynamic=L.GridLayer.extend({
     const bbox=[Math.min(p1.x,p2.x),Math.min(p1.y,p2.y),Math.max(p1.x,p2.x),Math.max(p1.y,p2.y)].join(",");
     const o=this.options;
     const bases=o.bases||[o.base];
-    const urlFor=base=>base+"/export?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&dpi=96&format=png32&transparent=true&f=image"+(o.lyrs?("&layers=show:"+o.lyrs):"");
+    // MapServer (county parcels, FEMA) uses /export + layers=show:N; an ArcGIS
+    // ImageServer (USGS elevation) uses /exportImage + a server-side renderingRule
+    // instead of picking a layer.
+    const urlFor=base=>o.imageServer
+      ? base+"/exportImage?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&format=png32&f=image"+(o.renderingRule?("&renderingRule="+encodeURIComponent(JSON.stringify(o.renderingRule))):"")
+      : base+"/export?bbox="+bbox+"&bboxSR=3857&imageSR=3857&size=256,256&dpi=96&format=png32&transparent=true&f=image"+(o.lyrs?("&layers=show:"+o.lyrs):"");
     let i=0;
     t.src=urlFor(bases[i]);
     t.onerror=function(){
@@ -458,13 +463,23 @@ const floodTiles=arcgisDynamic(
   {opacity:0.55,lyrs:28,attribution:'FEMA NFHL'}
 );
 
+// USGS 3DEP slope overlay — same USGS elevation dataset (3DEP) already sampled
+// point-wise for the "Topography" developer-checklist slope read (EPQS) above,
+// rendered here as a colorized slope map so grading risk is visible on the map
+// before you click. Nationwide coverage, no bbox restriction needed. Off by
+// default (opt-in via the layer switcher), same pattern as the FEMA overlay.
+const slopeTiles=arcgisDynamic(
+  "https://elevation.nationalmap.gov/arcgis/rest/services/3DEPElevation/ImageServer",
+  {opacity:0.55,imageServer:true,renderingRule:{rasterFunction:"Slope Map"},attribution:'USGS 3DEP'}
+);
+
 const IS_MOBILE=window.matchMedia("(max-width:760px)").matches;
 // Satellite-first: seeing the actual lot (trees, buildings, driveways) is the
 // most intuitive starting point for "what is this place" before diving into data.
 map=L.map("map",{zoomControl:!IS_MOBILE,layers:[baseSat,parcelTiles]}).setView([30.327,-97.949],14); // 78738, zoomed for parcels
 L.control.layers(
   {"Satellite":baseSat,"Street":baseStreet,"Topographic":baseTopo},
-  {"TCAD parcel lines":parcelTiles,"FEMA flood zones":floodTiles},
+  {"TCAD parcel lines":parcelTiles,"FEMA flood zones":floodTiles,"USGS slope map":slopeTiles},
   {position:"topright",collapsed:IS_MOBILE}   // expanded control would eat the small map
 ).addTo(map);
 map.on("click",e=>analyze(e.latlng));

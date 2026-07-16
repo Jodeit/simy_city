@@ -145,7 +145,25 @@ Ground rules for each run:
       real compiled `model.json`), and wired `node --test tests/js` into CI.
 
 ## Polish / stretch
-- [ ] Slope/contour overlay (USGS) toggle.
+- [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
+      the layer switcher, same opt-in/off-by-default pattern as the FEMA flood
+      overlay — reuses the USGS 3DEP elevation dataset already sampled
+      point-wise for the "Topography" developer-checklist slope read (EPQS),
+      now rendered as a colorized slope map so grading risk is visible on the
+      map before you click. Required extending the shared `ArcGISDynamic` tile
+      helper: MapServer overlays (county parcels, FEMA) use `/export` +
+      `layers=show:N`, but an ArcGIS *ImageServer* (3DEP) uses `/exportImage` +
+      a server-side `renderingRule` JSON param instead of a layer id — added an
+      `imageServer`/`renderingRule` option so both shapes share the same
+      per-tile bbox math and per-host fallback-on-error behavior. Verified in
+      headless Chromium: both pages load with zero console/page errors, the
+      slope layer is off by default, `map.addLayer`/`removeLayer` (the same
+      calls the layer-control checkbox makes) toggle it correctly, and the
+      built tile URL has the expected `/exportImage` + `renderingRule` shape
+      (confirmed the existing FEMA `/export` URL shape is unchanged). Outbound
+      network to `elevation.nationalmap.gov` is blocked from this sandbox, so
+      live tile rendering and the exact `"Slope Map"` rendering-rule name are
+      a good human spot-check.
 - [ ] Shareable "make the case" as an image/PDF export.
 - [ ] Accessibility pass (keyboard, ARIA, contrast) and performance (debounce,
       cache Overpass responses per session).
