@@ -12,7 +12,7 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
-  parseFccBlockFips, parseAcsTractRow, makeSessionCache,
+  parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -314,4 +314,34 @@ test("makeSessionCache: evicts the oldest entry once past maxEntries", async () 
   let k3Calls = 0;
   await cache("k3", () => { k3Calls++; return Promise.resolve("v3"); });
   assert.equal(k3Calls, 0, "k3 should still be cached");
+});
+
+// ---- wrapText (word-wrap for the "make the case" image export) ----
+// measure-agnostic: tests use character count as the "width" unit so they
+// don't need a real canvas; explore.html passes ctx.measureText for pixels.
+const charWidth = s => s.length;
+
+test("wrapText: short line passes through unchanged", () => {
+  assert.deepEqual(wrapText("hello world", 20, charWidth), ["hello world"]);
+});
+
+test("wrapText: wraps on word boundaries once a line exceeds maxWidth", () => {
+  const lines = wrapText("the quick brown fox jumps", 10, charWidth);
+  lines.forEach(l => assert.ok(l.length <= 10, `"${l}" exceeds maxWidth`));
+  assert.deepEqual(lines.join(" ").split(" ").filter(Boolean), ["the", "quick", "brown", "fox", "jumps"]);
+});
+
+test("wrapText: preserves existing newlines as separate wrapped segments", () => {
+  const lines = wrapText("line one\nline two", 20, charWidth);
+  assert.deepEqual(lines, ["line one", "line two"]);
+});
+
+test("wrapText: preserves blank lines (section breaks) instead of dropping them", () => {
+  const lines = wrapText("a\n\nb", 20, charWidth);
+  assert.deepEqual(lines, ["a", "", "b"]);
+});
+
+test("wrapText: a single word longer than maxWidth is kept whole, not truncated", () => {
+  const lines = wrapText("supercalifragilisticexpialidocious", 10, charWidth);
+  assert.deepEqual(lines, ["supercalifragilisticexpialidocious"]);
 });

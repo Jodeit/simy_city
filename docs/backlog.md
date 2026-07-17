@@ -164,7 +164,23 @@ Ground rules for each run:
       network to `elevation.nationalmap.gov` is blocked from this sandbox, so
       live tile rendering and the exact `"Slope Map"` rendering-rule name are
       a good human spot-check.
-- [ ] Shareable "make the case" as an image/PDF export.
+- [x] **Shareable "make the case" as an image export.** Added a "🖼️ Download
+      image" button next to the existing "Make the case" copy/email tools. It
+      renders the same case text onto a from-scratch `<canvas>` (title, wrapped
+      body, footer) and downloads it as a PNG — deliberately *not* a
+      DOM/map screenshot (html2canvas against Leaflet's cross-origin tiles
+      routinely taints the canvas and breaks `toBlob`), so this has zero CORS
+      risk anywhere it runs. Added a measure-agnostic `wrapText` word-wrapper
+      to `web/logic.js` (takes a `measure(candidateLine)` callback so the same
+      wrapping logic runs against a real canvas 2D context in the browser and
+      a plain character-count stand-in in tests — no canvas in Node), with 5
+      new unit tests (word-boundary wrapping, preserved blank-line section
+      breaks, preserved explicit newlines, an over-long single word kept
+      whole). Verified in headless Chromium: both pages load with zero
+      console/page errors, and driving `downloadCaseImage()` end to end
+      (canvas render → `toBlob` → anchor click) produced a real ~32KB PNG
+      with zero errors. A PDF variant is left as a follow-up if a vendored
+      PDF lib is ever wanted.
 - [x] **Cache Overpass/ArcGIS/USGS/Census responses per session.** Added a
       pure, tested `makeSessionCache` (capped in-memory key→promise map with
       oldest-first eviction and eviction-on-failure) to `web/logic.js`, and

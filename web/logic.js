@@ -107,6 +107,29 @@ function makeSessionCache(maxEntries){
   };
 }
 
+/* ---- "make the case" image export ----
+   Word-wraps `text` (which may already contain newlines — blank lines are
+   preserved as section breaks) into lines no wider than `maxWidth`, per the
+   caller-supplied `measure(candidateLine)` function. Kept measure-agnostic
+   so the same wrapping logic drives a real canvas 2D context in the browser
+   (measure by pixel width via ctx.measureText) and a plain character-count
+   stand-in in tests (no canvas in Node). */
+function wrapText(text,maxWidth,measure){
+  const out=[];
+  String(text).split("\n").forEach(rawLine=>{
+    if(rawLine===""){out.push("");return;}
+    const words=rawLine.split(" ");
+    let line="";
+    words.forEach(w=>{
+      const candidate=line?line+" "+w:w;
+      if(line&&measure(candidate)>maxWidth){out.push(line);line=w;}
+      else line=candidate;
+    });
+    if(line)out.push(line);
+  });
+  return out;
+}
+
 /* ---- parcel lookup helpers ---- */
 function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
 function pick(a,keys){
@@ -120,5 +143,5 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText};
 }
