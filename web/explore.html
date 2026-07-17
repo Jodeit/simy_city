@@ -666,15 +666,21 @@ function specText(spec){
 
 /* ---- LIVE demand read via Overpass (real counts → real verdict) ---- */
 const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+// Session-lifetime cache (web/logic.js) for read-only Overpass/ArcGIS/USGS/
+// Census lookups: re-clicking a parcel, or a Compare pin re-navigating the
+// map back to one, reuses this session's answers instead of re-hitting those
+// services. Data at a point doesn't change mid-session, so no TTL is needed.
+const netCache=makeSessionCache(300);
 function overpass(ql,seq,ok,fail){
-  (function attempt(eps){
-    if(seq!==reqSeq)return;
-    if(!eps.length){if(fail)fail();return;}
-    fetch(eps[0],{method:"POST",body:"data="+encodeURIComponent(ql)})
-      .then(r=>r.ok?r.json():Promise.reject(r.status))
-      .then(d=>{if(seq===reqSeq)ok(d);})
-      .catch(()=>attempt(eps.slice(1)));
-  })(OVERPASS.slice());
+  netCache("op:"+ql, ()=>new Promise((resolve,reject)=>{
+    (function attempt(eps){
+      if(!eps.length){reject();return;}
+      fetch(eps[0],{method:"POST",body:"data="+encodeURIComponent(ql)})
+        .then(r=>r.ok?r.json():Promise.reject(r.status))
+        .then(resolve)
+        .catch(()=>attempt(eps.slice(1)));
+    })(OVERPASS.slice());
+  })).then(d=>{if(seq===reqSeq)ok(d);}).catch(()=>{if(seq===reqSeq&&fail)fail();});
 }
 function setHTML(id,html){const el=document.getElementById(id);if(el){el.classList.remove("loading");el.innerHTML=html;}}
 function errHTML(t){return `<span class="unavail">⚠ ${t}</span>`;}
@@ -824,7 +830,7 @@ function arcgisPointQuery(base,latlng,returnGeom){
   const url=base+"/query?f=json&where=1%3D1&geometry="+pt+
     "&geometryType=esriGeometryPoint&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
     "&returnGeometry="+(returnGeom?"true":"false")+"&outFields=*";
-  return fetch(url).then(r=>r.ok?r.json():Promise.reject(r.status)).then(d=>{
+  return netCache(url, ()=>fetch(url).then(r=>r.ok?r.json():Promise.reject(r.status))).then(d=>{
     if(!d||d.error)throw new Error("arcgis");
     return (d.features||[]).map(f=>({
       properties:f.attributes||{},
@@ -966,12 +972,13 @@ function classifyOwner(name){
 function runTopo(latlng,seq){
   const dLat=0.0007, dLng=0.0007/Math.max(0.2,Math.cos(latlng.lat*Math.PI/180)); // ~78 m
   const pts=[[0,0],[dLat,0],[-dLat,0],[0,dLng],[0,-dLng]].map(([a,b])=>[latlng.lat+a,latlng.lng+b]);
-  Promise.all(pts.map(([y,x])=>
-    fetch(`${EPQS}?x=${x}&y=${y}&units=Meters&wkid=4326`).then(r=>r.ok?r.json():Promise.reject()).then(j=>{
+  Promise.all(pts.map(([y,x])=>{
+    const url=`${EPQS}?x=${x}&y=${y}&units=Meters&wkid=4326`;
+    return netCache(url, ()=>fetch(url).then(r=>r.ok?r.json():Promise.reject())).then(j=>{
       const v=parseFloat(j&&(j.value!=null?j.value:(j.location&&j.location.value)));
       return (isFinite(v)&&v>-1000)?v:null;
-    }).catch(()=>null)
-  )).then(els=>{
+    }).catch(()=>null);
+  })).then(els=>{
     if(seq!==reqSeq)return; if(!document.getElementById("devTopo"))return;
     const ok=els.filter(v=>v!=null);
     if(ok.length<3){setHTML("devTopo",errHTML("elevation unavailable here"));return;}
@@ -1040,8 +1047,8 @@ function runFlood(latlng,seq){
    a single tract is far smaller than a fast-casual/warehouse-club trade area). */
 function runCensus(latlng,seq){
   if(!document.getElementById("devCensus"))return;
-  fetch(`${FCC_BLOCK_API}?lat=${latlng.lat}&lon=${latlng.lng}&format=json`)
-    .then(r=>r.ok?r.json():Promise.reject(r.status))
+  const fccUrl=`${FCC_BLOCK_API}?lat=${latlng.lat}&lon=${latlng.lng}&format=json`;
+  netCache(fccUrl, ()=>fetch(fccUrl).then(r=>r.ok?r.json():Promise.reject(r.status)))
     .then(j=>{
       if(seq!==reqSeq)return;
       const fips=parseFccBlockFips(j);
@@ -1054,8 +1061,8 @@ function tryAcsYear(years,fips,seq){
   if(seq!==reqSeq)return; if(!document.getElementById("devCensus"))return;
   if(!years.length){setHTML("devCensus",errHTML("ACS data unavailable for this tract"));return;}
   const y=years[0];
-  fetch(`https://api.census.gov/data/${y}/acs/acs5?get=NAME,B11001_001E,B19013_001E,B01002_001E&for=tract:${fips.tract}&in=state:${fips.state}+county:${fips.county}`)
-    .then(r=>r.ok?r.json():Promise.reject(r.status))
+  const acsUrl=`https://api.census.gov/data/${y}/acs/acs5?get=NAME,B11001_001E,B19013_001E,B01002_001E&for=tract:${fips.tract}&in=state:${fips.state}+county:${fips.county}`;
+  netCache(acsUrl, ()=>fetch(acsUrl).then(r=>r.ok?r.json():Promise.reject(r.status)))
     .then(j=>{
       if(seq!==reqSeq)return;
       const d=parseAcsTractRow(j);

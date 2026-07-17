@@ -88,6 +88,25 @@ function parseAcsTractRow(json){
   return {households:num("B11001_001E"),medianIncome:num("B19013_001E"),medianAge:num("B01002_001E")};
 }
 
+/* ---- session-lifetime response cache ----
+   Wraps a key + promise-factory: the same key returns the same in-flight/
+   settled promise instead of re-issuing the request, so re-clicking a parcel
+   (or a Compare pin re-navigating the map back to one) reuses the Overpass/
+   ArcGIS/Census answers already fetched this session instead of re-hitting
+   those services. A rejected fetch evicts its key so a transient network
+   blip doesn't get cached as a permanent failure. Capped (oldest-first
+   eviction) so a long map-browsing session can't grow this unboundedly. */
+function makeSessionCache(maxEntries){
+  const store=new Map();
+  return function cached(key,run){
+    if(store.has(key))return store.get(key);
+    const p=Promise.resolve().then(run).catch(e=>{store.delete(key);throw e;});
+    store.set(key,p);
+    if(store.size>maxEntries)store.delete(store.keys().next().value);
+    return p;
+  };
+}
+
 /* ---- parcel lookup helpers ---- */
 function inBbox(ll,b){return ll.lng>=b[0]&&ll.lat>=b[1]&&ll.lng<=b[2]&&ll.lat<=b[3];}
 function pick(a,keys){
@@ -101,5 +120,5 @@ function pick(a,keys){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache};
 }

@@ -12,7 +12,7 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
-  parseFccBlockFips, parseAcsTractRow,
+  parseFccBlockFips, parseAcsTractRow, makeSessionCache,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -252,4 +252,66 @@ test("real model.json: findStandoffs() returns well-formed cycles", () => {
     assert.ok(s.edges.length >= 1);
     cheapest(s.edges); // must not throw on real breaker_cost values
   }
+});
+
+// ---- session-lifetime response cache (explore.html's Overpass/ArcGIS/Census
+// lookups, so re-clicking a parcel or re-navigating to a Compare pin reuses
+// this session's answers instead of re-fetching) ----
+
+test("makeSessionCache: same key runs the fetcher once and reuses the result", async () => {
+  const cache = makeSessionCache(10);
+  let calls = 0;
+  const run = () => { calls++; return Promise.resolve("data-" + calls); };
+  const a = await cache("k1", run);
+  const b = await cache("k1", run);
+  assert.equal(a, "data-1");
+  assert.equal(b, "data-1");
+  assert.equal(calls, 1);
+});
+
+test("makeSessionCache: different keys run independently", async () => {
+  const cache = makeSessionCache(10);
+  let calls = 0;
+  const run = () => { calls++; return Promise.resolve(calls); };
+  const a = await cache("k1", run);
+  const b = await cache("k2", run);
+  assert.equal(a, 1);
+  assert.equal(b, 2);
+  assert.equal(calls, 2);
+});
+
+test("makeSessionCache: a rejected fetch is evicted so the next call retries", async () => {
+  const cache = makeSessionCache(10);
+  let calls = 0;
+  const run = () => { calls++; return calls === 1 ? Promise.reject(new Error("network")) : Promise.resolve("ok"); };
+  await assert.rejects(() => cache("k1", run));
+  const result = await cache("k1", run);
+  assert.equal(result, "ok");
+  assert.equal(calls, 2);
+});
+
+test("makeSessionCache: concurrent calls for the same key share one in-flight promise", async () => {
+  const cache = makeSessionCache(10);
+  let calls = 0;
+  const run = () => { calls++; return Promise.resolve("shared"); };
+  const [a, b] = await Promise.all([cache("k1", run), cache("k1", run)]);
+  assert.equal(a, "shared");
+  assert.equal(b, "shared");
+  assert.equal(calls, 1);
+});
+
+test("makeSessionCache: evicts the oldest entry once past maxEntries", async () => {
+  const cache = makeSessionCache(2);
+  await cache("k1", () => Promise.resolve("v1"));
+  await cache("k2", () => Promise.resolve("v2"));
+  await cache("k3", () => Promise.resolve("v3")); // k1 should be evicted now
+
+  let calls = 0;
+  const result = await cache("k1", () => { calls++; return Promise.resolve("v1-again"); });
+  assert.equal(calls, 1, "k1 should have been re-fetched after eviction");
+  assert.equal(result, "v1-again");
+
+  let k3Calls = 0;
+  await cache("k3", () => { k3Calls++; return Promise.resolve("v3"); });
+  assert.equal(k3Calls, 0, "k3 should still be cached");
 });

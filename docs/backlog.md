@@ -165,8 +165,30 @@ Ground rules for each run:
       live tile rendering and the exact `"Slope Map"` rendering-rule name are
       a good human spot-check.
 - [ ] Shareable "make the case" as an image/PDF export.
-- [ ] Accessibility pass (keyboard, ARIA, contrast) and performance (debounce,
-      cache Overpass responses per session).
+- [x] **Cache Overpass/ArcGIS/USGS/Census responses per session.** Added a
+      pure, tested `makeSessionCache` (capped in-memory key→promise map with
+      oldest-first eviction and eviction-on-failure) to `web/logic.js`, and
+      wired it into every read-only lookup `explore.html` makes: Overpass
+      demand/competitor queries, the shared `arcgisPointQuery` helper (parcel,
+      MUD/district, FEMA flood), USGS topo elevation samples, and the
+      FCC-block/Census-ACS tract lookups. Same-point data doesn't change
+      mid-session, so re-clicking a parcel or a Compare pin re-navigating the
+      map back to one now reuses this session's answers instead of re-hitting
+      those services — fewer requests against public APIs and a snappier
+      repeat-click. The remaining "debounce, keyboard/ARIA/contrast
+      accessibility" half of this item is still open, split out below.
+      Verified with 5 new Node unit tests (hit/miss, per-key isolation,
+      failure eviction, concurrent-call sharing, cap eviction) and in headless
+      Chromium: both pages load with zero console/page errors, and driving
+      `overpass()` directly with a mocked `fetch` shows a second identical
+      query reuses the cached promise instead of issuing a second request.
+- [ ] Accessibility pass (keyboard, ARIA, contrast) on the Explore/Test-a-use
+      panels and map controls (focus states, `aria-label`s on icon-only
+      buttons like 📌/⚖️, verdict color contrast).
+- [ ] Debounce rapid repeat map clicks so a fast double-click doesn't kick off
+      two full Overpass/ArcGIS/topo/census fan-outs (the `reqSeq` staleness
+      check already discards the first click's *rendering*, but doesn't stop
+      its in-flight requests from firing).
 - [ ] Landing page: embed a live screenshot/GIF of the explorer.
 
 ## Done
