@@ -482,7 +482,11 @@ L.control.layers(
   {"TCAD parcel lines":parcelTiles,"FEMA flood zones":floodTiles,"USGS slope map":slopeTiles},
   {position:"topright",collapsed:IS_MOBILE}   // expanded control would eat the small map
 ).addTo(map);
-map.on("click",e=>analyze(e.latlng));
+// Debounced (trailing-edge): a fast double/triple-click on the map only
+// kicks off one Overpass/ArcGIS/USGS/Census fan-out, for the last click in
+// the burst, instead of one per click (the reqSeq staleness check already
+// discarded the earlier ones' *rendering*, but not their in-flight requests).
+map.on("click",debounce(e=>analyze(e.latlng),200));
 
 function analyze(latlng){
   document.getElementById("empty").style.display="none";

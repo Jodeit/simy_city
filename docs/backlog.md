@@ -201,10 +201,23 @@ Ground rules for each run:
 - [ ] Accessibility pass (keyboard, ARIA, contrast) on the Explore/Test-a-use
       panels and map controls (focus states, `aria-label`s on icon-only
       buttons like 📌/⚖️, verdict color contrast).
-- [ ] Debounce rapid repeat map clicks so a fast double-click doesn't kick off
+- [x] Debounce rapid repeat map clicks so a fast double-click doesn't kick off
       two full Overpass/ArcGIS/topo/census fan-outs (the `reqSeq` staleness
       check already discards the first click's *rendering*, but doesn't stop
-      its in-flight requests from firing).
+      its in-flight requests from firing). Added a small trailing-edge
+      `debounce(fn, wait)` to `web/logic.js` and wrapped the map's `"click"`
+      handler with it (200ms) — deliberately trailing-only (no leading-edge
+      fire), since firing immediately on the first click of a burst would
+      still kick off the very fan-out this exists to avoid; only the last
+      click in a rapid burst now calls `analyze()` at all. Added 4 unit tests
+      (single call, burst collapses to one trailing call with the last args,
+      well-spaced calls each fire independently, `cancel()` drops a pending
+      call). Verified in headless Chromium: both pages load with zero
+      console/page errors, and firing three synthetic `map.fire("click", …)`
+      events back-to-back left `reqSeq` unchanged until the debounce window
+      elapsed, then bumped it exactly once (for the third click's position) —
+      confirming the burst collapsed to a single `analyze()` run end-to-end,
+      not just at the unit-test level.
 - [ ] Landing page: embed a live screenshot/GIF of the explorer.
 
 ## Done

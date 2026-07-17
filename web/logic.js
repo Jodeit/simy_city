@@ -140,8 +140,26 @@ function pick(a,keys){
   return null;
 }
 
+/* ---- click debounce ----
+   Wraps `fn` so a burst of rapid calls (e.g. a fast double-click on the map)
+   only invokes `fn` once, `wait` ms after the *last* call in the burst —
+   trailing-edge only. This is deliberate: firing on the leading edge too
+   would still kick off a full network fan-out (Overpass/ArcGIS/USGS/Census)
+   for the click that's about to be superseded, which is exactly the waste
+   this exists to avoid. Returns the debounced function; call `.cancel()` to
+   drop a pending call outright (e.g. on teardown). */
+function debounce(fn,wait){
+  let timer=null;
+  function debounced(...args){
+    if(timer!==null)clearTimeout(timer);
+    timer=setTimeout(()=>{timer=null;fn.apply(null,args);},wait);
+  }
+  debounced.cancel=()=>{if(timer!==null){clearTimeout(timer);timer=null;}};
+  return debounced;
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce};
 }

@@ -12,7 +12,7 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
-  parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText,
+  parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText, debounce,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -344,4 +344,42 @@ test("wrapText: preserves blank lines (section breaks) instead of dropping them"
 test("wrapText: a single word longer than maxWidth is kept whole, not truncated", () => {
   const lines = wrapText("supercalifragilisticexpialidocious", 10, charWidth);
   assert.deepEqual(lines, ["supercalifragilisticexpialidocious"]);
+});
+
+// ---- debounce (collapses a rapid-click burst into one trailing call) ----
+
+test("debounce: a single call fires once, after the wait", async () => {
+  let calls = [];
+  const d = debounce((x) => calls.push(x), 20);
+  d("a");
+  assert.deepEqual(calls, []); // not yet — still waiting
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(calls, ["a"]);
+});
+
+test("debounce: a rapid burst collapses into one call with the last args", async () => {
+  let calls = [];
+  const d = debounce((x) => calls.push(x), 20);
+  d("a"); d("b"); d("c");
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(calls, ["c"]); // "a" and "b" never fire — no wasted fan-out
+});
+
+test("debounce: calls spaced further apart than the wait each fire separately", async () => {
+  let calls = [];
+  const d = debounce((x) => calls.push(x), 15);
+  d("a");
+  await new Promise((r) => setTimeout(r, 30));
+  d("b");
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(calls, ["a", "b"]);
+});
+
+test("debounce: cancel() drops a pending trailing call", async () => {
+  let calls = [];
+  const d = debounce((x) => calls.push(x), 15);
+  d("a");
+  d.cancel();
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(calls, []);
 });
