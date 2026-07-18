@@ -15,6 +15,23 @@ Ground rules for each run:
   docs/tests-only progress.
 
 ## Now (high value)
+- [x] **Real verdict for warehouse_club.** The last of the four land uses still
+      judged on rooftop demand alone. Blended the existing rooftop trade-area
+      read with the site-size gate `layers.yaml` already documents for it
+      (`parcel: { min_buildable_acres: 15 }` — a warehouse club needs a big flat
+      pad for the store + parking, not just nearby households) into one
+      PASS/SHORT verdict, waiting for both the rooftop leg (`runDemand`) and the
+      acreage leg (`showParcel`) — same wait-for-both-legs pattern as the
+      data_center/fast_casual/residential_subdivision verdicts
+      (`maybeRenderWCVerdict`). Verified in headless Chromium: both pages load
+      with zero page/console errors; driving the render function directly
+      through PASS / SHORT-on-site-size / SHORT-on-demand / acreage-unavailable
+      / no-rooftop-read / wrong-use-selected states produced correct verdict
+      text and CSS classes; and a full simulated map click with `warehouse_club`
+      selected renders the whole result panel without throwing. Outbound
+      network to Overpass/ArcGIS is blocked from this sandbox, so a live
+      end-to-end rooftop/acreage fetch on the real site is a good human
+      spot-check.
 - [x] **Real data_center verdict.** data_center previously showed no PASS/FAIL
       at all (rooftops don't matter for siting a data center). Added a real
       three-gate PASS/SHORT — nearest power substation ≤5 km (from the
@@ -242,7 +259,12 @@ Ground rules for each run:
       elapsed, then bumped it exactly once (for the third click's position) —
       confirming the burst collapsed to a single `analyze()` run end-to-end,
       not just at the unit-test level.
-- [ ] Landing page: embed a live screenshot/GIF of the explorer.
+- [ ] Landing page: embed a live screenshot/GIF of the explorer. (Checked into
+      this sandbox once: outbound network to map tiles/Overpass/ArcGIS is
+      blocked here, so any screenshot captured in-session would show a blank/
+      grey map — not representative of the live product, and not something
+      worth committing sight-unseen to the homepage. Needs a network-enabled
+      environment, or a human to run a capture script and commit the asset.)
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

@@ -285,6 +285,13 @@ let fcState=null;
 // from nearby schools — waits for both the acreage and school-count legs.
 const RES_UNITS_PER_ACRE=3, RES_STUDENTS_PER_HOME=0.5, RES_SEATS_PER_SCHOOL=750;
 let resState=null;
+// warehouse_club's real verdict: rooftop trade-area demand (already fetched
+// by runDemand) blended with the site-size gate layers.yaml already documents
+// (`parcel.min_buildable_acres: 15` — a warehouse club needs a big flat pad
+// for the store + parking, not just nearby households) — waits for both legs,
+// same wait-for-both-legs pattern as the other three real verdicts.
+const WC_MIN_ACRES=15;
+let wcState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -521,6 +528,7 @@ function analyze(latlng){
     dcState = current==="data_center" ? {seq} : null;
     fcState = current==="fast_casual" ? {seq} : null;
     resState = current==="residential_subdivision" ? {seq} : null;
+    wcState = current==="warehouse_club" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
@@ -658,8 +666,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -667,6 +675,7 @@ function renderBuild(use,latlng){
         ${isDC?"grid interconnect + parcel size + water district decide the verdict, not rooftops"
               :isFC?"rooftops + nearby offices/shops (daytime population) blend into the verdict"
               :isRes?"parcel acreage (est. homes) vs. nearby school capacity decide the verdict"
+              :isWC?"rooftops in the trade area + parcel acreage (needs a big flat pad) decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -747,10 +756,12 @@ function runDemand(latlng,seq){
       setHTML("roofVal", c==null?errHTML("rooftop count unavailable")
         : `🏠 <b>~${c.toLocaleString()}</b> rooftops within ${(cfg.radius/1000)} km <span class="src">(household proxy)</span>`);
       if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=c; maybeRenderFCVerdict(seq); }
+      else if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=c; maybeRenderWCVerdict(seq); }
       else if(cfg.roofNeed) renderDemandVerdict(c,cfg);
     }, ()=>{
       setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works."));
       if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=null; maybeRenderFCVerdict(seq); }
+      if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=null; maybeRenderWCVerdict(seq); }
     });
   // 1b) fast_casual only: daytime population proxy (offices/shops/workplaces) —
   // lunch traffic comes from workers and shoppers too, not just nearby homes.
@@ -872,6 +883,32 @@ function maybeRenderResVerdict(seq){
     : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
     +`<br><span style="font-weight:400;font-size:.85em">${units.toLocaleString()} est. homes @ ${RES_UNITS_PER_ACRE}/ac · ${RES_STUDENTS_PER_HOME} students/home</span>`;
 }
+// warehouse_club's real verdict — waits for the rooftop leg (runDemand) and
+// the acreage leg (showParcel) before rendering once. PASS needs *both* a
+// trade area with enough rooftops (the demand gate) and a parcel big enough
+// for the store + parking pad (the layers.yaml `min_buildable_acres: 15` gate)
+// — a big empty lot with no rooftops nearby fails just as surely as a dense
+// neighborhood with no room for the pad.
+function maybeRenderWCVerdict(seq){
+  if(current!=="warehouse_club"||mode!=="build"||!wcState||wcState.seq!==seq)return;
+  const s=wcState, cfg=USE_DEMAND.warehouse_club;
+  if(s.roofs===undefined||s.acres===undefined)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.roofs==null){ el.style.display="none"; return; } // no rooftop read at all — nothing to show
+  const demandOk=s.roofs>=cfg.roofNeed*0.85, siteOk=s.acres!=null&&s.acres>=WC_MIN_ACRES;
+  const pass=demandOk&&siteOk;
+  const legs=[
+    demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
+      : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
+    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${WC_MIN_ACRES} ac for store + parking)`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${WC_MIN_ACRES} ac for store + parking)`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — clears the trade-area demand and the site-size gate"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
 
 /* ---- parcel identification (real property boundary + county record) ---- */
 // One robust ArcGIS point query for both FeatureServer and (older) MapServer:
@@ -985,6 +1022,7 @@ function showParcel(geo,src,seq){
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
   if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
+  if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.acres=acN; maybeRenderWCVerdict(seq); }
   lastParcelSummary={seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,
