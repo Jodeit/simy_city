@@ -265,6 +265,36 @@ Ground rules for each run:
       grey map — not representative of the live product, and not something
       worth committing sight-unseen to the homepage. Needs a network-enabled
       environment, or a human to run a capture script and commit the asset.)
+- [ ] Shareable permalink for a clicked site. Encode the clicked lat/lng (and,
+      in Test-a-use mode, the selected use) into the URL hash on click/
+      `pushState`, and on load, if the hash carries a point, re-run `analyze()`
+      against it and pan/zoom the map there — so a "make the case" link can be
+      pasted to someone and reopen on the exact parcel instead of a blank map.
+      Pure client-side URL parsing, no new network calls; a good candidate for
+      unit tests in `web/logic.js` (hash encode/decode round-trip) plus a
+      headless-Chromium check that a synthetic `location.hash` on load drives
+      a real `analyze()` call.
+- [ ] Address search box. A text input above the map that geocodes a typed
+      address via the free, keyless Nominatim OSM search API
+      (`nominatim.openstreetmap.org/search`) and pans/zooms the map to the
+      result — most people don't know the lat/lng of the site they want to
+      evaluate and currently have to eyeball it on the map. Same
+      fetch-with-graceful-degradation pattern as the other Overpass/ArcGIS
+      reads (clear "not found"/"lookup failed" states, no silent hang), and
+      respect Nominatim's usage policy (identify the app in a `User-Agent`/
+      `Referer`, no autocomplete-on-keystroke — search on submit only).
+- [ ] Multi-tract Census ACS trade area. The current "Census tract (ACS)"
+      checklist row (see the "Census ACS demographics" item above) reads a
+      single ~1-3k-household tract at the clicked point. For land uses whose
+      rooftop demand read already looks at a multi-km radius (fast_casual,
+      warehouse_club), summing ACS data across every tract whose centroid
+      falls inside that same radius (via the FCC block API's bbox/radius
+      variant, or a simple bounding-box tract enumeration) would give a real
+      demographic read at the same trade-area scale as the demand math,
+      instead of one unrepresentative tract. Flagged as a natural follow-up
+      when the single-tract version shipped; larger than the other items here
+      since it likely needs a new batched-tract-lookup helper with its own
+      tests.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
