@@ -198,9 +198,33 @@ Ground rules for each run:
       Chromium: both pages load with zero console/page errors, and driving
       `overpass()` directly with a mocked `fetch` shows a second identical
       query reuses the cached promise instead of issuing a second request.
-- [ ] Accessibility pass (keyboard, ARIA, contrast) on the Explore/Test-a-use
-      panels and map controls (focus states, `aria-label`s on icon-only
-      buttons like 📌/⚖️, verdict color contrast).
+- [x] Accessibility pass (keyboard, ARIA, contrast) on the Explore/Test-a-use
+      panels. Made the explore-mode "I'm scouting" / "I have a use in mind"
+      path cards keyboard-operable (`role="button" tabindex="0"` + a shared
+      `wireActivate()` helper firing on Enter/Space, not just click — these
+      were plain `<div onclick>`s before, unreachable without a mouse).
+      Added `aria-pressed` to the mode-switch and use-selector toggle buttons
+      so screen readers announce which is active, and an `aria-label` on each
+      pinned-parcel's "✕" remove button (was icon-only with just a `title`).
+      Gave both modals (compare-parcels, bring-your-own-data) real dialog
+      semantics: `role="dialog"`/`aria-modal="true"`/`aria-labelledby`, focus
+      moves to the first focusable control on open, Escape closes and returns
+      focus to whatever opened it (not just a backdrop-click handler), and a
+      Tab focus trap keeps keyboard focus inside the modal instead of leaking
+      into the page/map behind it — a shared `openModal()`/`closeModal()`
+      pair used by both. Fixed the one real contrast failure: the amber
+      "contested"/"unavailable" text (`#9a6f1c` on `#fdeed6`/white) was
+      ~3.9:1–4.5:1, below the 4.5:1 AA threshold for normal-weight text at
+      this size; darkened to `#7a5410`, now 5.9:1. Verified in headless
+      Chromium: both pages load with zero console/page errors; keyboard-only
+      activation of a path card (Tab, Enter) switches mode; `aria-pressed`
+      reflects the active mode/use button; opening a modal moves focus in,
+      Escape closes it and returns focus to the opener, and Tab past the last
+      focusable wraps back to the first (trap holds); computed the new amber
+      contrast ratio programmatically (5.92:1). Full keyboard/ARIA audit of
+      the map's own controls (Leaflet's vendored layer switcher) is out of
+      scope here — that's third-party vendored code, not something this app
+      controls the markup of.
 - [x] Debounce rapid repeat map clicks so a fast double-click doesn't kick off
       two full Overpass/ArcGIS/topo/census fan-outs (the `reqSeq` staleness
       check already discards the first click's *rendering*, but doesn't stop

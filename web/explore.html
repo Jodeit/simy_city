@@ -42,7 +42,7 @@
   .leanbar b{position:absolute;top:0;bottom:0;display:block}
   .lean .who{flex:1}.lean .who small{display:block;color:var(--slate);font-size:.76rem}
   .verdict{font-weight:800;text-align:center;padding:9px;border-radius:10px;margin-top:6px;font-size:.92rem}
-  .verdict.contested{background:#fdeed6;color:#9a6f1c}
+  .verdict.contested{background:#fdeed6;color:#7a5410}
   .verdict.aligned{background:#e7f3e9;color:var(--garden-deep)}
   .live{font-size:.88rem;margin:6px 0}
   .live b{color:var(--ink)}
@@ -58,9 +58,9 @@
   .drow a{color:var(--garden-deep)}
   .loading{color:var(--slate);font-style:italic;font-size:.85rem;animation:pulse 1.3s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
-  .unavail{color:#9a6f1c;background:#fdeed6;border-radius:7px;padding:.2em .55em;font-size:.85rem;display:inline-block}
+  .unavail{color:#7a5410;background:#fdeed6;border-radius:7px;padding:.2em .55em;font-size:.85rem;display:inline-block}
   .standoff{font-size:.85rem;background:#fff;border:1px dashed var(--amber);border-radius:10px;padding:9px 10px;margin:7px 0}
-  .standoff b{color:#9a6f1c}
+  .standoff b{color:#7a5410}
   .tinker{background:#16201f;color:#dcebd9;color:#e7f0e8;border-radius:13px;padding:13px;margin-top:14px;font-size:.86rem}
   .tinker a{color:var(--leaf);font-weight:700}
   .legend{position:absolute;z-index:500;bottom:14px;left:14px;background:rgba(255,253,247,.94);border:1px solid var(--line);
@@ -167,8 +167,8 @@
   <header>
     <span class="brand">SIM<b>y</b>City <span class="exp" style="font-weight:500;color:#9fc6a5">Explorer</span></span>
     <div class="modes" id="modes">
-      <button class="mbtn active" data-mode="explore">🔎 Explore properties</button>
-      <button class="mbtn" data-mode="build">🎯 Test a use</button>
+      <button class="mbtn active" data-mode="explore" aria-pressed="true">🔎 Explore properties</button>
+      <button class="mbtn" data-mode="build" aria-pressed="false">🎯 Test a use</button>
     </div>
     <span class="hint"><a href="#" id="compareOpen">⚖️ Compare (<span id="compareCount">0</span>)</a> ·
       <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
@@ -185,14 +185,14 @@
       <h2>Find your next move.</h2>
       <p class="src">Real parcels, real public data — running entirely in your browser. Pick a lane:</p>
       <div class="paths">
-        <div class="path" id="pathExplore">
-          <div class="ic">🔎</div>
+        <div class="path" id="pathExplore" role="button" tabindex="0">
+          <div class="ic" aria-hidden="true">🔎</div>
           <b>I'm scouting for opportunity</b>
           <span>Click any property to see what it is, what it's worth, whether it's <b>for sale</b>,
             the developer red-flags (slope, MUD, flood), and <b>what it's best suited for</b>. No use case needed.</span>
         </div>
-        <div class="path" id="pathBuild">
-          <div class="ic">🎯</div>
+        <div class="path" id="pathBuild" role="button" tabindex="0">
+          <div class="ic" aria-hidden="true">🎯</div>
           <b>I have a use in mind</b>
           <span>Pick a use — data center, warehouse club, fast-casual, housing — then click parcels to
             test the <b>fit</b>: what it needs nearby, what it induces, and whether it <b>should</b> be built.</span>
@@ -206,8 +206,8 @@
 </div>
 
 <div class="modal" id="compareModal">
-  <div class="box wide">
-    <h3>Compare pinned parcels</h3>
+  <div class="box wide" role="dialog" aria-modal="true" aria-labelledby="compareModalTitle" tabindex="-1">
+    <h3 id="compareModalTitle">Compare pinned parcels</h3>
     <p>Pin a parcel from its analysis (📌 in the toolbar) to line it up against others here — size,
       value, and (in <b>Test a use</b>) the verdict.</p>
     <div class="cmpScroll"><div id="compareBody"></div></div>
@@ -220,8 +220,8 @@
 </div>
 
 <div class="modal" id="byoModal">
-  <div class="box">
-    <h3>Bring your own data <span style="font-weight:500;color:var(--slate)">(private)</span></h3>
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="byoModalTitle" tabindex="-1">
+    <h3 id="byoModalTitle">Bring your own data <span style="font-weight:500;color:var(--slate)">(private)</span></h3>
     <p>Drop pins from your own list — comps, sites you're tracking, parcels you own. One per line as
       <code>lat, lng, label</code>, or paste GeoJSON points.</p>
     <textarea id="byoText" placeholder="30.3072, -97.9203, My empty lot
@@ -364,15 +364,26 @@ else{fetch("model.json").then(r=>r.json()).then(m=>{MODEL=m;boot();});}
 
 function boot(){ initUses(); initModes(); setLegend(); }
 
+// Wires both a click and an Enter/Space keydown to `fn` — used for elements
+// (like the explore-mode path cards) that need button-like keyboard behavior
+// but aren't real <button>s, since a plain onclick div is mouse-only.
+function wireActivate(el,fn){
+  if(!el)return;
+  el.onclick=fn;
+  el.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); fn(); } };
+}
 function initModes(){
   document.querySelectorAll("#modes .mbtn").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
-  const pe=document.getElementById("pathExplore"), pb=document.getElementById("pathBuild");
-  if(pe)pe.onclick=()=>setMode("explore");
-  if(pb)pb.onclick=()=>setMode("build");
+  wireActivate(document.getElementById("pathExplore"),()=>setMode("explore"));
+  wireActivate(document.getElementById("pathBuild"),()=>setMode("build"));
 }
 function applyModeUI(m){
   mode=m;
-  document.querySelectorAll("#modes .mbtn").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
+  document.querySelectorAll("#modes .mbtn").forEach(b=>{
+    const on=b.dataset.mode===m;
+    b.classList.toggle("active",on);
+    b.setAttribute("aria-pressed",on?"true":"false");
+  });
   document.getElementById("useBar").style.display = m==="build" ? "block" : "none";
   setLegend();
 }
@@ -392,6 +403,7 @@ function initUses(){
   order.forEach(id=>{
     const b=document.createElement("button");
     b.className="ubtn"+(id===current?" active":"");
+    b.setAttribute("aria-pressed",id===current?"true":"false");
     b.dataset.use=id;
     b.textContent=MODEL.land_uses[id].label.replace(/\s*\(.*\)/,"");
     b.onclick=()=>{selectUse(id);if(lastLatLng)analyze(lastLatLng);};
@@ -400,7 +412,11 @@ function initUses(){
 }
 function selectUse(id){
   current=id;
-  document.querySelectorAll("#uses .ubtn").forEach(b=>b.classList.toggle("active",b.dataset.use===id));
+  document.querySelectorAll("#uses .ubtn").forEach(b=>{
+    const on=b.dataset.use===id;
+    b.classList.toggle("active",on);
+    b.setAttribute("aria-pressed",on?"true":"false");
+  });
 }
 
 // A tiny ArcGIS "dynamic export" tile layer: the county MapServer renders parcel
@@ -1137,14 +1153,45 @@ function renderBYO(pts){
     icon:L.divIcon({className:"",html:'<div style="background:#b3306b;width:14px;height:14px;border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>',iconSize:[14,14],iconAnchor:[7,14]})
   }).bindPopup("🔒 "+esc(p.label||"my point")))).addTo(map);
 }
+/* ---- modal accessibility: focus trap, Escape-to-close, focus return ----
+   Applies to both the compare and bring-your-own-data modals. Keyboard users
+   shouldn't be able to Tab out of an open modal into the page behind it, and
+   closing (Escape, backdrop click, or a Cancel/Close button) should hand
+   focus back to whatever opened it rather than dropping it to <body>. */
+function focusablesIn(container){
+  return Array.from(container.querySelectorAll('a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])'))
+    .filter(el=>el.offsetParent!==null);
+}
+function openModal(modal){
+  modal._opener=document.activeElement;
+  modal.classList.add("open");
+  const box=modal.querySelector(".box");
+  const f=box?focusablesIn(box):[];
+  (f[0]||box||modal).focus({preventScroll:true});
+  modal._keyHandler=e=>{
+    if(e.key==="Escape"){e.preventDefault();closeModal(modal);return;}
+    if(e.key!=="Tab"||!box)return;
+    const items=focusablesIn(box); if(!items.length)return;
+    const first=items[0], last=items[items.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  };
+  modal.addEventListener("keydown",modal._keyHandler);
+}
+function closeModal(modal){
+  modal.classList.remove("open");
+  if(modal._keyHandler){modal.removeEventListener("keydown",modal._keyHandler);modal._keyHandler=null;}
+  if(modal._opener&&typeof modal._opener.focus==="function")modal._opener.focus({preventScroll:true});
+}
+
 function loadBYO(){const raw=localStorage.getItem(BYO_KEY);if(raw){document.getElementById("byoText").value=raw;renderBYO(parseBYO(raw));}}
 function wireBYO(){
   const modal=document.getElementById("byoModal"), ta=document.getElementById("byoText");
-  document.getElementById("byoOpen").onclick=e=>{e.preventDefault();modal.classList.add("open");};
-  document.getElementById("byoCancel").onclick=()=>modal.classList.remove("open");
-  modal.onclick=e=>{if(e.target===modal)modal.classList.remove("open");};
+  document.getElementById("byoOpen").onclick=e=>{e.preventDefault();openModal(modal);};
+  document.getElementById("byoCancel").onclick=()=>closeModal(modal);
+  modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
   document.getElementById("byoAdd").onclick=()=>{const pts=parseBYO(ta.value);localStorage.setItem(BYO_KEY,ta.value);
-    renderBYO(pts);modal.classList.remove("open");if(pts.length)map.panTo([pts[0].lat,pts[0].lng]);};
+    renderBYO(pts);closeModal(modal);if(pts.length)map.panTo([pts[0].lat,pts[0].lng]);};
   document.getElementById("byoClear").onclick=()=>{ta.value="";localStorage.removeItem(BYO_KEY);if(byoLayer)byoLayer.remove();};
 }
 
@@ -1179,7 +1226,7 @@ function renderCompare(){
   const fmtAcres=a=>a!=null?a.toFixed(2)+" ac":"—";
   const fmtVal=v=>v!=null?"$"+v.toLocaleString():"—";
   const rows=[
-    ["", pins.map((p,i)=>`<button class="cmpX" title="remove" data-i="${i}">✕</button>`)],
+    ["", pins.map((p,i)=>`<button class="cmpX" title="remove" aria-label="Remove pinned parcel: ${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}" data-i="${i}">✕</button>`)],
     ["Site", pins.map(p=>`<a href="#" class="cmpGo" data-lat="${p.lat}" data-lng="${p.lng}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`)],
     ["Owner", pins.map(p=>esc(p.owner||"—"))],
     ["Acreage", pins.map(p=>fmtAcres(p.acres))],
@@ -1195,14 +1242,14 @@ function renderCompare(){
   el.querySelectorAll(".cmpX").forEach(b=>b.onclick=()=>removePin(+b.dataset.i));
   el.querySelectorAll(".cmpGo").forEach(a=>a.onclick=e=>{e.preventDefault();
     const lat=+a.dataset.lat,lng=+a.dataset.lng;
-    document.getElementById("compareModal").classList.remove("open");
+    closeModal(document.getElementById("compareModal"));
     map.setView([lat,lng],17); analyze(L.latLng(lat,lng));});
 }
 function wireCompare(){
   const modal=document.getElementById("compareModal");
-  document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();modal.classList.add("open");};
-  document.getElementById("compareCancel").onclick=()=>modal.classList.remove("open");
-  modal.onclick=e=>{if(e.target===modal)modal.classList.remove("open");};
+  document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
+  document.getElementById("compareCancel").onclick=()=>closeModal(modal);
+  modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
   document.getElementById("compareClear").onclick=()=>{pins=[];savePins();};
 }
 
