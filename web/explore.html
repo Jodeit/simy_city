@@ -556,12 +556,10 @@ function renderExplore(latlng){
 
 /* ---- shareable permalink + "make the case" ---- */
 function permalink(latlng){
-  const u=mode==="build"?`&use=${current}`:"";
-  return location.href.split("#")[0]+`#mode=${mode}${u}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`;
+  return location.href.split("#")[0]+"#"+encodeHash(mode,current,latlng.lat,latlng.lng);
 }
 function writeHash(latlng){
-  const u=mode==="build"?`&use=${current}`:"";
-  try{history.replaceState(null,"",`#mode=${mode}${u}&lat=${latlng.lat.toFixed(5)}&lng=${latlng.lng.toFixed(5)}`);}catch(e){}
+  try{history.replaceState(null,"",`#${encodeHash(mode,current,latlng.lat,latlng.lng)}`);}catch(e){}
 }
 function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function buildCaseText(use,latlng){
@@ -1291,14 +1289,12 @@ function wireCompare(){
   document.getElementById("compareClear").onclick=()=>{pins=[];savePins();};
 }
 
-/* ---- honor an incoming share link (#use=..&lat=..&lng=..) ---- */
+/* ---- honor an incoming share link (#mode=..&use=..&lat=..&lng=..) ---- */
 function applyHash(){
-  const h=location.hash.replace(/^#/,""); if(!h)return false;
-  const q={}; h.split("&").forEach(kv=>{const[k,v]=kv.split("=");q[k]=v;});
-  const lat=parseFloat(q.lat), lng=parseFloat(q.lng);
-  if(q.mode==="build"||q.mode==="explore")applyModeUI(q.mode);
+  const q=decodeHash(location.hash); if(!q)return false;
+  if(q.mode)applyModeUI(q.mode);
   if(q.use&&MODEL.land_uses[q.use])selectUse(q.use);
-  if(isFinite(lat)&&isFinite(lng)){map.setView([lat,lng],15);analyze(L.latLng(lat,lng));return true;}
+  if(q.lat!=null&&q.lng!=null){map.setView([q.lat,q.lng],15);analyze(L.latLng(q.lat,q.lng));return true;}
   return false;
 }
 

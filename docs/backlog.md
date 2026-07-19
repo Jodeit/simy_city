@@ -265,15 +265,26 @@ Ground rules for each run:
       grey map — not representative of the live product, and not something
       worth committing sight-unseen to the homepage. Needs a network-enabled
       environment, or a human to run a capture script and commit the asset.)
-- [ ] Shareable permalink for a clicked site. Encode the clicked lat/lng (and,
-      in Test-a-use mode, the selected use) into the URL hash on click/
-      `pushState`, and on load, if the hash carries a point, re-run `analyze()`
-      against it and pan/zoom the map there — so a "make the case" link can be
-      pasted to someone and reopen on the exact parcel instead of a blank map.
-      Pure client-side URL parsing, no new network calls; a good candidate for
-      unit tests in `web/logic.js` (hash encode/decode round-trip) plus a
-      headless-Chromium check that a synthetic `location.hash` on load drives
-      a real `analyze()` call.
+- [x] **Shareable permalink for a clicked site.** The click/load wiring
+      (`writeHash`/`applyHash` in `web/explore.html`) already existed from an
+      earlier run but wasn't checked off and had no tests for the actual
+      encode/decode logic. Extracted that logic into pure, testable
+      `encodeHash`/`decodeHash` functions in `web/logic.js` — `encodeHash`
+      rounds lat/lng to 5 decimals (~1m) and only includes `use` in
+      Test-a-use mode; `decodeHash` returns `null` outright for an absent/
+      empty hash, and `null` per-field (not NaN or a trusted-verbatim string)
+      for an unrecognized `mode`, an unparseable lat/lng, or a missing `use`
+      — so `applyHash()` only overrides state the hash actually carries.
+      `explore.html`'s `permalink()`/`writeHash()`/`applyHash()` now just
+      call these. Added 7 unit tests (round trip in both modes, leading-`#`
+      handling, empty-hash null, bad-mode rejection, missing/unparseable
+      lat/lng, URI-decoded `use`). Verified in headless Chromium: both pages
+      still load with zero JS errors, and loading `explore.html` with a
+      synthetic `#mode=build&use=warehouse_club&lat=..&lng=..` hash already
+      in the URL correctly switched to Test-a-use mode, selected
+      `warehouse_club`, set `lastLatLng` to the encoded point, and rendered a
+      full result panel — a real `analyze()` run driven entirely from the
+      URL on load, not just on a later click — with zero console errors.
 - [ ] Address search box. A text input above the map that geocodes a typed
       address via the free, keyless Nominatim OSM search API
       (`nominatim.openstreetmap.org/search`) and pans/zooms the map to the

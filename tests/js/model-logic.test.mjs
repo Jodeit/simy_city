@@ -13,6 +13,7 @@ const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
   parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText, debounce,
+  encodeHash, decodeHash,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -382,4 +383,46 @@ test("debounce: cancel() drops a pending trailing call", async () => {
   d.cancel();
   await new Promise((r) => setTimeout(r, 30));
   assert.deepEqual(calls, []);
+});
+
+// ---- encodeHash / decodeHash (shareable permalink) ----
+
+test("encodeHash/decodeHash: explore-mode round trip carries mode + point, no use", () => {
+  const hash = encodeHash("explore", "data_center", 30.372, -97.982);
+  assert.equal(hash, "mode=explore&lat=30.37200&lng=-97.98200");
+  const q = decodeHash(hash);
+  assert.deepEqual(q, { mode: "explore", use: null, lat: 30.372, lng: -97.982 });
+});
+
+test("encodeHash/decodeHash: build-mode round trip also carries the selected use", () => {
+  const hash = encodeHash("build", "warehouse_club", 30.1, -97.5);
+  const q = decodeHash(hash);
+  assert.deepEqual(q, { mode: "build", use: "warehouse_club", lat: 30.1, lng: -97.5 });
+});
+
+test("decodeHash: accepts a leading '#' (as read straight off location.hash)", () => {
+  const q = decodeHash("#mode=explore&lat=1&lng=2");
+  assert.equal(q.lat, 1);
+  assert.equal(q.lng, 2);
+});
+
+test("decodeHash: empty or absent hash returns null", () => {
+  assert.equal(decodeHash(""), null);
+  assert.equal(decodeHash("#"), null);
+  assert.equal(decodeHash(undefined), null);
+});
+
+test("decodeHash: unrecognized mode is dropped rather than trusted verbatim", () => {
+  const q = decodeHash("mode=bogus&lat=1&lng=2");
+  assert.equal(q.mode, null);
+});
+
+test("decodeHash: missing/unparseable lat or lng comes back null, not NaN", () => {
+  assert.equal(decodeHash("mode=explore").lat, null);
+  assert.equal(decodeHash("mode=explore&lat=notanumber&lng=2").lat, null);
+});
+
+test("decodeHash: a use value is URI-decoded", () => {
+  const q = decodeHash(`mode=build&use=${encodeURIComponent("fast_casual")}&lat=1&lng=2`);
+  assert.equal(q.use, "fast_casual");
 });

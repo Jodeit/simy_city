@@ -158,8 +158,38 @@ function debounce(fn,wait){
   return debounced;
 }
 
+/* ---- shareable permalink (URL hash) encode/decode ----
+   Pure encode/decode so a "make the case" link can carry the clicked point
+   (and, in Test-a-use mode, the selected use) in the URL hash: written on
+   click via history.replaceState, read back on load to re-run analyze()
+   against the same point. `encodeHash` always rounds lat/lng to 5 decimals
+   (~1m precision — plenty for a parcel-level link, keeps the hash short).
+   `decodeHash` returns null for an absent/empty hash, and null for mode/use/
+   lat/lng fields that are missing or don't parse, so the caller can apply
+   only what's actually present instead of clobbering current state. */
+function encodeHash(mode,use,lat,lng){
+  const u=mode==="build"?`&use=${encodeURIComponent(use)}`:"";
+  return `mode=${mode}${u}&lat=${lat.toFixed(5)}&lng=${lng.toFixed(5)}`;
+}
+function decodeHash(hash){
+  const h=String(hash||"").replace(/^#/,"");
+  if(!h)return null;
+  const q={};
+  h.split("&").forEach(kv=>{
+    const i=kv.indexOf("=");if(i<0)return;
+    q[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1));
+  });
+  const lat=parseFloat(q.lat), lng=parseFloat(q.lng);
+  return {
+    mode:(q.mode==="build"||q.mode==="explore")?q.mode:null,
+    use:q.use||null,
+    lat:isFinite(lat)?lat:null,
+    lng:isFinite(lng)?lng:null,
+  };
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce,encodeHash,decodeHash};
 }
