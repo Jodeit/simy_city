@@ -188,8 +188,28 @@ function decodeHash(hash){
   };
 }
 
+/* ---- address search (Nominatim OSM geocoder) ----
+   Free, keyless forward-geocoding so someone who only knows a street address
+   (not a lat/lng) can jump straight to a site. `nominatimUrl` builds the
+   request; `parseNominatimResult` reads the first hit out of the `[{lat,lon,
+   display_name},...]` response shape, or null for a no-match/malformed
+   response so the caller can show a clear "not found" state instead of
+   hanging or throwing. Submit-only (no autocomplete-on-keystroke) is enforced
+   by the caller, not here — see explore.html's wireAddrSearch.
+   https://operations.osmfoundation.org/policies/nominatim/ */
+function nominatimUrl(query){
+  return "https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(query);
+}
+function parseNominatimResult(json){
+  const hit=Array.isArray(json)?json[0]:null;
+  if(!hit)return null;
+  const lat=parseFloat(hit.lat), lng=parseFloat(hit.lon);
+  if(!isFinite(lat)||!isFinite(lng))return null;
+  return {lat,lng,label:hit.display_name||null};
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce,encodeHash,decodeHash};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,nominatimUrl,parseNominatimResult};
 }

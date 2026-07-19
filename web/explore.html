@@ -66,6 +66,18 @@
   .legend{position:absolute;z-index:500;bottom:14px;left:14px;background:rgba(255,253,247,.94);border:1px solid var(--line);
     border-radius:10px;padding:8px 11px;font-size:.78rem;color:var(--slate)}
   .legend b{color:var(--ink)}
+  /* address search — centered top so it clears the desktop zoom control (top-left)
+     and the layer switcher (top-right) without needing per-corner layout math */
+  .addrsearch{position:absolute;z-index:500;top:12px;left:50%;transform:translateX(-50%);
+    display:flex;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  .addrsearch input{border:none;outline:none;font:inherit;font-size:.85rem;padding:.5em .7em;width:min(230px,42vw);color:var(--ink)}
+  .addrsearch button{border:none;background:var(--garden);color:#06210d;font-size:.95rem;padding:.5em .8em;cursor:pointer}
+  .addrsearch button:hover{background:var(--garden-deep);color:#fff}
+  .addrstatus{position:absolute;z-index:500;top:54px;left:50%;transform:translateX(-50%);
+    background:rgba(255,253,247,.96);border:1px solid var(--line);border-radius:8px;padding:6px 10px;
+    font-size:.8rem;color:var(--slate);max-width:min(280px,80vw);text-align:center}
+  .addrstatus.err{color:#7a5410;background:#fdeed6;border-color:#f0d8ab}
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px}
   .toolbtn{font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink);
     padding:.4em .7em;border-radius:9px;cursor:pointer}
@@ -132,6 +144,9 @@
     .mbtn{font-size:.76rem;padding:.42em .55em;white-space:nowrap}
     .hint{display:none}
     .legend{left:8px;right:8px;bottom:8px;font-size:.7rem;padding:5px 8px;line-height:1.35}
+    .addrsearch{top:8px}
+    .addrsearch input{width:min(180px,55vw);font-size:16px}     /* stop iOS auto-zoom on focus */
+    .addrstatus{top:44px;font-size:.76rem}
     .paths{grid-template-columns:1fr}
     .path{padding:13px}
     .usebar .chips{gap:5px}
@@ -174,6 +189,11 @@
       <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
   </header>
   <div id="mapwrap"><div id="map"></div>
+    <form id="addrForm" class="addrsearch" autocomplete="off">
+      <input id="addrInput" type="text" placeholder="Search an address…" aria-label="Search an address"/>
+      <button type="submit" aria-label="Search">🔍</button>
+    </form>
+    <div class="addrstatus" id="addrStatus" style="display:none" role="status" aria-live="polite"></div>
     <div class="legend" id="legend"></div>
   </div>
   <aside id="panel">
@@ -1298,6 +1318,39 @@ function applyHash(){
   return false;
 }
 
+/* ---- address search (Nominatim OSM geocoder, submit-only) ----
+   Most people know an address, not a lat/lng. Same fetch-with-graceful-
+   degradation + session-cache pattern as the Overpass/ArcGIS/Census reads
+   above: clear "not found"/"lookup failed" states, no silent hang. Fires
+   only on form submit (Enter or the button), never on keystroke, per
+   Nominatim's usage-policy ban on autocomplete-style query volume — the
+   browser's own Referer header (sent automatically) identifies this app,
+   since fetch() cannot set a custom User-Agent. */
+function wireAddrSearch(){
+  const form=document.getElementById("addrForm");
+  const input=document.getElementById("addrInput");
+  const status=document.getElementById("addrStatus");
+  if(!form)return;
+  form.onsubmit=e=>{
+    e.preventDefault();
+    const q=input.value.trim();
+    if(!q)return;
+    status.style.display="block"; status.className="addrstatus";
+    status.textContent="Searching…";
+    const url=nominatimUrl(q);
+    netCache(url, ()=>fetch(url,{headers:{"Accept":"application/json"}}).then(r=>r.ok?r.json():Promise.reject(r.status)))
+      .then(json=>{
+        const hit=parseNominatimResult(json);
+        if(!hit){status.textContent="No match found for that address.";status.className="addrstatus err";return;}
+        status.style.display="none";
+        const latlng=L.latLng(hit.lat,hit.lng);
+        map.setView(latlng,17);
+        analyze(latlng);
+      })
+      .catch(()=>{status.textContent="Address lookup failed — try again.";status.className="addrstatus err";});
+  };
+}
+
 function wireCTA(){
   const b=document.getElementById('ctaTry');
   if(!b) return;
@@ -1308,7 +1361,7 @@ function wireCTA(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); wireCTA(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); wireCTA(); wireAddrSearch(); applyHash();
 </script>
 </body>
 </html>

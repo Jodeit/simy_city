@@ -13,7 +13,7 @@ const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
   parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText, debounce,
-  encodeHash, decodeHash,
+  encodeHash, decodeHash, nominatimUrl, parseNominatimResult,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -425,4 +425,32 @@ test("decodeHash: missing/unparseable lat or lng comes back null, not NaN", () =
 test("decodeHash: a use value is URI-decoded", () => {
   const q = decodeHash(`mode=build&use=${encodeURIComponent("fast_casual")}&lat=1&lng=2`);
   assert.equal(q.use, "fast_casual");
+});
+
+// ---- nominatimUrl / parseNominatimResult (address search) ----
+
+test("nominatimUrl: builds a format=json,limit=1 search URL with the query encoded", () => {
+  const url = nominatimUrl("123 Main St, Austin, TX");
+  assert.ok(url.startsWith("https://nominatim.openstreetmap.org/search?"));
+  assert.ok(url.includes("format=json"));
+  assert.ok(url.includes("limit=1"));
+  assert.ok(url.includes("q=123%20Main%20St%2C%20Austin%2C%20TX"));
+});
+
+test("parseNominatimResult: reads lat/lng/label from the first hit", () => {
+  const json = [{ lat: "30.267200", lon: "-97.743100", display_name: "Austin, Travis County, Texas" }];
+  assert.deepEqual(parseNominatimResult(json), { lat: 30.2672, lng: -97.7431, label: "Austin, Travis County, Texas" });
+});
+
+test("parseNominatimResult: an empty results array is null (no match)", () => {
+  assert.equal(parseNominatimResult([]), null);
+});
+
+test("parseNominatimResult: a malformed/non-array response is null, not a throw", () => {
+  assert.equal(parseNominatimResult(null), null);
+  assert.equal(parseNominatimResult({ error: "Unable to geocode" }), null);
+});
+
+test("parseNominatimResult: unparseable lat/lon on the hit is null", () => {
+  assert.equal(parseNominatimResult([{ lat: "not-a-number", lon: "-97.7" }]), null);
 });

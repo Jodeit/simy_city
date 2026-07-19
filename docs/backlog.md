@@ -285,15 +285,31 @@ Ground rules for each run:
       `warehouse_club`, set `lastLatLng` to the encoded point, and rendered a
       full result panel — a real `analyze()` run driven entirely from the
       URL on load, not just on a later click — with zero console errors.
-- [ ] Address search box. A text input above the map that geocodes a typed
-      address via the free, keyless Nominatim OSM search API
-      (`nominatim.openstreetmap.org/search`) and pans/zooms the map to the
-      result — most people don't know the lat/lng of the site they want to
-      evaluate and currently have to eyeball it on the map. Same
-      fetch-with-graceful-degradation pattern as the other Overpass/ArcGIS
-      reads (clear "not found"/"lookup failed" states, no silent hang), and
-      respect Nominatim's usage policy (identify the app in a `User-Agent`/
-      `Referer`, no autocomplete-on-keystroke — search on submit only).
+- [x] **Address search box.** Added a "Search an address…" input overlaid on
+      the map (centered top, clear of both the desktop zoom control and the
+      layer switcher) that geocodes via the free, keyless Nominatim OSM
+      search API and jumps straight to the result — `map.setView` +
+      `analyze(latlng)`, the same "land on a point and get the full read"
+      path a real map click or an incoming permalink takes — instead of
+      making people eyeball a lat/lng on the map first. Submit-only (Enter or
+      the button), never on keystroke, per Nominatim's usage-policy ban on
+      autocomplete-style query volume; the browser's own `Referer` header
+      (sent automatically) identifies the app, since `fetch()` can't set a
+      custom `User-Agent`. Reuses the existing `netCache` session cache and
+      shows clear "no match found" / "lookup failed" states rather than
+      hanging silently, same fetch-with-graceful-degradation pattern as the
+      other Overpass/ArcGIS/Census reads. Added pure `nominatimUrl`/
+      `parseNominatimResult` helpers to `web/logic.js` (URL shape, first-hit
+      parsing, empty-results/malformed-response → null) with 5 new unit
+      tests. Verified in headless Chromium: both pages load with zero
+      console/page errors; driving the form submit with a mocked `fetch`
+      through the success, no-match, and network-failure paths rendered the
+      correct result panel / status text / CSS classes each time with zero
+      console errors; screenshots at desktop and mobile viewports confirm the
+      search bar doesn't overlap the zoom control or (expanded or collapsed)
+      layer switcher. Outbound network to `nominatim.openstreetmap.org` is
+      blocked from this sandbox, so a live end-to-end address lookup on the
+      real site is a good human spot-check.
 - [ ] Multi-tract Census ACS trade area. The current "Census tract (ACS)"
       checklist row (see the "Census ACS demographics" item above) reads a
       single ~1-3k-household tract at the clicked point. For land uses whose
