@@ -310,18 +310,32 @@ Ground rules for each run:
       layer switcher. Outbound network to `nominatim.openstreetmap.org` is
       blocked from this sandbox, so a live end-to-end address lookup on the
       real site is a good human spot-check.
-- [ ] Multi-tract Census ACS trade area. The current "Census tract (ACS)"
-      checklist row (see the "Census ACS demographics" item above) reads a
-      single ~1-3k-household tract at the clicked point. For land uses whose
-      rooftop demand read already looks at a multi-km radius (fast_casual,
-      warehouse_club), summing ACS data across every tract whose centroid
-      falls inside that same radius (via the FCC block API's bbox/radius
-      variant, or a simple bounding-box tract enumeration) would give a real
-      demographic read at the same trade-area scale as the demand math,
-      instead of one unrepresentative tract. Flagged as a natural follow-up
-      when the single-tract version shipped; larger than the other items here
-      since it likely needs a new batched-tract-lookup helper with its own
-      tests.
+- [x] **Multi-tract Census ACS trade area.** The single-tract "Census tract
+      (ACS)" checklist row reads one ~1-3k-household tract at the clicked
+      point — far smaller than the multi-km trade area fast_casual/
+      warehouse_club already judge rooftop demand across. Added a second
+      checklist row, "Trade-area demographics (ACS)", shown only for those two
+      uses in Test-a-use mode: `tradeAreaSamplePoints` (new, `web/logic.js`)
+      samples a grid of points spanning the same trade-area radius (filtered
+      to the circle via the existing `haversine`, since there's no free bbox/
+      polygon tract-lookup API to match), each gets FCC-block-looked-up to a
+      tract FIPS (reusing the existing keyless FCC endpoint), `dedupeFips`
+      drops duplicates/nulls, then the Census ACS 5-yr API is queried per
+      distinct tract and `sumAcsTracts` sums households (household-weighted
+      average for median income/age, since summing those across tracts is
+      meaningless) — same multi-source-fallback and session-cache reuse
+      pattern as every other live read. Added 8 new unit tests for the three
+      pure helpers (center-inclusion, radius-containment, corner-filtering,
+      dedup, weighted-average math, all-unusable → unavailable-not-zero).
+      Verified in headless Chromium: both pages load with zero console/page
+      errors; and — with `fetch` mocked to synthesize 3 distinct tracts —
+      driving a full `setMode("build")` → `selectUse("warehouse_club")` →
+      `analyze()` run end to end rendered the real aggregated households/
+      income/age row with zero errors, while explore mode and data_center
+      (uses without a defined trade-area radius) correctly show no such row.
+      Outbound network to `geo.fcc.gov`/`api.census.gov` is blocked from this
+      sandbox, so a live spot-check on the real site is a good human
+      follow-up.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
