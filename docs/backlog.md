@@ -310,18 +310,64 @@ Ground rules for each run:
       layer switcher. Outbound network to `nominatim.openstreetmap.org` is
       blocked from this sandbox, so a live end-to-end address lookup on the
       real site is a good human spot-check.
-- [ ] Multi-tract Census ACS trade area. The current "Census tract (ACS)"
-      checklist row (see the "Census ACS demographics" item above) reads a
-      single ~1-3k-household tract at the clicked point. For land uses whose
-      rooftop demand read already looks at a multi-km radius (fast_casual,
-      warehouse_club), summing ACS data across every tract whose centroid
-      falls inside that same radius (via the FCC block API's bbox/radius
-      variant, or a simple bounding-box tract enumeration) would give a real
-      demographic read at the same trade-area scale as the demand math,
-      instead of one unrepresentative tract. Flagged as a natural follow-up
-      when the single-tract version shipped; larger than the other items here
-      since it likely needs a new batched-tract-lookup helper with its own
-      tests.
+- [x] **Multi-tract Census ACS trade area.** The single-tract "Census tract
+      (ACS)" row reads only the ~1-3k-household tract under the pin — far
+      smaller than the fast_casual/warehouse_club multi-km rooftop trade area.
+      Neither the FCC block API nor the Census ACS API support a bbox/radius
+      query (point lookups only), so added a point-sampling proxy instead:
+      `sampleTradeAreaPoints` (center + 8 compass-bearing points at 60% of the
+      use's own `USE_DEMAND[current].radius`, same radius the rooftop demand
+      read already uses), `dedupeTracts` (collapses the up-to-9 FCC lookups
+      to unique state+county+tract, since neighboring sample points often
+      land in the same tract), and `aggregateAcsTracts` (household-weighted
+      roll-up of each unique tract's ACS row — sum for households, weighted
+      average for income/age, tracts missing a field excluded from just that
+      field's average). Wired up as a new "🏘️ Trade-area demographics (ACS)"
+      checklist row, shown only for the two land uses with a multi-km demand
+      read (`AMENITY_USES` — fast_casual, warehouse_club) in Test-a-use mode,
+      alongside (not replacing) the existing single-tract row. Added 11 new
+      unit tests for the three pure helpers. Verified in headless Chromium:
+      both pages load with zero console/page errors; a real simulated map
+      click with `warehouse_club` selected runs the whole fan-out without
+      throwing; and driving `runCensusTradeArea` directly with a mocked
+      `fetch` through both the multi-tract success path (3 unique tracts →
+      correct sum/weighted-average text) and an all-FCC-lookups-unreachable
+      path rendered correct text/CSS with zero console errors. Outbound
+      network to `geo.fcc.gov`/`api.census.gov` is blocked from this sandbox,
+      so a live spot-check on the real site (does the 9-point sample actually
+      land in several distinct tracts in a real trade area) is a good human
+      follow-up.
+- [ ] One more parcel county. `PARCEL_SOURCES` covers Travis (TX), Maricopa
+      (AZ), and Harris (TX). Adding a 4th (e.g. Bexar County/San Antonio TX
+      via BCAD's ArcGIS MapServer, or Wake County/Raleigh NC) would keep
+      generalizing away from the original Travis-only assumptions — same
+      shape as the "More parcel counties" item already shipped: a `bbox`,
+      per-source field-name `pick()` lists (each county names its APN/owner/
+      acreage/value fields differently), and a `zoning_note`/`county_state`
+      pair (don't assume "TX counties don't zone" for a non-TX county).
+      Verifiable offline the same way that item was: mock ArcGIS attribute
+      payloads through `showParcel` and confirm `inBbox`/`PARCEL_SOURCES`
+      routing and rendered fields, since live endpoint reachability can't be
+      checked from this sandbox.
+- [ ] Share the pinned Compare list via URL. The permalink hash
+      (`encodeHash`/`decodeHash` in `web/logic.js`) currently carries only the
+      single clicked point; the Compare feature's pins (`localStorage`-backed,
+      capped at 6) have no share/reload path of their own. Extending the hash
+      (or a second `#compare=...` param) to carry the pinned points — decoded
+      back into the compare list on load, same `applyHash()`-on-load pattern
+      the single-site permalink already uses — would let someone share "here
+      are the 3 sites I'm comparing" as one link instead of walking someone
+      through re-pinning each site by hand.
+- [ ] Nearest school's name in the residential_subdivision checklist. The
+      school-capacity leg of `maybeRenderResVerdict` currently only counts
+      nearby schools (an Overpass count query) to estimate seat capacity —
+      it doesn't surface which school(s) it's counting. The data_center/
+      warehouse_club verdicts already fetch named nearest-feature data (the
+      substation and competitor Overpass queries return `tags.name`); switching
+      the school query from a `count` query to a real element query (same
+      shape as the competitor scan) and surfacing the nearest school's name
+      and distance would make the capacity claim inspectable instead of just
+      a bare number.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

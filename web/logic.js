@@ -88,6 +88,59 @@ function parseAcsTractRow(json){
   return {households:num("B11001_001E"),medianIncome:num("B19013_001E"),medianAge:num("B01002_001E")};
 }
 
+/* ---- multi-tract Census ACS trade area ----
+   The single-tract read above is due-diligence context for the clicked point,
+   not a demographic read at the same multi-km scale as the fast_casual/
+   warehouse_club rooftop trade-area radius (a census tract is much smaller).
+   Since the FCC/Census block APIs are point lookups only (no bbox/radius
+   query), approximate trade-area coverage by sampling points around the
+   center — a documented proxy, same spirit as the rooftop-count radius
+   itself — then dedupe to unique tracts and weight-average their ACS rows. */
+// Center + 8 compass-bearing points at 60% of the trade-area radius: enough
+// spatial spread to usually land in several different tracts without
+// exploding into dozens of FCC/ACS requests per click.
+function sampleTradeAreaPoints(lat,lng,radiusKm){
+  const R=6371, d=(radiusKm*0.6)/R;
+  const la1=lat*Math.PI/180, lo1=lng*Math.PI/180;
+  const pts=[{lat,lng}];
+  [0,45,90,135,180,225,270,315].forEach(bearingDeg=>{
+    const brng=bearingDeg*Math.PI/180;
+    const la2=Math.asin(Math.sin(la1)*Math.cos(d)+Math.cos(la1)*Math.sin(d)*Math.cos(brng));
+    const lo2=lo1+Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(la1),Math.cos(d)-Math.sin(la1)*Math.sin(la2));
+    pts.push({lat:la2*180/Math.PI, lng:((lo2*180/Math.PI+540)%360)-180});
+  });
+  return pts;
+}
+// Collapses a list of per-point FCC lookups (some possibly null, on nulls/
+// dupes-because-the-same-tract-covers-multiple-sample-points) down to each
+// unique state+county+tract, first-occurrence order.
+function dedupeTracts(fipsList){
+  const seen=new Set(), out=[];
+  (fipsList||[]).forEach(f=>{
+    if(!f)return;
+    const key=`${f.state}|${f.county}|${f.tract}`;
+    if(seen.has(key))return;
+    seen.add(key); out.push(f);
+  });
+  return out;
+}
+// Combines each sampled tract's ACS row into one trade-area figure: households
+// sum (the trade-area's actual household count), and a household-weighted
+// average for income/age (so a large-but-sparse tract doesn't skew the
+// average as much as a dense one). Tracts missing households are excluded
+// entirely (no reliable weight); null if none of the sampled tracts resolved.
+function aggregateAcsTracts(rows){
+  const valid=(rows||[]).filter(r=>r&&r.households!=null);
+  if(!valid.length)return null;
+  const totalHouseholds=valid.reduce((s,r)=>s+r.households,0);
+  const wavg=key=>{
+    const w=valid.filter(r=>r[key]!=null);
+    const totW=w.reduce((s,r)=>s+r.households,0);
+    return (w.length&&totW)?w.reduce((s,r)=>s+r[key]*r.households,0)/totW:null;
+  };
+  return {tracts:valid.length,totalHouseholds,medianIncome:wavg("medianIncome"),medianAge:wavg("medianAge")};
+}
+
 /* ---- session-lifetime response cache ----
    Wraps a key + promise-factory: the same key returns the same in-flight/
    settled promise instead of re-issuing the request, so re-clicking a parcel
@@ -211,5 +264,5 @@ function parseNominatimResult(json){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,nominatimUrl,parseNominatimResult};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,nominatimUrl,parseNominatimResult};
 }

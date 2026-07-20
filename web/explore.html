@@ -1026,6 +1026,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
     <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
+    ${(mode==="build"&&AMENITY_USES.has(current))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -1035,7 +1036,10 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
-  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);}
+  if(lastLatLng){
+    runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);
+    if(mode==="build"&&AMENITY_USES.has(current))runCensusTradeArea(lastLatLng,seq);
+  }
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
@@ -1186,6 +1190,48 @@ function tryAcsYear(years,fips,seq){
       setHTML("devCensus",parts.join(" · ")+` <span class="src">(ACS ${y} 5-yr, this tract only)</span>`);
     })
     .catch(()=>tryAcsYear(years.slice(1),fips,seq));
+}
+
+/* Multi-tract Census ACS trade area (fast_casual/warehouse_club only): point-
+   samples several tracts across the same trade-area radius the rooftop demand
+   read uses (USE_DEMAND[current].radius), dedupes to unique tracts, and rolls
+   up their ACS rows into one household-weighted trade-area figure — a real
+   read at demand-read scale, not just the one tract under the pin. */
+function runCensusTradeArea(latlng,seq){
+  if(!document.getElementById("devCensusTA"))return;
+  const cfg=USE_DEMAND[current]; if(!cfg)return;
+  const pts=sampleTradeAreaPoints(latlng.lat,latlng.lng,cfg.radius/1000);
+  Promise.all(pts.map(p=>{
+    const fccUrl=`${FCC_BLOCK_API}?lat=${p.lat}&lon=${p.lng}&format=json`;
+    return netCache(fccUrl, ()=>fetch(fccUrl).then(r=>r.ok?r.json():Promise.reject(r.status)))
+      .then(parseFccBlockFips).catch(()=>null);
+  })).then(fipsList=>{
+    if(seq!==reqSeq||!document.getElementById("devCensusTA"))return;
+    const tracts=dedupeTracts(fipsList);
+    if(!tracts.length){setHTML("devCensusTA",errHTML("tract lookup unavailable across this trade area"));return;}
+    Promise.all(tracts.map(f=>fetchAcsTractRow(ACS_YEARS.slice(),f))).then(rows=>{
+      if(seq!==reqSeq||!document.getElementById("devCensusTA"))return;
+      const agg=aggregateAcsTracts(rows);
+      if(!agg){setHTML("devCensusTA",errHTML("ACS data unavailable across this trade area"));return;}
+      const parts=[`<b>${agg.tracts}</b> tract${agg.tracts===1?"":"s"} sampled`,
+        `~<b>${Math.round(agg.totalHouseholds).toLocaleString()}</b> households`];
+      if(agg.medianIncome!=null)parts.push(`avg median income <b>$${Math.round(agg.medianIncome).toLocaleString()}</b>`);
+      if(agg.medianAge!=null)parts.push(`avg median age <b>${agg.medianAge.toFixed(1)}</b>`);
+      setHTML("devCensusTA",parts.join(" · ")+
+        ` <span class="src">(ACS ${ACS_YEARS[0]} 5-yr · ${pts.length}-point sample across the ${(cfg.radius/1000)}-km trade area — approximate, not exhaustive)</span>`);
+    });
+  });
+}
+// Same ACS lookup as tryAcsYear, but resolves to parsed data (or null) instead
+// of writing to the DOM, so multiple tracts can be fetched in parallel and
+// rolled up together.
+function fetchAcsTractRow(years,fips){
+  if(!years.length)return Promise.resolve(null);
+  const y=years[0];
+  const acsUrl=`https://api.census.gov/data/${y}/acs/acs5?get=NAME,B11001_001E,B19013_001E,B01002_001E&for=tract:${fips.tract}&in=state:${fips.state}+county:${fips.county}`;
+  return netCache(acsUrl, ()=>fetch(acsUrl).then(r=>r.ok?r.json():Promise.reject(r.status)))
+    .then(j=>{const d=parseAcsTractRow(j); return (d&&d.households!=null)?d:fetchAcsTractRow(years.slice(1),fips);})
+    .catch(()=>fetchAcsTractRow(years.slice(1),fips));
 }
 
 /* ---- bring-your-own-data (private, client-side only) ---- */

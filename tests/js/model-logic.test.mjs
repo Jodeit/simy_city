@@ -12,7 +12,8 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
-  parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText, debounce,
+  parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
+  aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, nominatimUrl, parseNominatimResult,
 } = logic;
 
@@ -253,6 +254,79 @@ test("real model.json: findStandoffs() returns well-formed cycles", () => {
     assert.ok(s.edges.length >= 1);
     cheapest(s.edges); // must not throw on real breaker_cost values
   }
+});
+
+// ---- multi-tract Census ACS trade area (sampleTradeAreaPoints / dedupeTracts / aggregateAcsTracts) ----
+
+test("sampleTradeAreaPoints: returns the center plus 8 compass-bearing points", () => {
+  const pts = sampleTradeAreaPoints(30.327, -97.949, 15);
+  assert.equal(pts.length, 9);
+  assert.deepEqual(pts[0], { lat: 30.327, lng: -97.949 });
+});
+
+test("sampleTradeAreaPoints: ring points sit ~60% of the radius from the center", () => {
+  const pts = sampleTradeAreaPoints(30.327, -97.949, 10); // 10km radius -> 6km ring
+  const dists = pts.slice(1).map((p) => haversine(30.327, -97.949, p.lat, p.lng));
+  dists.forEach((km) => assert.ok(km > 5.9 && km < 6.1, `expected ~6km, got ${km}`));
+});
+
+test("sampleTradeAreaPoints: ring points spread across distinct bearings, not clustered", () => {
+  const pts = sampleTradeAreaPoints(30.327, -97.949, 10);
+  const lats = new Set(pts.map((p) => p.lat.toFixed(4)));
+  assert.ok(lats.size > 1, "expected points at more than one latitude");
+});
+
+test("dedupeTracts: collapses repeated tracts to unique state+county+tract, first occurrence kept", () => {
+  const a = { state: "48", county: "453", tract: "001100" };
+  const b = { state: "48", county: "453", tract: "001100" };
+  const c = { state: "48", county: "453", tract: "001200" };
+  assert.deepEqual(dedupeTracts([a, b, c]), [a, c]);
+});
+
+test("dedupeTracts: drops nulls (failed per-point lookups) without erroring", () => {
+  const a = { state: "48", county: "453", tract: "001100" };
+  assert.deepEqual(dedupeTracts([null, a, null]), [a]);
+});
+
+test("dedupeTracts: empty/undefined input returns an empty array", () => {
+  assert.deepEqual(dedupeTracts([]), []);
+  assert.deepEqual(dedupeTracts(undefined), []);
+});
+
+test("aggregateAcsTracts: sums households and household-weights income/age across tracts", () => {
+  const rows = [
+    { households: 1000, medianIncome: 60000, medianAge: 30 },
+    { households: 3000, medianIncome: 100000, medianAge: 40 },
+  ];
+  const agg = aggregateAcsTracts(rows);
+  assert.equal(agg.tracts, 2);
+  assert.equal(agg.totalHouseholds, 4000);
+  assert.equal(agg.medianIncome, (1000 * 60000 + 3000 * 100000) / 4000);
+  assert.equal(agg.medianAge, (1000 * 30 + 3000 * 40) / 4000);
+});
+
+test("aggregateAcsTracts: excludes tracts with no household count from the roll-up", () => {
+  const rows = [{ households: 500, medianIncome: 50000, medianAge: 35 }, { households: null }, null];
+  const agg = aggregateAcsTracts(rows);
+  assert.equal(agg.tracts, 1);
+  assert.equal(agg.totalHouseholds, 500);
+});
+
+test("aggregateAcsTracts: a tract missing just income/age is excluded from that average only", () => {
+  const rows = [
+    { households: 1000, medianIncome: null, medianAge: 30 },
+    { households: 1000, medianIncome: 80000, medianAge: null },
+  ];
+  const agg = aggregateAcsTracts(rows);
+  assert.equal(agg.totalHouseholds, 2000);
+  assert.equal(agg.medianIncome, 80000); // only the second tract contributes
+  assert.equal(agg.medianAge, 30);       // only the first tract contributes
+});
+
+test("aggregateAcsTracts: no valid tracts at all is null", () => {
+  assert.equal(aggregateAcsTracts([]), null);
+  assert.equal(aggregateAcsTracts([{ households: null }, null]), null);
+  assert.equal(aggregateAcsTracts(undefined), null);
 });
 
 // ---- session-lifetime response cache (explore.html's Overpass/ArcGIS/Census
