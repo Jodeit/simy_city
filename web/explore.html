@@ -358,6 +358,19 @@ const PARCEL_SOURCES=[
     county_state:"Harris County, TX",
     zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
   },
+  {
+    name:"Bexar Appraisal District (Bexar County, TX)",
+    urls:["https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0"],
+    bbox:[-98.80,29.15,-98.20,29.70],
+    // BCAD's e-search portal (esearch.bcad.org) doesn't document a stable
+    // per-account deep-link URL scheme, so — same call as Harris County —
+    // send people to the search page with the panel's own account number
+    // already visible rather than guess a link shape that might 404.
+    record:()=>"https://esearch.bcad.org/",
+    source_label:"Bexar Appraisal District",
+    county_state:"Bexar County, TX",
+    zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).

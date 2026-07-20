@@ -337,18 +337,27 @@ Ground rules for each run:
       so a live spot-check on the real site (does the 9-point sample actually
       land in several distinct tracts in a real trade area) is a good human
       follow-up.
-- [ ] One more parcel county. `PARCEL_SOURCES` covers Travis (TX), Maricopa
-      (AZ), and Harris (TX). Adding a 4th (e.g. Bexar County/San Antonio TX
-      via BCAD's ArcGIS MapServer, or Wake County/Raleigh NC) would keep
-      generalizing away from the original Travis-only assumptions — same
-      shape as the "More parcel counties" item already shipped: a `bbox`,
-      per-source field-name `pick()` lists (each county names its APN/owner/
-      acreage/value fields differently), and a `zoning_note`/`county_state`
-      pair (don't assume "TX counties don't zone" for a non-TX county).
-      Verifiable offline the same way that item was: mock ArcGIS attribute
-      payloads through `showParcel` and confirm `inBbox`/`PARCEL_SOURCES`
-      routing and rendered fields, since live endpoint reachability can't be
-      checked from this sandbox.
+- [x] **One more parcel county.** Added Bexar County, TX (San Antonio) as a
+      4th `PARCEL_SOURCES` entry — `maps.bexar.org`'s ArcGIS `Parcels/MapServer/0`
+      (found via web search since the sandbox can't reach ArcGIS hosts directly
+      to introspect field names; the URL itself was confirmed live and indexed).
+      Bexar's field names weren't independently confirmed (403s on every ArcGIS
+      REST introspection attempt from this sandbox — likely bot-blocking, not a
+      dead host), so no new names were added to the shared `pick()` lists: Texas
+      CADs commonly export the same PACS-style field names Travis already covers
+      (`PROP_ID`, `OWNER_NAME`, `SITUS`, `STATE_CD`, `GIS_ACRES`,
+      `MARKET_VALUE`), so the existing candidate lists should already match: —
+      a real spot-check is still the right human follow-up. BCAD's `esearch.bcad.org`
+      portal doesn't document a stable per-account deep-link scheme, so — same
+      call as Harris County — `record()` links to the search page rather than
+      guessing a URL shape that might 404. Bexar is a TX county, so it reuses
+      the "TX counties don't zone" `zoning_note`. Verified in headless
+      Chromium: `inBbox` correctly routes a downtown-San-Antonio point to the
+      new source and correctly finds no source for an uncovered point (Denver);
+      a real `analyze()` click at that point with a mocked ArcGIS response
+      rendered parcel ID/owner/address/land-use/acreage/appraised-value
+      correctly via the existing shared `showParcel` path; both pages still
+      load with zero console/page errors.
 - [ ] Share the pinned Compare list via URL. The permalink hash
       (`encodeHash`/`decodeHash` in `web/logic.js`) currently carries only the
       single clicked point; the Compare feature's pins (`localStorage`-backed,
