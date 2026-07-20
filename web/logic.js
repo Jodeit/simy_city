@@ -88,6 +88,62 @@ function parseAcsTractRow(json){
   return {households:num("B11001_001E"),medianIncome:num("B19013_001E"),medianAge:num("B01002_001E")};
 }
 
+/* ---- multi-tract trade-area Census sum ----
+   The single-tract read above answers "who lives right here"; fast_casual and
+   warehouse_club already judge demand across a multi-km trade-area radius
+   (USE_DEMAND in explore.html), and a single ~1-3k-household tract is far
+   smaller than that. There's no free bbox/polygon tract-lookup API to match,
+   so this samples several points across that same radius (grid, filtered to
+   the circle — a flat-earth degree approximation, fine at this scale), lets
+   the caller FCC-lookup each to a tract FIPS, dedupes, then sums ACS rows
+   across every distinct tract found for a real trade-area-scale figure. */
+// Grid of (2*steps+1)^2 points spanning -radiusKm..+radiusKm in both lat/lng,
+// kept only if within radiusKm of the center (haversine, so real distance).
+function tradeAreaSamplePoints(lat,lng,radiusKm,steps){
+  steps=steps||2;
+  const dLat=radiusKm/111.0;
+  const dLng=radiusKm/(111.0*Math.max(0.15,Math.cos(lat*Math.PI/180)));
+  const pts=[];
+  for(let i=-steps;i<=steps;i++){
+    for(let j=-steps;j<=steps;j++){
+      const plat=lat+dLat*(i/steps), plng=lng+dLng*(j/steps);
+      if(haversine(lat,lng,plat,plng)<=radiusKm+1e-9)pts.push({lat:plat,lng:plng});
+    }
+  }
+  return pts;
+}
+// Drops nulls and duplicate tracts (same state+county+tract), keeping first-seen order.
+function dedupeFips(fipsList){
+  const seen=new Set(),out=[];
+  (fipsList||[]).forEach(f=>{
+    if(!f)return;
+    const key=f.state+f.county+f.tract;
+    if(!seen.has(key)){seen.add(key);out.push(f);}
+  });
+  return out;
+}
+// Sums households across tract rows (nulls/missing treated as 0 households
+// contributed); medianIncome/medianAge are household-weighted averages across
+// tracts that reported a value, since summing income/age across tracts is
+// meaningless. Returns households:null (not 0) when every row is unusable, so
+// callers can render "unavailable" instead of a fake zero.
+function sumAcsTracts(rows){
+  const valid=(rows||[]).filter(Boolean);
+  const hadAnyHouseholds=valid.some(r=>r.households!=null);
+  const households=valid.reduce((s,r)=>s+(r.households||0),0);
+  const weightedAvg=key=>{
+    const withVal=valid.filter(r=>r.households!=null&&r[key]!=null);
+    const totalW=withVal.reduce((s,r)=>s+r.households,0);
+    return totalW?withVal.reduce((s,r)=>s+r[key]*r.households,0)/totalW:null;
+  };
+  return {
+    households:hadAnyHouseholds?households:null,
+    medianIncome:weightedAvg("medianIncome"),
+    medianAge:weightedAvg("medianAge"),
+    tracts:valid.length,
+  };
+}
+
 /* ---- session-lifetime response cache ----
    Wraps a key + promise-factory: the same key returns the same in-flight/
    settled promise instead of re-issuing the request, so re-clicking a parcel
@@ -211,5 +267,5 @@ function parseNominatimResult(json){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,nominatimUrl,parseNominatimResult};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,tradeAreaSamplePoints,dedupeFips,sumAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,nominatimUrl,parseNominatimResult};
 }

@@ -287,6 +287,10 @@ const USE_DEMAND={
   data_center:{ radius:8000, roofNeed:0, needLabel:"",
     compQ:'nwr["power"="substation"]', compLabel:"power substations" },
 };
+// Land uses whose demand read already looks at a multi-km trade area, so the
+// single-tract Census read is worth backing up with a trade-area-scale sum
+// (see runCensusTradeArea).
+const MULTI_TRACT_USES=new Set(["fast_casual","warehouse_club"]);
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
 // water-district presence, the three site-selection gates that actually
@@ -1026,6 +1030,9 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
     <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
+    ${mode==="build"&&MULTI_TRACT_USES.has(current)
+      ?`<div class="drow"><span>👪 Trade-area demographics (ACS)</span><b id="devCensusArea" class="loading">sampling trade area…</b></div>`
+      :""}
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -1035,7 +1042,10 @@ function showParcel(geo,src,seq){
     <div class="src">✔ real boundary &amp; data from <b>${esc(src.source_label)}</b> ·
     <a href="${src.record(a)}" target="_blank" rel="noopener">view official county record ↗</a></div>${dev}`);
 
-  if(lastLatLng){runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);}
+  if(lastLatLng){
+    runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);
+    if(mode==="build"&&MULTI_TRACT_USES.has(current))runCensusTradeArea(lastLatLng,seq);
+  }
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
@@ -1186,6 +1196,48 @@ function tryAcsYear(years,fips,seq){
       setHTML("devCensus",parts.join(" · ")+` <span class="src">(ACS ${y} 5-yr, this tract only)</span>`);
     })
     .catch(()=>tryAcsYear(years.slice(1),fips,seq));
+}
+
+/* Trade-area Census sum (fast_casual/warehouse_club only): the single-tract
+   read above is far smaller than the multi-km rooftop trade area these two
+   uses already judge demand across. Sample points across that same radius
+   (logic.js's tradeAreaSamplePoints — a grid filtered to the circle), FCC-
+   lookup each to a tract FIPS, dedupe, then sum ACS households (weighted-avg
+   income/age) across every distinct tract found. */
+function runCensusTradeArea(latlng,seq){
+  const el=document.getElementById("devCensusArea"); if(!el)return;
+  const radiusKm=USE_DEMAND[current].radius/1000;
+  const pts=tradeAreaSamplePoints(latlng.lat,latlng.lng,radiusKm,2);
+  Promise.all(pts.map(p=>{
+    const url=`${FCC_BLOCK_API}?lat=${p.lat}&lon=${p.lng}&format=json`;
+    return netCache(url, ()=>fetch(url).then(r=>r.ok?r.json():Promise.reject(r.status)))
+      .then(parseFccBlockFips).catch(()=>null);
+  })).then(fipsList=>{
+    if(seq!==reqSeq)return; if(!document.getElementById("devCensusArea"))return;
+    const uniq=dedupeFips(fipsList);
+    if(!uniq.length){setHTML("devCensusArea",errHTML("trade-area tract lookup unavailable here"));return;}
+    Promise.all(uniq.map(f=>fetchAcsForTract(f,ACS_YEARS.slice()))).then(rows=>{
+      if(seq!==reqSeq)return; if(!document.getElementById("devCensusArea"))return;
+      const sum=sumAcsTracts(rows);
+      if(sum.households==null){setHTML("devCensusArea",errHTML("trade-area ACS data unavailable"));return;}
+      const parts=[`<b>~${Math.round(sum.households).toLocaleString()}</b> households`];
+      if(sum.medianIncome!=null)parts.push(`median income <b>~$${Math.round(sum.medianIncome).toLocaleString()}</b>`);
+      if(sum.medianAge!=null)parts.push(`median age <b>~${sum.medianAge.toFixed(0)}</b>`);
+      setHTML("devCensusArea",parts.join(" · ")+
+        ` <span class="src">(ACS, ${sum.tracts} tract${sum.tracts===1?"":"s"} sampled across the ${radiusKm} km trade area — approximate)</span>`);
+    });
+  });
+}
+function fetchAcsForTract(fips,years){
+  if(!years.length)return Promise.resolve(null);
+  const y=years[0];
+  const acsUrl=`https://api.census.gov/data/${y}/acs/acs5?get=NAME,B11001_001E,B19013_001E,B01002_001E&for=tract:${fips.tract}&in=state:${fips.state}+county:${fips.county}`;
+  return netCache(acsUrl, ()=>fetch(acsUrl).then(r=>r.ok?r.json():Promise.reject(r.status)))
+    .then(j=>{
+      const d=parseAcsTractRow(j);
+      return (d&&d.households!=null)?d:(years.length>1?fetchAcsForTract(fips,years.slice(1)):d);
+    })
+    .catch(()=>years.length>1?fetchAcsForTract(fips,years.slice(1)):null);
 }
 
 /* ---- bring-your-own-data (private, client-side only) ---- */

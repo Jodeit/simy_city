@@ -12,7 +12,8 @@ const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand,
-  parseFccBlockFips, parseAcsTractRow, makeSessionCache, wrapText, debounce,
+  parseFccBlockFips, parseAcsTractRow, tradeAreaSamplePoints, dedupeFips, sumAcsTracts,
+  makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, nominatimUrl, parseNominatimResult,
 } = logic;
 
@@ -230,6 +231,78 @@ test("parseAcsTractRow: treats Census's large-negative suppression sentinel as m
 test("parseAcsTractRow: malformed/short response is null", () => {
   assert.equal(parseAcsTractRow(null), null);
   assert.equal(parseAcsTractRow([["NAME"]]), null);
+});
+
+// ---- multi-tract trade-area Census sum (tradeAreaSamplePoints / dedupeFips / sumAcsTracts) ----
+
+test("tradeAreaSamplePoints: always includes the center point", () => {
+  const pts = tradeAreaSamplePoints(30.3, -97.9, 6, 2);
+  assert.ok(pts.some(p => p.lat === 30.3 && p.lng === -97.9));
+});
+
+test("tradeAreaSamplePoints: every returned point is within radiusKm of the center", () => {
+  const radiusKm = 15;
+  const pts = tradeAreaSamplePoints(30.3, -97.9, radiusKm, 2);
+  pts.forEach(p => {
+    const km = haversine(30.3, -97.9, p.lat, p.lng);
+    assert.ok(km <= radiusKm + 0.01, `point at ${km}km exceeds radius ${radiusKm}km`);
+  });
+});
+
+test("tradeAreaSamplePoints: excludes the grid's corner points (outside the circle)", () => {
+  // steps=2 grid corners sit at ~radiusKm*sqrt(2) from center — outside the circle.
+  const radiusKm = 6;
+  const pts = tradeAreaSamplePoints(30.3, -97.9, radiusKm, 2);
+  assert.ok(pts.length < 25, "corner points should have been filtered out");
+  assert.ok(pts.length > 1, "should still return more than just the center");
+});
+
+test("dedupeFips: drops nulls and duplicate tracts, keeps first-seen order", () => {
+  const a = { state: "48", county: "453", tract: "001100" };
+  const b = { state: "48", county: "453", tract: "001100" }; // same tract, different object
+  const c = { state: "48", county: "453", tract: "002200" };
+  assert.deepEqual(dedupeFips([a, null, b, c]), [a, c]);
+});
+
+test("dedupeFips: empty/undefined input returns an empty array", () => {
+  assert.deepEqual(dedupeFips([]), []);
+  assert.deepEqual(dedupeFips(undefined), []);
+});
+
+test("sumAcsTracts: sums households and computes household-weighted average income/age", () => {
+  const rows = [
+    { households: 1000, medianIncome: 60000, medianAge: 30 },
+    { households: 3000, medianIncome: 100000, medianAge: 40 },
+  ];
+  const sum = sumAcsTracts(rows);
+  assert.equal(sum.households, 4000);
+  assert.equal(sum.medianIncome, (1000 * 60000 + 3000 * 100000) / 4000);
+  assert.equal(sum.medianAge, (1000 * 30 + 3000 * 40) / 4000);
+  assert.equal(sum.tracts, 2);
+});
+
+test("sumAcsTracts: a tract missing income/age is excluded from that average but still counts households", () => {
+  const rows = [
+    { households: 1000, medianIncome: null, medianAge: 30 },
+    { households: 1000, medianIncome: 50000, medianAge: null },
+  ];
+  const sum = sumAcsTracts(rows);
+  assert.equal(sum.households, 2000);
+  assert.equal(sum.medianIncome, 50000);
+  assert.equal(sum.medianAge, 30);
+});
+
+test("sumAcsTracts: nulls/missing rows are dropped; all-unusable input is unavailable, not zero", () => {
+  const sum = sumAcsTracts([null, { households: null, medianIncome: null, medianAge: null }]);
+  assert.equal(sum.households, null);
+  assert.equal(sum.medianIncome, null);
+  assert.equal(sum.medianAge, null);
+  assert.equal(sum.tracts, 1);
+});
+
+test("sumAcsTracts: empty input is fully unavailable with zero tracts", () => {
+  const sum = sumAcsTracts([]);
+  assert.deepEqual(sum, { households: null, medianIncome: null, medianAge: null, tracts: 0 });
 });
 
 // ---- integration: the real compiled model runs cleanly through evaluate/findStandoffs ----
