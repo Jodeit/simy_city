@@ -241,6 +241,66 @@ function decodeHash(hash){
   };
 }
 
+/* ---- shareable Compare list (URL hash) encode/decode ----
+   Same shape of problem as encodeHash/decodeHash above, for the pinned-
+   parcels Compare list (explore.html's `pins`, capped at 6): a visitor
+   should be able to copy one link that hands someone else the same set of
+   pinned sites, without a server or account. `encodeComparePins` packs only
+   the fields renderCompare() actually displays (not raw parcel attrs like
+   `id`/`situs`) as JSON, URI-encoded, into a standalone `cmp=` hash segment
+   — deliberately NOT combined with encodeHash's mode/use/lat/lng, since the
+   Compare list and the single clicked point are independent things to
+   share. `decodeComparePins` returns null if there's no `cmp` segment or it
+   doesn't parse to an array, otherwise up to 6 sanitized pin objects (rows
+   missing lat/lng dropped outright — everything else defaults to null
+   rather than passing through untrusted values verbatim). `mergeComparePins`
+   folds decoded pins into an existing list non-destructively: it appends
+   only pins not already pinned (same rounded-lat/lng dedupe addPin() uses)
+   and caps the result at 6, so loading a shared link never clobbers pins a
+   visitor already had of their own. */
+function encodeComparePins(pins){
+  if(!pins||!pins.length)return "";
+  const compact=pins.slice(0,6).map(p=>({
+    lat:+(+p.lat).toFixed(5), lng:+(+p.lng).toFixed(5),
+    label:p.label||null, owner:p.owner||null,
+    acres:(p.acres!=null&&isFinite(p.acres))?p.acres:null,
+    value:(p.value!=null&&isFinite(p.value))?p.value:null,
+    land:p.land||null, county:p.county||null,
+    use:p.use||null, verdict:p.verdict||null,
+  }));
+  return "cmp="+encodeURIComponent(JSON.stringify(compact));
+}
+function decodeComparePins(hash){
+  const h=String(hash||"").replace(/^#/,"");
+  if(!h)return null;
+  let raw=null;
+  h.split("&").forEach(kv=>{
+    const i=kv.indexOf("=");if(i<0)return;
+    if(kv.slice(0,i)==="cmp")raw=kv.slice(i+1);
+  });
+  if(raw==null)return null;
+  let arr;
+  try{arr=JSON.parse(decodeURIComponent(raw));}catch(e){return null;}
+  if(!Array.isArray(arr))return null;
+  return arr.filter(p=>p&&isFinite(p.lat)&&isFinite(p.lng)).slice(0,6).map(p=>({
+    lat:+p.lat, lng:+p.lng,
+    label:p.label||null, owner:p.owner||null,
+    acres:(p.acres!=null&&isFinite(p.acres))?+p.acres:null,
+    value:(p.value!=null&&isFinite(p.value))?+p.value:null,
+    land:p.land||null, county:p.county||null,
+    use:p.use||null, verdict:p.verdict||null,
+  }));
+}
+function mergeComparePins(existing,incoming){
+  const out=(existing||[]).slice();
+  (incoming||[]).forEach(p=>{
+    if(out.length>=6)return;
+    const dup=out.some(o=>Math.abs(o.lat-p.lat)<1e-6&&Math.abs(o.lng-p.lng)<1e-6);
+    if(!dup)out.push(p);
+  });
+  return out.slice(0,6);
+}
+
 /* ---- address search (Nominatim OSM geocoder) ----
    Free, keyless forward-geocoding so someone who only knows a street address
    (not a lat/lng) can jump straight to a site. `nominatimUrl` builds the
@@ -264,5 +324,5 @@ function parseNominatimResult(json){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,nominatimUrl,parseNominatimResult};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult};
 }

@@ -231,8 +231,10 @@
     <p>Pin a parcel from its analysis (📌 in the toolbar) to line it up against others here — size,
       value, and (in <b>Test a use</b>) the verdict.</p>
     <div class="cmpScroll"><div id="compareBody"></div></div>
-    <div class="privacy">🔒 Stays in your browser (saved to local storage). Never uploaded, never leaves your device.</div>
+    <div class="privacy">🔒 Saved to local storage, never uploaded automatically. "Share list" puts these pins in a URL only when you copy it.</div>
     <div class="actions">
+      <span class="ok" id="compareShareMsg" style="margin-right:auto"></span>
+      <button class="btng" id="compareShare">🔗 Share list</button>
       <button class="btng" id="compareClear">Clear all</button>
       <button class="btng" id="compareCancel">Close</button>
     </div>
@@ -669,8 +671,8 @@ function downloadCaseImage(text,label){
     setTimeout(()=>URL.revokeObjectURL(url),4000);
   });
 }
-function copy(text,msg){
-  const done=()=>{const m=document.getElementById("toolMsg");if(m){m.textContent="✓ "+msg;setTimeout(()=>m.textContent="",2500);}};
+function copy(text,msg,targetId){
+  const done=()=>{const m=document.getElementById(targetId||"toolMsg");if(m){m.textContent="✓ "+msg;setTimeout(()=>m.textContent="",2500);}};
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,done);}
   else{const t=document.getElementById("caseTxt");if(t){t.select();document.execCommand("copy");}done();}
 }
@@ -1369,15 +1371,26 @@ function wireCompare(){
   document.getElementById("compareCancel").onclick=()=>closeModal(modal);
   modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
   document.getElementById("compareClear").onclick=()=>{pins=[];savePins();};
+  document.getElementById("compareShare").onclick=()=>{
+    const m=document.getElementById("compareShareMsg");
+    if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
+    const link=location.href.split("#")[0]+"#"+encodeComparePins(pins);
+    copy(link,`link copied — carries ${pins.length} pin${pins.length===1?"":"s"}`,"compareShareMsg");
+  };
 }
 
-/* ---- honor an incoming share link (#mode=..&use=..&lat=..&lng=..) ---- */
+/* ---- honor an incoming share link (#mode=..&use=..&lat=..&lng=.. and/or
+   #cmp=.. for a shared Compare list — see encodeHash/encodeComparePins in
+   web/logic.js). A shared Compare list merges into (never replaces) any
+   pins already saved in this browser. ---- */
 function applyHash(){
-  const q=decodeHash(location.hash); if(!q)return false;
+  const cmp=decodeComparePins(location.hash);
+  if(cmp&&cmp.length){pins=mergeComparePins(pins,cmp);savePins();}
+  const q=decodeHash(location.hash); if(!q)return !!(cmp&&cmp.length);
   if(q.mode)applyModeUI(q.mode);
   if(q.use&&MODEL.land_uses[q.use])selectUse(q.use);
   if(q.lat!=null&&q.lng!=null){map.setView([q.lat,q.lng],15);analyze(L.latLng(q.lat,q.lng));return true;}
-  return false;
+  return !!(cmp&&cmp.length);
 }
 
 /* ---- address search (Nominatim OSM geocoder, submit-only) ----

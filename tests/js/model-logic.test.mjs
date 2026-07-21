@@ -14,7 +14,8 @@ const {
   countOf, haversine, inBbox, pick, blendedDemand,
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
-  encodeHash, decodeHash, nominatimUrl, parseNominatimResult,
+  encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
+  nominatimUrl, parseNominatimResult,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -499,6 +500,96 @@ test("decodeHash: missing/unparseable lat or lng comes back null, not NaN", () =
 test("decodeHash: a use value is URI-decoded", () => {
   const q = decodeHash(`mode=build&use=${encodeURIComponent("fast_casual")}&lat=1&lng=2`);
   assert.equal(q.use, "fast_casual");
+});
+
+// ---- encodeComparePins / decodeComparePins / mergeComparePins (shareable Compare list) ----
+
+test("encodeComparePins: empty list encodes to an empty string", () => {
+  assert.equal(encodeComparePins([]), "");
+  assert.equal(encodeComparePins(null), "");
+});
+
+test("encodeComparePins/decodeComparePins: round trips the fields renderCompare displays", () => {
+  const pins = [
+    { lat: 30.37201234, lng: -97.98209876, label: "123 Main St", owner: "Acme LLC",
+      acres: 12.5, value: 450000, land: "COMMERCIAL", county: "Travis County, TX",
+      use: "Warehouse club", verdict: "PASS — clears the bar" },
+  ];
+  const seg = encodeComparePins(pins);
+  assert.ok(seg.startsWith("cmp="));
+  const back = decodeComparePins(seg);
+  assert.equal(back.length, 1);
+  assert.equal(back[0].lat, 30.37201);   // rounded to 5 decimals, same as encodeHash
+  assert.equal(back[0].lng, -97.98210);
+  assert.equal(back[0].label, "123 Main St");
+  assert.equal(back[0].owner, "Acme LLC");
+  assert.equal(back[0].acres, 12.5);
+  assert.equal(back[0].value, 450000);
+  assert.equal(back[0].land, "COMMERCIAL");
+  assert.equal(back[0].county, "Travis County, TX");
+  assert.equal(back[0].use, "Warehouse club");
+  assert.equal(back[0].verdict, "PASS — clears the bar");
+});
+
+test("encodeComparePins: caps at 6 pins", () => {
+  const pins = Array.from({ length: 9 }, (_, i) => ({ lat: i, lng: i }));
+  const back = decodeComparePins(encodeComparePins(pins));
+  assert.equal(back.length, 6);
+});
+
+test("decodeComparePins: missing fields default to null, not undefined/NaN", () => {
+  const back = decodeComparePins(encodeComparePins([{ lat: 1, lng: 2 }]));
+  assert.deepEqual(back[0], {
+    lat: 1, lng: 2, label: null, owner: null, acres: null, value: null,
+    land: null, county: null, use: null, verdict: null,
+  });
+});
+
+test("decodeComparePins: rows missing lat/lng are dropped, not passed through as NaN", () => {
+  const seg = "cmp=" + encodeURIComponent(JSON.stringify([
+    { lat: 1, lng: 2 }, { lat: "nope", lng: 2 }, { lng: 2 },
+  ]));
+  const back = decodeComparePins(seg);
+  assert.equal(back.length, 1);
+  assert.equal(back[0].lat, 1);
+});
+
+test("decodeComparePins: absent hash, no cmp segment, or malformed JSON all return null (not throw)", () => {
+  assert.equal(decodeComparePins(""), null);
+  assert.equal(decodeComparePins("#mode=explore&lat=1&lng=2"), null);
+  assert.equal(decodeComparePins("cmp=%7Bnot-valid-json"), null);
+  assert.equal(decodeComparePins("cmp=" + encodeURIComponent(JSON.stringify({ not: "an array" }))), null);
+});
+
+test("decodeComparePins: coexists with a mode/use/lat/lng hash without corrupting either", () => {
+  const cmpSeg = encodeComparePins([{ lat: 1, lng: 2, label: "Site A" }]);
+  const hash = `mode=build&use=data_center&lat=30.1&lng=-97.5&${cmpSeg}`;
+  const q = decodeHash(hash);
+  assert.deepEqual(q, { mode: "build", use: "data_center", lat: 30.1, lng: -97.5 });
+  const cmp = decodeComparePins(hash);
+  assert.equal(cmp[0].label, "Site A");
+});
+
+test("mergeComparePins: appends incoming pins not already present, deduped by rounded lat/lng", () => {
+  const existing = [{ lat: 1, lng: 1, label: "Existing" }];
+  const incoming = [{ lat: 1.0000001, lng: 1.0000001, label: "Dup" }, { lat: 2, lng: 2, label: "New" }];
+  const merged = mergeComparePins(existing, incoming);
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].label, "Existing");
+  assert.equal(merged[1].label, "New");
+});
+
+test("mergeComparePins: caps the merged result at 6, dropping overflow", () => {
+  const existing = Array.from({ length: 5 }, (_, i) => ({ lat: i, lng: i }));
+  const incoming = Array.from({ length: 4 }, (_, i) => ({ lat: 10 + i, lng: 10 + i }));
+  const merged = mergeComparePins(existing, incoming);
+  assert.equal(merged.length, 6);
+});
+
+test("mergeComparePins: never mutates the existing list in place", () => {
+  const existing = [{ lat: 1, lng: 1 }];
+  mergeComparePins(existing, [{ lat: 2, lng: 2 }]);
+  assert.equal(existing.length, 1);
 });
 
 // ---- nominatimUrl / parseNominatimResult (address search) ----

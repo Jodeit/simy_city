@@ -358,15 +358,40 @@ Ground rules for each run:
       rendered parcel ID/owner/address/land-use/acreage/appraised-value
       correctly via the existing shared `showParcel` path; both pages still
       load with zero console/page errors.
-- [ ] Share the pinned Compare list via URL. The permalink hash
-      (`encodeHash`/`decodeHash` in `web/logic.js`) currently carries only the
-      single clicked point; the Compare feature's pins (`localStorage`-backed,
-      capped at 6) have no share/reload path of their own. Extending the hash
-      (or a second `#compare=...` param) to carry the pinned points — decoded
-      back into the compare list on load, same `applyHash()`-on-load pattern
-      the single-site permalink already uses — would let someone share "here
-      are the 3 sites I'm comparing" as one link instead of walking someone
-      through re-pinning each site by hand.
+- [x] **Share the pinned Compare list via URL.** Added a standalone `cmp=`
+      hash segment (`encodeComparePins`/`decodeComparePins` in `web/logic.js`)
+      alongside the existing single-point `mode=/use=/lat=/lng=` permalink —
+      kept separate rather than merged into `encodeHash`, since the clicked
+      point and the Compare list are independent things to share. Packs only
+      the fields `renderCompare()` displays (label, owner, acreage, value,
+      land use, county, tested use, verdict — not raw parcel attrs), capped
+      at 6 pins, URI-encoded JSON. A new "🔗 Share list" button in the
+      Compare modal copies `location.href` + the encoded segment (`copy()`
+      generalized to take a target status-element id so the modal gets its
+      own feedback message instead of the toolbar's `toolMsg`, which doesn't
+      exist inside the modal). On load, `applyHash()` decodes any `cmp=`
+      segment and folds it into the existing `pins` via `mergeComparePins`
+      (same rounded-lat/lng dedupe `addPin()` uses, capped at 6) — so opening
+      a shared link *adds* to whatever's already pinned locally instead of
+      replacing it, and re-persists to `localStorage` via `savePins()`.
+      Updated the Compare modal's privacy note, since pins now *can* leave
+      the device — but only when a person explicitly clicks Share, never
+      automatically. Added 10 new unit tests (encode/decode round trip,
+      6-pin cap, missing-field defaults, malformed/absent hash, dropping
+      rows without valid lat/lng, coexistence with the point hash, merge
+      dedup/cap/non-mutation). Verified in headless Chromium: both pages
+      still load with zero console/page errors; seeded `localStorage` pins,
+      reloaded, clicked the real Share-list button end to end and confirmed
+      the copied link round-trips through decode/merge correctly; and — the
+      scenario that actually matters — opened a real `#cmp=...` link as a
+      **fresh navigation** (both into an empty-pins browser and into one with
+      a pin of its own already saved) and confirmed `applyHash()` populates/
+      merges `pins` and `localStorage` correctly with zero errors. Note:
+      like the pre-existing single-point permalink, this only fires on an
+      actual page load — `explore.html` has no `hashchange` listener, so
+      navigating to a same-document hash-only URL (e.g. via `history.
+      pushState`) won't re-trigger it; a real "open this link" (new tab,
+      pasted URL, clicked from chat/email) always does.
 - [x] **Nearest school's name in the residential_subdivision checklist.** The
       school-capacity leg of `maybeRenderResVerdict` counted nearby schools to
       estimate seat capacity but never surfaced which school(s) it was
