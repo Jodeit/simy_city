@@ -820,12 +820,13 @@ function runDemand(latlng,seq){
       maybeRenderDCVerdict(seq);
     } else if(current==="residential_subdivision"&&resState&&resState.seq===seq){
       resState.schools = els.length;
+      resState.nearestSchool = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderResVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
     if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
-    else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; maybeRenderResVerdict(seq); }
+    else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; resState.nearestSchool=null; maybeRenderResVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -909,9 +910,11 @@ function maybeRenderResVerdict(seq){
   const capacity=s.schools*RES_SEATS_PER_SCHOOL;
   const pass=capacity>=kids;
   el.className="verdict "+(pass?"aligned":"contested");
+  const nearest=s.nearestSchool
+    ? ` — nearest <b>${esc(s.nearestSchool.name)}</b> (${s.nearestSchool.km.toFixed(1)} km)` : "";
   el.innerHTML=(pass
-    ? `✓ ~${Math.round(kids)} induced school-age kids fit within the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)`
-    : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
+    ? `✓ ~${Math.round(kids)} induced school-age kids fit within the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}`
+    : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
     +`<br><span style="font-weight:400;font-size:.85em">${units.toLocaleString()} est. homes @ ${RES_UNITS_PER_ACRE}/ac · ${RES_STUDENTS_PER_HOME} students/home</span>`;
 }
 // warehouse_club's real verdict — waits for the rooftop leg (runDemand) and

@@ -367,16 +367,24 @@ Ground rules for each run:
       the single-site permalink already uses — would let someone share "here
       are the 3 sites I'm comparing" as one link instead of walking someone
       through re-pinning each site by hand.
-- [ ] Nearest school's name in the residential_subdivision checklist. The
-      school-capacity leg of `maybeRenderResVerdict` currently only counts
-      nearby schools (an Overpass count query) to estimate seat capacity —
-      it doesn't surface which school(s) it's counting. The data_center/
-      warehouse_club verdicts already fetch named nearest-feature data (the
-      substation and competitor Overpass queries return `tags.name`); switching
-      the school query from a `count` query to a real element query (same
-      shape as the competitor scan) and surfacing the nearest school's name
-      and distance would make the capacity claim inspectable instead of just
-      a bare number.
+- [x] **Nearest school's name in the residential_subdivision checklist.** The
+      school-capacity leg of `maybeRenderResVerdict` counted nearby schools to
+      estimate seat capacity but never surfaced which school(s) it was
+      counting. `runDemand`'s competitor-scan query already resolves named,
+      distance-sorted elements for every use (shared with the data_center
+      substation scan) — that data just wasn't being kept for
+      residential_subdivision. Stashed the nearest hit
+      (`resState.nearestSchool = {name, km}`) alongside the existing
+      `resState.schools` count, and added it to the verdict text (both PASS
+      and SHORT read "nearest **Lakeview Elementary** (1.2 km)"-style, string
+      omitted entirely in the capacity-unavailable state). Verified in
+      headless Chromium: both pages load with zero console/page errors; a
+      real end-to-end `analyze()` click with residential_subdivision selected
+      renders the panel and sets `resState` without throwing; and driving
+      `maybeRenderResVerdict` directly through PASS / SHORT / capacity-
+      unavailable states with a mocked nearest-school produced the expected
+      verdict text, CSS class, and correctly omitted the school name only in
+      the unavailable state.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
