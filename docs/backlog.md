@@ -160,6 +160,30 @@ Ground rules for each run:
       in tests — no build step), added `tests/js/model-logic.test.mjs` (Node's
       built-in test runner, 23 cases incl. an integration check against the
       real compiled `model.json`), and wired `node --test tests/js` into CI.
+- [ ] **Live `hashchange` re-apply for shared links.** `applyHash()` only runs
+      once on page load (`web/explore.html`) — there's no `hashchange`
+      listener, a gap the "Share the pinned Compare list via URL" entry above
+      already flagged. Add `window.addEventListener("hashchange", applyHash)`
+      so navigating to a same-document `#cmp=`/point permalink (e.g. an
+      in-app link, not just a fresh tab) re-triggers it. Purely local, no
+      network dependency — verify with a synthetic `hashchange` event in
+      headless Chromium asserting `pins`/map state update, same pattern as
+      the existing permalink tests.
+- [ ] **Paste raw coordinates into the address search box.** `wireAddrSearch()`
+      always round-trips through Nominatim, even for input that's already a
+      `"30.31, -97.99"`-style lat/lng pair (e.g. copied from another app or a
+      permalink). Add a pure `parseLatLngQuery(str)` helper to `web/logic.js`
+      and have the search handler short-circuit straight to `map.setView` +
+      `analyze()` when it matches, skipping the network call entirely.
+      Zero-network-dependency path, easy to unit test in isolation.
+- [ ] **CSV export for the Compare table.** The Compare modal has a "Share
+      list" (URL) button but no downloadable-file export. Add a "⬇️ Download
+      CSV" button next to it, backed by a pure `pinsToCsv(pins)` helper in
+      `web/logic.js` (same fields `renderCompare()` shows — label/owner/
+      acreage/value/land use/county/use/verdict — with proper quoting for
+      commas/quotes in owner names), wired to a `Blob` + anchor download —
+      same client-side-only, zero-CORS-risk pattern as the existing PNG
+      "make the case" image export.
 
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
