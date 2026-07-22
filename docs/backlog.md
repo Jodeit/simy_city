@@ -410,17 +410,26 @@ Ground rules for each run:
       unavailable states with a mocked nearest-school produced the expected
       verdict text, CSS class, and correctly omitted the school name only in
       the unavailable state.
-- [ ] CSV export for the Compare list. Add a "⬇️ Download CSV" button next to
-      the existing "🔗 Share list" button in the Compare modal, exporting the
-      same rows `renderCompare()` already shows (label, owner, acreage,
-      appraised value, land use, county, and — in Test-a-use — use/verdict) as
-      a downloaded `.csv` via a `Blob` + anchor click, same client-side-only
-      pattern as the existing PNG "make the case" image export — no network
-      call at all, so it's fully verifiable in this sandbox. The one thing
-      worth real care: a pure `toCsvRow`/`toCsv` helper in `web/logic.js` that
-      correctly quotes fields containing commas, quotes, or newlines (owner
-      names and addresses routinely have commas) — add unit tests for those
-      escaping edge cases plus a full multi-row round-trip.
+- [x] **CSV export for the Compare list.** Added a "⬇️ Download CSV" button
+      next to the existing "🔗 Share list" button in the Compare modal,
+      exporting the same rows `renderCompare()` already shows (site, owner,
+      acreage, appraised value, land use, county, and — in Test-a-use —
+      use/verdict) as a downloaded `.csv` via a `Blob` + anchor click, same
+      client-side-only pattern as the existing PNG "make the case" image
+      export — no network call at all. Added pure `toCsvField`/`toCsvRow`/
+      `toCsv` helpers to `web/logic.js` implementing RFC-4180 quoting (a field
+      is wrapped in double quotes, with embedded quotes doubled, whenever it
+      contains a comma, a double quote, or a newline — owner names and
+      addresses routinely have commas), CRLF row joins, and null/undefined
+      fields rendered as empty rather than the literal "null"/"undefined".
+      Added 9 new unit tests covering the escaping edge cases and a full
+      multi-row round-trip. Verified in headless Chromium: both pages load
+      with zero console/page errors; seeded two pins (one with a
+      comma-containing owner name and a comma-containing fallback
+      lat/lng label, one all-nulls) and drove the real `downloadCompareCsv()`
+      end to end (Blob → anchor click, mocked to confirm the click fires
+      without an actual filesystem write) — produced exactly the expected
+      quoted CSV text with zero console errors.
 - [ ] Recently-viewed sites (session history). Distinct from the explicit
       "📌 Pin to compare" list: keep an automatic MRU list (last ~6, most
       recent first) of every point `analyze()` resolved this session (from

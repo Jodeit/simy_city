@@ -321,8 +321,23 @@ function parseNominatimResult(json){
   return {lat,lng,label:hit.display_name||null};
 }
 
+/* ---- CSV export for the Compare list ----
+   `toCsvRow` quotes a single field per RFC 4180: wrapped in double quotes
+   whenever it contains a comma, a double quote (itself doubled), or a
+   newline — owner names and addresses routinely have commas ("Smith,
+   John Trust"), so this can't just join with commas unguarded. `toCsv`
+   joins rows with CRLF (the RFC-4180-conventional line ending, and what
+   Excel expects). Null/undefined fields become an empty string, not the
+   literal "null"/"undefined". */
+function toCsvField(v){
+  const s=v==null?"":String(v);
+  return /[",\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function toCsvRow(fields){ return (fields||[]).map(toCsvField).join(","); }
+function toCsv(rows){ return (rows||[]).map(toCsvRow).join("\r\n"); }
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,toCsvField,toCsvRow,toCsv};
 }

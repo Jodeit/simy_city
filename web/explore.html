@@ -235,6 +235,7 @@
     <div class="actions">
       <span class="ok" id="compareShareMsg" style="margin-right:auto"></span>
       <button class="btng" id="compareShare">🔗 Share list</button>
+      <button class="btng" id="compareCsv">⬇️ Download CSV</button>
       <button class="btng" id="compareClear">Clear all</button>
       <button class="btng" id="compareCancel">Close</button>
     </div>
@@ -1365,6 +1366,24 @@ function renderCompare(){
     closeModal(document.getElementById("compareModal"));
     map.setView([lat,lng],17); analyze(L.latLng(lat,lng));});
 }
+// Exports the same rows renderCompare() shows as a downloaded .csv — same
+// client-side-only Blob+anchor pattern as downloadCaseImage's PNG export,
+// no network call. toCsvRow/toCsv (web/logic.js) handle the RFC-4180
+// quoting (owner names/addresses routinely contain commas).
+function downloadCompareCsv(){
+  const fmtAcres=a=>a!=null?a.toFixed(2):"";
+  const rows=[["Site","Owner","Acreage (ac)","Appraised value ($)","Land use","County","Testing","Verdict"]];
+  pins.forEach(p=>rows.push([
+    p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`,
+    p.owner||"", fmtAcres(p.acres), p.value!=null?p.value:"",
+    p.land||"", p.county||"", p.use||"", p.verdict||"",
+  ]));
+  const blob=new Blob([toCsv(rows)],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-compare.csv";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
 function wireCompare(){
   const modal=document.getElementById("compareModal");
   document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
@@ -1376,6 +1395,12 @@ function wireCompare(){
     if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
     const link=location.href.split("#")[0]+"#"+encodeComparePins(pins);
     copy(link,`link copied — carries ${pins.length} pin${pins.length===1?"":"s"}`,"compareShareMsg");
+  };
+  document.getElementById("compareCsv").onclick=()=>{
+    const m=document.getElementById("compareShareMsg");
+    if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
+    downloadCompareCsv();
+    if(m){m.textContent="✓ CSV downloaded";setTimeout(()=>m.textContent="",2500);}
   };
 }
 

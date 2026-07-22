@@ -15,7 +15,7 @@ const {
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
-  nominatimUrl, parseNominatimResult,
+  nominatimUrl, parseNominatimResult, toCsvField, toCsvRow, toCsv,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -618,4 +618,44 @@ test("parseNominatimResult: a malformed/non-array response is null, not a throw"
 
 test("parseNominatimResult: unparseable lat/lon on the hit is null", () => {
   assert.equal(parseNominatimResult([{ lat: "not-a-number", lon: "-97.7" }]), null);
+});
+
+// ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----
+
+test("toCsvField: a plain field passes through unquoted", () => {
+  assert.equal(toCsvField("Travis County"), "Travis County");
+});
+
+test("toCsvField: a field containing a comma is wrapped in quotes", () => {
+  assert.equal(toCsvField("Smith, John Trust"), '"Smith, John Trust"');
+});
+
+test("toCsvField: a field containing a double quote is wrapped and the quote doubled", () => {
+  assert.equal(toCsvField('12" Water Line'), '"12"" Water Line"');
+});
+
+test("toCsvField: a field containing a newline is wrapped in quotes", () => {
+  assert.equal(toCsvField("line one\nline two"), '"line one\nline two"');
+});
+
+test("toCsvField: null/undefined become an empty string, not the literal text", () => {
+  assert.equal(toCsvField(null), "");
+  assert.equal(toCsvField(undefined), "");
+});
+
+test("toCsvField: a number field is stringified", () => {
+  assert.equal(toCsvField(12.5), "12.5");
+});
+
+test("toCsvRow: joins fields with commas, quoting only where needed", () => {
+  assert.equal(toCsvRow(["Site A", "Smith, John", 12.5, null]), 'Site A,"Smith, John",12.5,');
+});
+
+test("toCsv: joins rows with CRLF for a full multi-row round trip", () => {
+  const csv = toCsv([
+    ["Site", "Owner"],
+    ["123 Main St", "Smith, John Trust"],
+    ["456 Oak Ave", null],
+  ]);
+  assert.equal(csv, 'Site,Owner\r\n123 Main St,"Smith, John Trust"\r\n456 Oak Ave,');
 });
