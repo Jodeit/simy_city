@@ -410,6 +410,43 @@ Ground rules for each run:
       unavailable states with a mocked nearest-school produced the expected
       verdict text, CSS class, and correctly omitted the school name only in
       the unavailable state.
+- [ ] CSV export for the Compare list. Add a "⬇️ Download CSV" button next to
+      the existing "🔗 Share list" button in the Compare modal, exporting the
+      same rows `renderCompare()` already shows (label, owner, acreage,
+      appraised value, land use, county, and — in Test-a-use — use/verdict) as
+      a downloaded `.csv` via a `Blob` + anchor click, same client-side-only
+      pattern as the existing PNG "make the case" image export — no network
+      call at all, so it's fully verifiable in this sandbox. The one thing
+      worth real care: a pure `toCsvRow`/`toCsv` helper in `web/logic.js` that
+      correctly quotes fields containing commas, quotes, or newlines (owner
+      names and addresses routinely have commas) — add unit tests for those
+      escaping edge cases plus a full multi-row round-trip.
+- [ ] Recently-viewed sites (session history). Distinct from the explicit
+      "📌 Pin to compare" list: keep an automatic MRU list (last ~6, most
+      recent first) of every point `analyze()` resolved this session (from
+      `lastParcelSummary`/`lastLatLng`, same snapshot Compare pins already
+      read — no extra network calls), persisted to `localStorage` under its
+      own key so it survives a reload, shown as a small collapsible strip
+      ("Recently viewed ▾") above or below the result panel. Clicking an
+      entry re-navigates the map to that point the same way a Compare row's
+      site-name link already does. Purely additive bookkeeping (append on
+      each successful `analyze()`, cap + de-dupe by rounded lat/lng, evict
+      oldest) — a good candidate for the same pure-helper-plus-unit-tests
+      treatment as `addPin()`/`mergeComparePins`.
+- [ ] One more parcel county (5th `PARCEL_SOURCES` entry). Travis/Maricopa/
+      Harris/Bexar are covered; a populous county with a public ArcGIS
+      MapServer parcel layer — e.g. Cook County, IL (Chicago) or Los Angeles
+      County, CA — would keep widening real-parcel coverage beyond Texas/
+      Arizona. Same recipe as the Bexar addition: find the county assessor's
+      ArcGIS REST endpoint (web search, since this sandbox can't reach ArcGIS
+      hosts to introspect field names directly), add a `PARCEL_SOURCES` entry
+      with its `bbox`/`county_state`/`zoning_note`, and extend the shared
+      `pick()` candidate field lists only if the county's field names don't
+      already match an existing pattern. Live endpoint reachability and exact
+      field names won't be confirmable from this sandbox (network to
+      `*.arcgis.com`/county GIS hosts is blocked) — same accepted limitation
+      as every prior county addition — so a human spot-check on the real site
+      is the expected follow-up.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
