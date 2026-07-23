@@ -161,6 +161,40 @@ Ground rules for each run:
       built-in test runner, 23 cases incl. an integration check against the
       real compiled `model.json`), and wired `node --test tests/js` into CI.
 
+## Next (breadth) — newly added
+- [ ] **Paste raw coordinates into the address search box.** `wireAddrSearch()`
+      in `web/explore.html` always calls Nominatim, even when the query is
+      already a `lat, lng` pair (something people commonly paste straight
+      from Google Maps or a GPS app). Short-circuit before the fetch: if the
+      trimmed query matches a `lat, lng` shape within valid ranges (`-90..90`,
+      `-180..180`), skip the network call entirely and jump straight to
+      `map.setView` + `analyze()`, same as a real geocoder hit. Add a pure
+      `parseCoordPair(q)` helper to `web/logic.js` (returns `{lat,lng}` or
+      `null`) with unit tests for valid "lat, lng" and "lat,lng" pairs,
+      out-of-range values, and address-shaped strings that must NOT match
+      (e.g. "123 Main St, Austin, TX" has a comma too).
+- [ ] **Live `hashchange` re-apply for shared/pinned links.** `applyHash()`
+      (`web/explore.html`) only runs once, on initial page load (see the
+      final line of the inline script: `wireBYO(); ... applyHash();`). A
+      same-document navigation to a new `#mode=…`/`#cmp=…` hash — e.g.
+      pasting a fresh permalink into the address bar of an already-open tab —
+      never re-triggers it today. Add
+      `window.addEventListener("hashchange", applyHash)`. Before shipping,
+      confirm `applyHash()` is safe to call mid-session and not just on cold
+      load: it already merges Compare pins rather than replacing them
+      (`mergeComparePins`), but check it doesn't double-record a
+      "recently viewed" entry or clobber in-progress state on repeat calls.
+- [ ] **Dark mode toggle.** The app ships one light theme only. Add a manual
+      light/dark toggle (persisted to `localStorage`, defaulting to the
+      browser's `prefers-color-scheme`) by moving the existing hard-coded
+      colors in `web/explore.html`'s `<style>` block onto CSS custom
+      properties and swapping a `data-theme` attribute on `<html>`. Re-check
+      contrast for the dark palette with the same rigor the accessibility
+      pass already applied to the light one (the amber "contested/
+      unavailable" text was tuned to 5.9:1 against its light background —
+      an inverted/naive dark variant is not guaranteed to clear 4.5:1 AA
+      against a dark background and needs its own computed check).
+
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
       the layer switcher, same opt-in/off-by-default pattern as the FEMA flood
