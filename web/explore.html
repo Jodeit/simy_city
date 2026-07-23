@@ -386,6 +386,23 @@ const PARCEL_SOURCES=[
     county_state:"Bexar County, TX",
     zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
   },
+  {
+    name:"LA County Assessor (Los Angeles County, CA)",
+    urls:["https://public.gis.lacounty.gov/public/rest/services/LACounty_Cache/LACounty_Parcel/MapServer/0"],
+    // includes the offshore Channel Islands (Catalina, San Clemente) — inBbox is
+    // only a rough pre-filter before the point query, so the extra slack is harmless.
+    bbox:[-118.95,32.80,-117.65,34.82],
+    // The public layer exposes AIN/SitusFullAddress/UseType but not owner name
+    // or acreage/value (those live in the separate, non-GIS Assessor roll) —
+    // same graceful partial-field-coverage as every other county here.
+    // The Assessor portal (portal.assessor.lacounty.gov) doesn't document a
+    // stable per-AIN deep-link scheme either, so — same call as Harris/Bexar —
+    // send people to the portal's own search rather than guess a link shape.
+    record:()=>"https://portal.assessor.lacounty.gov/",
+    source_label:"LA County Assessor",
+    county_state:"Los Angeles County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1021,10 +1038,10 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR"]);
   let rows="";

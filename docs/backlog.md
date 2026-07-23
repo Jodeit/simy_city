@@ -453,20 +453,38 @@ Ground rules for each run:
       persisted to `localStorage`) even with outbound network blocked in
       this sandbox (the no-parcel-resolved case still records lat/lng), and
       clicking the resulting link re-triggered `analyze()` without throwing.
-- [ ] One more parcel county (5th `PARCEL_SOURCES` entry). Travis/Maricopa/
-      Harris/Bexar are covered; a populous county with a public ArcGIS
-      MapServer parcel layer — e.g. Cook County, IL (Chicago) or Los Angeles
-      County, CA — would keep widening real-parcel coverage beyond Texas/
-      Arizona. Same recipe as the Bexar addition: find the county assessor's
-      ArcGIS REST endpoint (web search, since this sandbox can't reach ArcGIS
-      hosts to introspect field names directly), add a `PARCEL_SOURCES` entry
-      with its `bbox`/`county_state`/`zoning_note`, and extend the shared
-      `pick()` candidate field lists only if the county's field names don't
-      already match an existing pattern. Live endpoint reachability and exact
-      field names won't be confirmable from this sandbox (network to
-      `*.arcgis.com`/county GIS hosts is blocked) — same accepted limitation
-      as every prior county addition — so a human spot-check on the real site
-      is the expected follow-up.
+- [x] **One more parcel county.** Added Los Angeles County, CA as a 5th
+      `PARCEL_SOURCES` entry — `public.gis.lacounty.gov`'s
+      `LACounty_Cache/LACounty_Parcel/MapServer/0` (found via web search since
+      this sandbox can't reach ArcGIS hosts to introspect field names
+      directly; search results independently confirmed the field list —
+      `AIN`, `SitusFullAddress`, `UseType` — from the layer's own published
+      schema). Added those three names to the shared `pick()` id/address/
+      land-use candidate lists. The public layer doesn't expose owner name,
+      acreage, or assessed value (those live in the separate non-GIS Assessor
+      roll, not the parcel-boundary GIS layer) — left unmapped rather than
+      guessing a wrong field, same graceful partial-field-coverage every
+      other county already degrades to; in particular the layer's only area
+      field, `Shape.STArea()`, is square feet, not acres, and `pick()` does
+      no unit conversion, so mapping it to the acreage row would've rendered
+      a bogus "12000.00 ac" — left out on purpose. LA County's Assessor
+      portal doesn't document a stable per-AIN deep-link scheme either, so —
+      same call as Harris/Bexar — `record()` links to the portal's search
+      page rather than guessing a URL shape that might 404. Unlike the TX
+      counties already covered, CA counties do zone unincorporated land, so
+      this is the first non-"TX counties don't zone" `zoning_note`. Verified
+      in headless Chromium: both pages load with zero real JS errors;
+      `inBbox` correctly routes a downtown-LA point to the new source and
+      still finds no source for an out-of-coverage point (Denver); driving
+      `showParcel` directly with a mocked LA-shaped ArcGIS attribute payload
+      (`AIN`/`SitusFullAddress`/`UseType`) rendered the parcel ID/address/
+      land-use rows, the new CA zoning note, and the record link correctly;
+      and a real simulated map click at that point with `warehouse_club`
+      selected ran the whole fan-out (parcel + demand) without throwing,
+      degrading to "couldn't reach the county parcel service" since outbound
+      network to `*.gis.lacounty.gov` is blocked from this sandbox — a live
+      spot-check on the real site (actual field values, portal link) is a
+      good human follow-up, same as every prior county addition.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
