@@ -109,6 +109,14 @@
   .cmpX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:1rem;padding:0 4px}
   .cmpX:hover{color:#b33030}
   .cmpEmpty{color:var(--slate);font-size:.86rem}
+  /* recently-viewed strip */
+  .recentStrip{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 11px;margin-bottom:12px}
+  .recentStrip summary{cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink);list-style:none}
+  .recentStrip summary::-webkit-details-marker{display:none}
+  .recentStrip summary::before{content:"▸ ";color:var(--slate)}
+  .recentStrip[open] summary::before{content:"▾ "}
+  .recentList{margin-top:7px;font-size:.85rem;line-height:1.9}
+  .recentList a{color:var(--garden-deep)}
   /* mode switch */
   .modes{display:flex;gap:0;background:#1f2c2a;border:1px solid #38514c;border-radius:10px;overflow:hidden}
   .mbtn{font:inherit;font-size:.85rem;font-weight:700;border:none;background:transparent;color:#cfe6d3;padding:.45em .9em;cursor:pointer}
@@ -201,6 +209,10 @@
       <div class="lbl">What do you want to build?</div>
       <div class="chips" id="uses"></div>
     </div>
+    <details class="recentStrip" id="recentStrip" style="display:none">
+      <summary>Recently viewed <span id="recentCount"></span></summary>
+      <div class="recentList" id="recentList"></div>
+    </details>
     <div class="empty" id="empty">
       <h2>Find your next move.</h2>
       <p class="src">Real parcels, real public data — running entirely in your browser. Pick a lane:</p>
@@ -976,7 +988,7 @@ function runParcel(latlng,seq){
       <b>county-by-county</b>, so coverage grows as people add their county
       (<a href="https://github.com/jodeit/simy_city/blob/main/web/explore.html" target="_blank" rel="noopener">how to add one</a>).
       Mapped today: <b>${PARCEL_SOURCES.map(s=>esc(s.name)).join(", ")}</b> — try the 78738 area (Travis County).`);
-    lastParcelSummary={seq,lat:latlng.lat,lng:latlng.lng,label:null};
+    setLastParcelSummary({seq,lat:latlng.lat,lng:latlng.lng,label:null});
     return;
   }
   tryParcel(src.urls.slice(),latlng,src,false,seq);
@@ -988,7 +1000,7 @@ function tryParcel(urls,latlng,src,sawEmpty,seq){
     setHTML("parcelVal", sawEmpty
       ? `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel (road, right-of-way, or water). Try clicking a building.`
       : errHTML("couldn’t reach the county parcel service just now — the analysis below still works."));
-    lastParcelSummary={seq,lat:latlng.lat,lng:latlng.lng,label:null};
+    setLastParcelSummary({seq,lat:latlng.lat,lng:latlng.lng,label:null});
     return;
   }
   arcgisPointQuery(urls[0],latlng,true).then(feats=>{
@@ -1001,7 +1013,7 @@ function showParcel(geo,src,seq){
   const f=geo&&geo.features&&geo.features[0];
   if(!f){setHTML("parcelVal", `Inside <b>${esc(src.source_label)}</b> coverage, but this exact point isn’t on a mapped parcel
     (likely a road, right-of-way, or water).`);
-    lastParcelSummary={seq,lat:lastLatLng.lat,lng:lastLatLng.lng,label:null};
+    setLastParcelSummary({seq,lat:lastLatLng.lat,lng:lastLatLng.lng,label:null});
     return;}
   const a=f.properties||{};
   if(f.geometry){
@@ -1064,10 +1076,10 @@ function showParcel(geo,src,seq){
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
   if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
   if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.acres=acN; maybeRenderWCVerdict(seq); }
-  lastParcelSummary={seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
+  setLastParcelSummary({seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,
-    value:(value!=null&&!isNaN(+value))?+value:null, county:src.source_label};
+    value:(value!=null&&!isNaN(+value))?+value:null, county:src.source_label});
 }
 
 // "What could go here?" — rank land uses by physical fit (lot size). Each row
@@ -1316,6 +1328,45 @@ function wireBYO(){
   document.getElementById("byoClear").onclick=()=>{ta.value="";localStorage.removeItem(BYO_KEY);if(byoLayer)byoLayer.remove();};
 }
 
+/* ---- recently-viewed sites (automatic, session-spanning, local only) ----
+   Distinct from the explicit "📌 Pin to compare" list: a passive MRU trail
+   of every point analyze() resolved, so a visitor can jump back to
+   something they looked at a few clicks ago. addRecentSite (web/logic.js)
+   does the pure dedupe/cap logic; this just persists + renders it. */
+const RECENT_KEY="simy_recent_v1";
+let recent=[];
+function loadRecent(){
+  try{recent=JSON.parse(localStorage.getItem(RECENT_KEY)||"[]");}catch(e){recent=[];}
+  renderRecent();
+}
+function saveRecent(){ localStorage.setItem(RECENT_KEY,JSON.stringify(recent)); renderRecent(); }
+function recordRecent(snapshot){ recent=addRecentSite(recent,snapshot,6); saveRecent(); }
+function renderRecent(){
+  const strip=document.getElementById("recentStrip"); if(!strip)return;
+  if(!recent.length){strip.style.display="none";return;}
+  strip.style.display="block";
+  const count=document.getElementById("recentCount"); if(count)count.textContent=`(${recent.length})`;
+  const list=document.getElementById("recentList");
+  list.innerHTML=recent.map((p,i)=>
+    `<a href="#" class="recentGo" data-i="${i}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`+
+    (p.use?` <span class="src">— ${esc(p.use)}</span>`:"")
+  ).join("<br>");
+  list.querySelectorAll(".recentGo").forEach(a=>a.onclick=e=>{
+    e.preventDefault();
+    const p=recent[+a.dataset.i]; if(!p)return;
+    map.setView([p.lat,p.lng],17); analyze(L.latLng(p.lat,p.lng));
+  });
+}
+// Every lastParcelSummary assignment (whether or not a parcel actually
+// resolved on this county's coverage) also records a recent-sites entry —
+// this is the one place all of those assignments funnel through.
+function setLastParcelSummary(s){
+  lastParcelSummary=s;
+  if(s.seq!==reqSeq)return;                 // a newer click superseded this one
+  const {seq,...snapshot}=s;
+  recordRecent({...snapshot, use:mode==="build"?useLabel(current):null});
+}
+
 /* ---- compare pinned parcels (private, client-side only) ---- */
 const PINS_KEY="simy_pins_v1";
 let pins=[];
@@ -1461,7 +1512,7 @@ function wireCTA(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); wireCTA(); wireAddrSearch(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); applyHash();
 </script>
 </body>
 </html>

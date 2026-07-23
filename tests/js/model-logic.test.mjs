@@ -15,7 +15,7 @@ const {
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
-  nominatimUrl, parseNominatimResult, toCsvField, toCsvRow, toCsv,
+  nominatimUrl, parseNominatimResult, toCsvField, toCsvRow, toCsv, addRecentSite,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -658,4 +658,50 @@ test("toCsv: joins rows with CRLF for a full multi-row round trip", () => {
     ["456 Oak Ave", null],
   ]);
   assert.equal(csv, 'Site,Owner\r\n123 Main St,"Smith, John Trust"\r\n456 Oak Ave,');
+});
+
+// ---- addRecentSite (recently-viewed sites, session history) ----
+
+test("addRecentSite: prepends a new site to an empty list", () => {
+  const list = addRecentSite([], { lat: 1, lng: 1, label: "A" });
+  assert.deepEqual(list, [{ lat: 1, lng: 1, label: "A" }]);
+});
+
+test("addRecentSite: prepends a new site ahead of existing ones (most-recent-first)", () => {
+  const list = addRecentSite([{ lat: 1, lng: 1, label: "Old" }], { lat: 2, lng: 2, label: "New" });
+  assert.equal(list.length, 2);
+  assert.equal(list[0].label, "New");
+  assert.equal(list[1].label, "Old");
+});
+
+test("addRecentSite: re-visiting an already-listed point (within rounding) moves it to the front instead of duplicating", () => {
+  const existing = [
+    { lat: 1, lng: 1, label: "First" },
+    { lat: 2, lng: 2, label: "Second" },
+  ];
+  const list = addRecentSite(existing, { lat: 2.0000001, lng: 2.0000001, label: "Second (revisited)" });
+  assert.equal(list.length, 2);
+  assert.equal(list[0].label, "Second (revisited)");
+  assert.equal(list[1].label, "First");
+});
+
+test("addRecentSite: caps the list at the given size, dropping the oldest", () => {
+  // MRU order: index 0 is most recent, so the last entry (index 5) is the oldest.
+  const existing = Array.from({ length: 6 }, (_, i) => ({ lat: i, lng: i, label: `Site ${i}` }));
+  const list = addRecentSite(existing, { lat: 99, lng: 99, label: "Newest" }, 6);
+  assert.equal(list.length, 6);
+  assert.equal(list[0].label, "Newest");
+  assert.ok(!list.some(p => p.label === "Site 5"));  // oldest fell off
+});
+
+test("addRecentSite: defaults the cap to 6 when not given", () => {
+  const existing = Array.from({ length: 6 }, (_, i) => ({ lat: i, lng: i }));
+  const list = addRecentSite(existing, { lat: 99, lng: 99 });
+  assert.equal(list.length, 6);
+});
+
+test("addRecentSite: never mutates the existing list in place", () => {
+  const existing = [{ lat: 1, lng: 1 }];
+  addRecentSite(existing, { lat: 2, lng: 2 });
+  assert.equal(existing.length, 1);
 });

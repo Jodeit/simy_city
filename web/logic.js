@@ -336,8 +336,24 @@ function toCsvField(v){
 function toCsvRow(fields){ return (fields||[]).map(toCsvField).join(","); }
 function toCsv(rows){ return (rows||[]).map(toCsvRow).join("\r\n"); }
 
+/* ---- recently-viewed sites (session history, local only) ----
+   Distinct from the explicit "📌 Pin to compare" list: an automatic MRU
+   (most-recently-used) trail of every point analyze() resolved, kept so a
+   visitor can jump back to something they looked at a few clicks ago
+   without re-finding it on the map. `addRecentSite` moves a re-visited point
+   (same rounded lat/lng, same dedupe distance addPin()/mergeComparePins()
+   use) to the front instead of adding a second entry, then caps the list —
+   oldest entries fall off the end rather than growing unboundedly across a
+   long browsing session. */
+function addRecentSite(list,entry,cap){
+  cap=cap||6;
+  const out=(list||[]).filter(p=>!(Math.abs(p.lat-entry.lat)<1e-6&&Math.abs(p.lng-entry.lng)<1e-6));
+  out.unshift(entry);
+  return out.slice(0,cap);
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,toCsvField,toCsvRow,toCsv};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,toCsvField,toCsvRow,toCsv,addRecentSite};
 }

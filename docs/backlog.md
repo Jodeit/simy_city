@@ -430,18 +430,29 @@ Ground rules for each run:
       end to end (Blob → anchor click, mocked to confirm the click fires
       without an actual filesystem write) — produced exactly the expected
       quoted CSV text with zero console errors.
-- [ ] Recently-viewed sites (session history). Distinct from the explicit
-      "📌 Pin to compare" list: keep an automatic MRU list (last ~6, most
-      recent first) of every point `analyze()` resolved this session (from
-      `lastParcelSummary`/`lastLatLng`, same snapshot Compare pins already
-      read — no extra network calls), persisted to `localStorage` under its
-      own key so it survives a reload, shown as a small collapsible strip
-      ("Recently viewed ▾") above or below the result panel. Clicking an
-      entry re-navigates the map to that point the same way a Compare row's
-      site-name link already does. Purely additive bookkeeping (append on
-      each successful `analyze()`, cap + de-dupe by rounded lat/lng, evict
-      oldest) — a good candidate for the same pure-helper-plus-unit-tests
-      treatment as `addPin()`/`mergeComparePins`.
+- [x] **Recently-viewed sites (session history).** Added an automatic MRU
+      list (cap 6, most-recent-first) of every point `analyze()` resolved,
+      distinct from the explicit "📌 Pin to compare" list — no user action
+      needed. A new `setLastParcelSummary()` wrapper is the one place all
+      four `lastParcelSummary` assignments (no-parcel-source, no-parcel-here,
+      network-failure, and the fully-resolved case) funnel through, so
+      recording happens regardless of how much data actually resolved for a
+      given click — same snapshot shape Compare pins already read, no extra
+      network calls. Added a pure `addRecentSite` helper to `web/logic.js`
+      (moves a re-visited point, same rounded-lat/lng dedupe `addPin()`/
+      `mergeComparePins()` use, to the front instead of duplicating it; caps
+      and drops the oldest) with 6 new unit tests, persisted to `localStorage`
+      under its own key, and rendered as a collapsible "Recently viewed"
+      `<details>` strip above the result panel — hidden entirely until the
+      first site is viewed. Clicking an entry re-navigates the map the same
+      way a Compare row's site-name link already does. Verified in headless
+      Chromium: both pages load with zero console/page errors; the strip
+      stays hidden with no history; `addRecentSite` driven directly in-page
+      confirmed MRU ordering and revisit-dedupe; and a real simulated map
+      click populated the strip end to end (`recent.length` went to 1,
+      persisted to `localStorage`) even with outbound network blocked in
+      this sandbox (the no-parcel-resolved case still records lat/lng), and
+      clicking the resulting link re-triggered `analyze()` without throwing.
 - [ ] One more parcel county (5th `PARCEL_SOURCES` entry). Travis/Maricopa/
       Harris/Bexar are covered; a populous county with a public ArcGIS
       MapServer parcel layer — e.g. Cook County, IL (Chicago) or Los Angeles
