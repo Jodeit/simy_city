@@ -1538,6 +1538,15 @@ function wireCTA(){
 }
 
 wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); applyHash();
+/* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
+   an already-open tab's address bar) — applyHash() only ran on cold load
+   before. Safe to call repeatedly: writeHash() (called from analyze()) uses
+   history.replaceState, which never fires "hashchange" itself, so there's no
+   feedback loop; and both the Compare-pin merge (mergeComparePins) and the
+   recently-viewed record (addRecentSite) already dedupe by rounded lat/lng,
+   so re-applying the same hash just moves the existing entry to the front
+   instead of duplicating it. */
+window.addEventListener("hashchange", applyHash);
 </script>
 </body>
 </html>

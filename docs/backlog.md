@@ -181,17 +181,27 @@ Ground rules for each run:
       `lastLatLng` to the parsed point and ran a real `analyze()` end to end
       (result panel rendered) with zero console/page errors, without ever
       hitting the Nominatim fetch path.
-- [ ] **Live `hashchange` re-apply for shared/pinned links.** `applyHash()`
-      (`web/explore.html`) only runs once, on initial page load (see the
-      final line of the inline script: `wireBYO(); ... applyHash();`). A
+- [x] **Live `hashchange` re-apply for shared/pinned links.** `applyHash()`
+      (`web/explore.html`) previously only ran once, on initial page load.
+      Added `window.addEventListener("hashchange", applyHash)` so a
       same-document navigation to a new `#mode=…`/`#cmp=…` hash — e.g.
       pasting a fresh permalink into the address bar of an already-open tab —
-      never re-triggers it today. Add
-      `window.addEventListener("hashchange", applyHash)`. Before shipping,
-      confirm `applyHash()` is safe to call mid-session and not just on cold
-      load: it already merges Compare pins rather than replacing them
-      (`mergeComparePins`), but check it doesn't double-record a
-      "recently viewed" entry or clobber in-progress state on repeat calls.
+      now re-applies it. Confirmed this is safe to call mid-session: `writeHash()`
+      (called from every `analyze()`) uses `history.replaceState`, which never
+      fires `hashchange` itself, so there's no feedback loop between a click
+      and the new listener; and both the Compare-pin merge
+      (`mergeComparePins`) and the recently-viewed record (`addRecentSite`)
+      already dedupe by rounded lat/lng, so re-applying the same hash moves
+      the existing entry to the front instead of duplicating it. Verified in
+      headless Chromium: both pages load with zero console/page errors;
+      firing a synthetic same-document `hashchange` to a fresh
+      `#mode=build&use=data_center&lat=..&lng=..` (never visited at load)
+      switched mode/use, ran a real `analyze()`, and added one recently-viewed
+      entry; re-applying the identical hash added zero new entries (dedup
+      holds); and changing to a genuinely different point via a second
+      `hashchange` navigated again and added a second distinct entry — all
+      with zero console/page errors (network calls to Overpass/ArcGIS
+      correctly fail-and-degrade in this sandbox, as expected).
 - [ ] **Dark mode toggle.** The app ships one light theme only. Add a manual
       light/dark toggle (persisted to `localStorage`, defaulting to the
       browser's `prefers-color-scheme`) by moving the existing hard-coded
