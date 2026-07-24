@@ -15,7 +15,7 @@ const {
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
-  nominatimUrl, parseNominatimResult, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -618,6 +618,48 @@ test("parseNominatimResult: a malformed/non-array response is null, not a throw"
 
 test("parseNominatimResult: unparseable lat/lon on the hit is null", () => {
   assert.equal(parseNominatimResult([{ lat: "not-a-number", lon: "-97.7" }]), null);
+});
+
+// ---- parseCoordPair (paste raw coordinates into the address search box) ----
+
+test("parseCoordPair: a plain 'lat, lng' pair parses", () => {
+  assert.deepEqual(parseCoordPair("30.2672, -97.7431"), { lat: 30.2672, lng: -97.7431 });
+});
+
+test("parseCoordPair: no space after the comma also parses", () => {
+  assert.deepEqual(parseCoordPair("30.2672,-97.7431"), { lat: 30.2672, lng: -97.7431 });
+});
+
+test("parseCoordPair: surrounding whitespace is trimmed", () => {
+  assert.deepEqual(parseCoordPair("  30.2672, -97.7431  "), { lat: 30.2672, lng: -97.7431 });
+});
+
+test("parseCoordPair: integer-valued coordinates parse", () => {
+  assert.deepEqual(parseCoordPair("0, 0"), { lat: 0, lng: 0 });
+});
+
+test("parseCoordPair: out-of-range latitude is null", () => {
+  assert.equal(parseCoordPair("91, -97.7431"), null);
+  assert.equal(parseCoordPair("-91, -97.7431"), null);
+});
+
+test("parseCoordPair: out-of-range longitude is null", () => {
+  assert.equal(parseCoordPair("30.2672, 181"), null);
+  assert.equal(parseCoordPair("30.2672, -181"), null);
+});
+
+test("parseCoordPair: an address string with a comma does not match", () => {
+  assert.equal(parseCoordPair("123 Main St, Austin, TX"), null);
+});
+
+test("parseCoordPair: a bare address with no comma does not match", () => {
+  assert.equal(parseCoordPair("123 Main St"), null);
+});
+
+test("parseCoordPair: empty/non-string input is null", () => {
+  assert.equal(parseCoordPair(""), null);
+  assert.equal(parseCoordPair(null), null);
+  assert.equal(parseCoordPair(undefined), null);
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----
