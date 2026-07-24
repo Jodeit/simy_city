@@ -162,17 +162,25 @@ Ground rules for each run:
       real compiled `model.json`), and wired `node --test tests/js` into CI.
 
 ## Next (breadth) — newly added
-- [ ] **Paste raw coordinates into the address search box.** `wireAddrSearch()`
-      in `web/explore.html` always calls Nominatim, even when the query is
-      already a `lat, lng` pair (something people commonly paste straight
-      from Google Maps or a GPS app). Short-circuit before the fetch: if the
-      trimmed query matches a `lat, lng` shape within valid ranges (`-90..90`,
-      `-180..180`), skip the network call entirely and jump straight to
-      `map.setView` + `analyze()`, same as a real geocoder hit. Add a pure
-      `parseCoordPair(q)` helper to `web/logic.js` (returns `{lat,lng}` or
-      `null`) with unit tests for valid "lat, lng" and "lat,lng" pairs,
-      out-of-range values, and address-shaped strings that must NOT match
-      (e.g. "123 Main St, Austin, TX" has a comma too).
+- [x] **Paste raw coordinates into the address search box.** `wireAddrSearch()`
+      in `web/explore.html` previously always called Nominatim, even when the
+      query was already a `lat, lng` pair (something people commonly paste
+      straight from Google Maps or a GPS app). Added a pure `parseCoordPair(q)`
+      helper to `web/logic.js` (matches a plain `-?digits(.digits)?, -?digits(.digits)?`
+      shape, range-checks `-90..90`/`-180..180`, returns `{lat,lng}` or `null`)
+      and short-circuit before the fetch in `wireAddrSearch()`: on a match,
+      skip Nominatim entirely and jump straight to `map.setView` + `analyze()`,
+      same as a real geocoder hit. Address-shaped strings with a comma (e.g.
+      "123 Main St, Austin, TX") correctly fall through to the normal
+      geocoder search since they don't match the coordinate-pair regex. Added
+      8 new unit tests (with/without space after the comma, integer
+      coordinates, out-of-range lat/lng in all four directions, address
+      strings, empty/non-string/malformed input). Verified in headless
+      Chromium: both pages load with zero console/page errors; filling the
+      address box with `"30.2672, -97.7431"` and submitting the form set
+      `lastLatLng` to the parsed point and ran a real `analyze()` end to end
+      (result panel rendered) with zero console/page errors, without ever
+      hitting the Nominatim fetch path.
 - [ ] **Live `hashchange` re-apply for shared/pinned links.** `applyHash()`
       (`web/explore.html`) only runs once, on initial page load (see the
       final line of the inline script: `wireBYO(); ... applyHash();`). A

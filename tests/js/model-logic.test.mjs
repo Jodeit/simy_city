@@ -15,7 +15,7 @@ const {
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
-  nominatimUrl, parseNominatimResult, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -618,6 +618,41 @@ test("parseNominatimResult: a malformed/non-array response is null, not a throw"
 
 test("parseNominatimResult: unparseable lat/lon on the hit is null", () => {
   assert.equal(parseNominatimResult([{ lat: "not-a-number", lon: "-97.7" }]), null);
+});
+
+// ---- parseCoordPair (short-circuit a pasted "lat, lng" pair) ----
+
+test("parseCoordPair: parses a plain 'lat, lng' pair", () => {
+  assert.deepEqual(parseCoordPair("30.2672, -97.7431"), { lat: 30.2672, lng: -97.7431 });
+});
+
+test("parseCoordPair: parses without a space after the comma", () => {
+  assert.deepEqual(parseCoordPair("30.2672,-97.7431"), { lat: 30.2672, lng: -97.7431 });
+});
+
+test("parseCoordPair: trims surrounding whitespace and handles integers", () => {
+  assert.deepEqual(parseCoordPair("  30, -97  "), { lat: 30, lng: -97 });
+});
+
+test("parseCoordPair: out-of-range lat or lng is null", () => {
+  assert.equal(parseCoordPair("95, -97.7431"), null);
+  assert.equal(parseCoordPair("30.2672, -181"), null);
+  assert.equal(parseCoordPair("-91, 0"), null);
+  assert.equal(parseCoordPair("0, 181"), null);
+});
+
+test("parseCoordPair: address-shaped strings with a comma do not match", () => {
+  assert.equal(parseCoordPair("123 Main St, Austin, TX"), null);
+  assert.equal(parseCoordPair("Austin, TX"), null);
+});
+
+test("parseCoordPair: empty, non-string, or malformed input is null", () => {
+  assert.equal(parseCoordPair(""), null);
+  assert.equal(parseCoordPair("   "), null);
+  assert.equal(parseCoordPair(null), null);
+  assert.equal(parseCoordPair(undefined), null);
+  assert.equal(parseCoordPair("30.2672"), null);
+  assert.equal(parseCoordPair("30.2672, -97.7431, 5"), null);
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----

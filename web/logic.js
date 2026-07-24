@@ -321,6 +321,24 @@ function parseNominatimResult(json){
   return {lat,lng,label:hit.display_name||null};
 }
 
+/* People commonly paste a raw "lat, lng" pair straight from Google Maps or a
+   GPS app into the address box — that's not something Nominatim needs to
+   geocode, and shouldn't cost a network round-trip. Matches a plain
+   "<number>, <number>" shape (optional leading "-", optional decimals, one
+   comma, optional surrounding whitespace) and range-checks it; anything else
+   — including an address that happens to contain a comma, e.g.
+   "123 Main St, Austin, TX" — returns null so the caller falls through to
+   the normal geocoder search. */
+function parseCoordPair(q){
+  if(typeof q!=="string")return null;
+  const m=q.trim().match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/);
+  if(!m)return null;
+  const lat=parseFloat(m[1]), lng=parseFloat(m[2]);
+  if(!isFinite(lat)||!isFinite(lng))return null;
+  if(lat<-90||lat>90||lng<-180||lng>180)return null;
+  return {lat,lng};
+}
+
 /* ---- CSV export for the Compare list ----
    `toCsvRow` quotes a single field per RFC 4180: wrapped in double quotes
    whenever it contains a comma, a double quote (itself doubled), or a
@@ -355,5 +373,5 @@ function addRecentSite(list,entry,cap){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,toCsvField,toCsvRow,toCsv,addRecentSite};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite};
 }
