@@ -1503,6 +1503,14 @@ function wireAddrSearch(){
     e.preventDefault();
     const q=input.value.trim();
     if(!q)return;
+    const coords=parseCoordPair(q);
+    if(coords){
+      status.style.display="none";
+      const latlng=L.latLng(coords.lat,coords.lng);
+      map.setView(latlng,17);
+      analyze(latlng);
+      return;
+    }
     status.style.display="block"; status.className="addrstatus";
     status.textContent="Searching…";
     const url=nominatimUrl(q);

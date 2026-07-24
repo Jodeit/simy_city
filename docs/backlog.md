@@ -162,17 +162,28 @@ Ground rules for each run:
       real compiled `model.json`), and wired `node --test tests/js` into CI.
 
 ## Next (breadth) — newly added
-- [ ] **Paste raw coordinates into the address search box.** `wireAddrSearch()`
-      in `web/explore.html` always calls Nominatim, even when the query is
+- [x] **Paste raw coordinates into the address search box.** `wireAddrSearch()`
+      in `web/explore.html` always called Nominatim, even when the query was
       already a `lat, lng` pair (something people commonly paste straight
-      from Google Maps or a GPS app). Short-circuit before the fetch: if the
-      trimmed query matches a `lat, lng` shape within valid ranges (`-90..90`,
-      `-180..180`), skip the network call entirely and jump straight to
-      `map.setView` + `analyze()`, same as a real geocoder hit. Add a pure
-      `parseCoordPair(q)` helper to `web/logic.js` (returns `{lat,lng}` or
-      `null`) with unit tests for valid "lat, lng" and "lat,lng" pairs,
-      out-of-range values, and address-shaped strings that must NOT match
-      (e.g. "123 Main St, Austin, TX" has a comma too).
+      from Google Maps or a GPS app). Added a pure `parseCoordPair(q)` helper
+      to `web/logic.js` — strict single-shape match (`lat, lng` or `lat,lng`,
+      trimmed, each half a valid number in range `-90..90`/`-180..180`, and
+      nothing else in the string) so an address with a comma like
+      "123 Main St, Austin, TX" correctly falls through to the normal
+      geocode path instead of being misread as coordinates (three fields and
+      non-numeric text, not two numbers). `wireAddrSearch` now checks this
+      first and, on a match, skips the Nominatim fetch entirely and jumps
+      straight to `map.setView` + `analyze()`, same as a real geocoder hit.
+      Added 9 unit tests (space/no-space variants, whitespace trimming,
+      integer coords, out-of-range lat/lng, address-with-comma rejection,
+      no-comma address rejection, empty/non-string input). Verified in
+      headless Chromium: both pages load with zero console/page errors
+      (only expected `ERR_TUNNEL_CONNECTION_FAILED` network-blocked resource
+      loads, no JS errors), and driving the real address form's submit
+      handler with `"30.2672, -97.7431"` in the input called `analyze()`
+      with that exact lat/lng and hid the status box without ever building
+      a Nominatim URL, while `"123 Main St, Austin, TX"` still parses to
+      `null` so it would fall through to the geocoder.
 - [ ] **Live `hashchange` re-apply for shared/pinned links.** `applyHash()`
       (`web/explore.html`) only runs once, on initial page load (see the
       final line of the inline script: `wireBYO(); ... applyHash();`). A
