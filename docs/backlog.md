@@ -234,6 +234,37 @@ Ground rules for each run:
       `data-theme`, updated the icon/`aria-pressed`, and persisted the new
       choice to `localStorage`, all with zero console errors.
 
+## Next (breadth) — newly added (2)
+- [ ] **Dark mode for the landing page.** `web/explore.html` now has a
+      light/dark toggle (`data-theme` + CSS custom properties); `web/index.html`
+      (the marketing/about page) was explicitly left light-only in that pass.
+      Extend the same pattern — move `index.html`'s `:root` colors onto custom
+      properties, add a `:root[data-theme="dark"]` override block, reuse the
+      same before-first-paint inline script and `localStorage` key
+      (`simy_theme`) so a visitor's choice carries over between the two pages,
+      and add the same 🌙/☀️ toggle to the nav. Needs its own contrast pass —
+      `index.html`'s hero section is already dark-on-image, but the light
+      sections (qcards, dependency diagram, etc.) aren't.
+- [ ] **One more parcel county.** `PARCEL_SOURCES` covers five counties so far
+      (Travis, Maricopa, Harris, Bexar, Los Angeles). Add a sixth — a good
+      next candidate is Cook County, IL (Chicago) or King County, WA
+      (Seattle), both of which publish public ArcGIS parcel MapServers. Same
+      approach as the prior five: find the live MapServer URL and field names
+      (web search, since this sandbox can't reach ArcGIS hosts directly to
+      introspect schemas), extend `pick()`'s candidate field lists only for
+      genuinely new field names, add a `zoning_note`/`county_state`, and — if
+      no stable per-parcel deep-link scheme is documented — link to the
+      assessor's search page rather than guessing a URL. A live spot-check
+      of the new source is a good human follow-up, same as every prior county.
+- [ ] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
+      The `.loading` class (`web/explore.html`) uses an infinite `@keyframes
+      pulse` opacity animation while parcel/topo/MUD/census reads are
+      in-flight. Wrap it in `@media (prefers-reduced-motion: no-preference)`
+      (or add a `(prefers-reduced-motion: reduce)` override that disables the
+      animation) so it doesn't run for people who've asked their OS to
+      minimize motion — the same accessibility rigor the keyboard/ARIA/
+      contrast pass already applied elsewhere in this app.
+
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
       the layer switcher, same opt-in/off-by-default pattern as the FEMA flood
