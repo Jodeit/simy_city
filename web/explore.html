@@ -428,6 +428,24 @@ const PARCEL_SOURCES=[
     county_state:"Los Angeles County, CA",
     zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
   },
+  {
+    name:"King County GIS (King County, WA)",
+    urls:["https://gismaps.kingcounty.gov/arcgis/rest/services/Property/KingCo_Parcels/MapServer/0"],
+    bbox:[-122.55,47.08,-121.05,47.80],
+    // The public layer exposes only PIN (and its MAJOR/MINOR halves) — no
+    // owner name, situs address, land use, acreage, or value: Washington
+    // state law broadly restricts owner-name exposure on public REST
+    // endpoints, and this GIS boundary layer doesn't carry the assessor's
+    // roll data at all. Same graceful partial-field-coverage as every other
+    // county here — unlike Harris/Bexar/LA though, King County's Parcel
+    // Viewer *does* document a stable per-PIN deep link, so record() points
+    // straight at the parcel instead of a bare search page.
+    record:(a)=>{const id=pick(a,["PIN"]);
+      return id?`https://gismaps.kingcounty.gov/parcelviewer2/ParcelReport.aspx?pin=${encodeURIComponent(id)}`:"https://gismaps.kingcounty.gov/parcelviewer2/";},
+    source_label:"King County GIS",
+    county_state:"King County, WA",
+    zoning_note:"WA counties do zone unincorporated land (Growth Management Act) — check the King County zoning code, or the city if incorporated",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1063,7 +1081,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType"]);
