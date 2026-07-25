@@ -202,16 +202,37 @@ Ground rules for each run:
       `hashchange` navigated again and added a second distinct entry — all
       with zero console/page errors (network calls to Overpass/ArcGIS
       correctly fail-and-degrade in this sandbox, as expected).
-- [ ] **Dark mode toggle.** The app ships one light theme only. Add a manual
-      light/dark toggle (persisted to `localStorage`, defaulting to the
-      browser's `prefers-color-scheme`) by moving the existing hard-coded
-      colors in `web/explore.html`'s `<style>` block onto CSS custom
-      properties and swapping a `data-theme` attribute on `<html>`. Re-check
-      contrast for the dark palette with the same rigor the accessibility
-      pass already applied to the light one (the amber "contested/
-      unavailable" text was tuned to 5.9:1 against its light background —
-      an inverted/naive dark variant is not guaranteed to clear 4.5:1 AA
-      against a dark background and needs its own computed check).
+- [x] **Dark mode toggle.** Added a manual light/dark toggle to
+      `web/explore.html` — a 🌙/☀️ button in the header, persisted to
+      `localStorage` (`simy_theme`), defaulting to the browser's
+      `prefers-color-scheme` when no explicit choice has been made yet. Moved
+      the panel/map-overlay/modal colors (previously hard-coded hex) onto CSS
+      custom properties (`--ink`, `--slate`, `--paper`, `--line`, `--card`,
+      plus new `--surface`/`--contested-*`/`--aligned-*`/`--danger-*`/
+      `--leanbar-*`/`--overlay-bg`/`--modal-backdrop`/`--shadow-*`) and added
+      a `:root[data-theme="dark"]` override block; a tiny inline script in
+      `<head>` (before the stylesheet/style block) reads the saved choice or
+      `matchMedia("(prefers-color-scheme: dark)")` and sets the `data-theme`
+      attribute before first paint, avoiding a flash of the wrong theme. The
+      always-dark header/mode-switch chrome (already dark in the light theme,
+      by design) and the small per-perspective JS marker/chip colors are
+      unchanged in both themes — only the light-in-light-mode panel surfaces
+      needed a dark counterpart. Computed contrast ratios for every new dark
+      pairing (body text, secondary text, links, contested/aligned/danger
+      verdict text-on-background) — all clear 4.5:1 AA, several 7-15:1 (same
+      rigor as the earlier light-theme accessibility pass, which found the
+      original amber text at only 5.9:1 — a naive inverted dark palette is
+      not guaranteed to pass and didn't get a free pass here either).
+      `web/index.html` (the marketing landing page) was left light-only —
+      out of scope for this pass; a natural follow-up if wanted. Verified in
+      headless Chromium: both pages load with zero genuine JS errors (only
+      the expected sandbox-blocked `ERR_TUNNEL_CONNECTION_FAILED` network
+      errors, same as every prior run); forcing `simy_theme=dark` via
+      `localStorage` before load correctly set `data-theme="dark"` and
+      rendered the dark panel background/text colors (confirmed via
+      `getComputedStyle`); and clicking the toggle button live flipped
+      `data-theme`, updated the icon/`aria-pressed`, and persisted the new
+      choice to `localStorage`, all with zero console errors.
 
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to

@@ -4,11 +4,30 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>SIMyCity Explorer — drop a development, see what it needs</title>
+<script>
+// Set the theme before first paint (avoids a flash of the wrong theme).
+// Explicit choice wins; otherwise fall back to the OS/browser preference.
+(function(){
+  try{
+    var saved = localStorage.getItem("simy_theme");
+    var theme = saved === "dark" || saved === "light" ? saved
+      : (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", theme);
+  }catch(e){}
+})();
+</script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316201f'/%3E%3Ctext x='32' y='45' font-size='36' text-anchor='middle' font-family='Arial,sans-serif' font-weight='800' fill='%2374c476'%3ES%3C/text%3E%3C/svg%3E"/>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
 <style>
   :root{--garden:#2f9e44;--garden-deep:#1f7a33;--leaf:#74c476;--amber:#d9a441;--water:#3a8fb7;
-    --power:#e8843c;--ink:#16201f;--slate:#5b6b6a;--paper:#f6f4ec;--line:#e3ddcd;--card:#fffdf7;}
+    --power:#e8843c;--ink:#16201f;--slate:#5b6b6a;--paper:#f6f4ec;--line:#e3ddcd;--card:#fffdf7;
+    --surface:#fff;--contested-bg:#fdeed6;--contested-fg:#7a5410;--aligned-bg:#e7f3e9;--aligned-fg:var(--garden-deep);
+    --danger-bg:#fdecec;--danger-fg:#b33030;--leanbar-bg:#e7e2d3;--leanbar-line:#b9b09a;--err-border:#f0d8ab;
+    --overlay-bg:rgba(255,253,247,.95);--modal-backdrop:rgba(15,23,21,.55);--shadow-1:rgba(0,0,0,.18);--shadow-2:rgba(0,0,0,.3);}
+  :root[data-theme="dark"]{--garden-deep:#6fcf87;--ink:#e8f0ea;--slate:#9fb3ae;--paper:#14181a;--line:#33403c;--card:#1e2422;
+    --surface:#202725;--contested-bg:#3a2a10;--contested-fg:#f0c987;--aligned-bg:#132a19;--aligned-fg:#8ed99a;
+    --danger-bg:#3a1414;--danger-fg:#ff9d9d;--leanbar-bg:#33403c;--leanbar-line:#6b7d78;--err-border:#5a441f;
+    --overlay-bg:rgba(20,24,26,.92);}
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink)}
   #app{display:grid;grid-template-columns:1fr 380px;grid-template-rows:auto 1fr;height:100%}
@@ -27,7 +46,7 @@
   #map{position:absolute;inset:0}
   #panel{background:var(--paper);border-left:1px solid var(--line);overflow-y:auto;padding:16px 16px 60px}
   .empty{color:var(--slate);font-size:.92rem;line-height:1.5}
-  .empty kbd{background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:.05em .4em;font-size:.85em}
+  .empty kbd{background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:.05em .4em;font-size:.85em}
   h2{margin:.1em 0 .1em;font-size:1.15rem;letter-spacing:-.01em}
   .where{color:var(--slate);font-size:.82rem;margin-bottom:12px}
   .block{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px 13px;margin:11px 0}
@@ -37,13 +56,13 @@
   .req small{display:block;color:var(--slate);font-size:.78rem}
   .src{font-size:.74rem;color:var(--garden-deep)}
   .lean{display:flex;align-items:center;gap:9px;margin:7px 0;font-size:.9rem}
-  .leanbar{height:9px;border-radius:5px;flex:0 0 86px;background:#e7e2d3;position:relative;overflow:hidden}
-  .leanbar i{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#b9b09a}
+  .leanbar{height:9px;border-radius:5px;flex:0 0 86px;background:var(--leanbar-bg);position:relative;overflow:hidden}
+  .leanbar i{position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--leanbar-line)}
   .leanbar b{position:absolute;top:0;bottom:0;display:block}
   .lean .who{flex:1}.lean .who small{display:block;color:var(--slate);font-size:.76rem}
   .verdict{font-weight:800;text-align:center;padding:9px;border-radius:10px;margin-top:6px;font-size:.92rem}
-  .verdict.contested{background:#fdeed6;color:#7a5410}
-  .verdict.aligned{background:#e7f3e9;color:var(--garden-deep)}
+  .verdict.contested{background:var(--contested-bg);color:var(--contested-fg)}
+  .verdict.aligned{background:var(--aligned-bg);color:var(--aligned-fg)}
   .live{font-size:.88rem;margin:6px 0}
   .live b{color:var(--ink)}
   #parcelBlock{border-left:3px solid var(--power)}
@@ -58,47 +77,47 @@
   .drow a{color:var(--garden-deep)}
   .loading{color:var(--slate);font-style:italic;font-size:.85rem;animation:pulse 1.3s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
-  .unavail{color:#7a5410;background:#fdeed6;border-radius:7px;padding:.2em .55em;font-size:.85rem;display:inline-block}
-  .standoff{font-size:.85rem;background:#fff;border:1px dashed var(--amber);border-radius:10px;padding:9px 10px;margin:7px 0}
-  .standoff b{color:#7a5410}
+  .unavail{color:var(--contested-fg);background:var(--contested-bg);border-radius:7px;padding:.2em .55em;font-size:.85rem;display:inline-block}
+  .standoff{font-size:.85rem;background:var(--surface);border:1px dashed var(--amber);border-radius:10px;padding:9px 10px;margin:7px 0}
+  .standoff b{color:var(--contested-fg)}
   .tinker{background:#16201f;color:#dcebd9;color:#e7f0e8;border-radius:13px;padding:13px;margin-top:14px;font-size:.86rem}
   .tinker a{color:var(--leaf);font-weight:700}
-  .legend{position:absolute;z-index:500;bottom:14px;left:14px;background:rgba(255,253,247,.94);border:1px solid var(--line);
+  .legend{position:absolute;z-index:500;bottom:14px;left:14px;background:var(--overlay-bg);border:1px solid var(--line);
     border-radius:10px;padding:8px 11px;font-size:.78rem;color:var(--slate)}
   .legend b{color:var(--ink)}
   /* address search — centered top so it clears the desktop zoom control (top-left)
      and the layer switcher (top-right) without needing per-corner layout math */
   .addrsearch{position:absolute;z-index:500;top:12px;left:50%;transform:translateX(-50%);
-    display:flex;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;
-    box-shadow:0 2px 10px rgba(0,0,0,.18)}
-  .addrsearch input{border:none;outline:none;font:inherit;font-size:.85rem;padding:.5em .7em;width:min(230px,42vw);color:var(--ink)}
+    display:flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 2px 10px var(--shadow-1)}
+  .addrsearch input{border:none;outline:none;font:inherit;font-size:.85rem;padding:.5em .7em;width:min(230px,42vw);color:var(--ink);background:var(--surface)}
   .addrsearch button{border:none;background:var(--garden);color:#06210d;font-size:.95rem;padding:.5em .8em;cursor:pointer}
   .addrsearch button:hover{background:var(--garden-deep);color:#fff}
   .addrstatus{position:absolute;z-index:500;top:54px;left:50%;transform:translateX(-50%);
-    background:rgba(255,253,247,.96);border:1px solid var(--line);border-radius:8px;padding:6px 10px;
+    background:var(--overlay-bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;
     font-size:.8rem;color:var(--slate);max-width:min(280px,80vw);text-align:center}
-  .addrstatus.err{color:#7a5410;background:#fdeed6;border-color:#f0d8ab}
+  .addrstatus.err{color:var(--contested-fg);background:var(--contested-bg);border-color:var(--err-border)}
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px}
-  .toolbtn{font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--ink);
+  .toolbtn{font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);
     padding:.4em .7em;border-radius:9px;cursor:pointer}
   .toolbtn:hover{border-color:var(--garden);color:var(--garden-deep)}
   .casebox{flex-basis:100%;margin-top:4px}
   .casebox summary{cursor:pointer;font-size:.82rem;color:var(--garden-deep);font-weight:600}
   .casebox textarea{width:100%;height:140px;margin-top:7px;font:inherit;font-size:.78rem;border:1px solid var(--line);
-    border-radius:9px;padding:8px;resize:vertical;background:#fffdf7}
+    border-radius:9px;padding:8px;resize:vertical;background:var(--card);color:var(--ink)}
   .casebox .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
   .ok{color:var(--garden-deep);font-size:.78rem;font-weight:600;margin-left:6px}
   /* bring-your-own-data modal */
-  .modal{position:fixed;inset:0;background:rgba(15,23,21,.55);display:none;z-index:1000;align-items:center;justify-content:center}
+  .modal{position:fixed;inset:0;background:var(--modal-backdrop);display:none;z-index:1000;align-items:center;justify-content:center}
   .modal.open{display:flex}
-  .modal .box{background:var(--paper);border-radius:16px;max-width:520px;width:92%;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .modal .box{background:var(--paper);border-radius:16px;max-width:520px;width:92%;padding:20px;box-shadow:0 20px 60px var(--shadow-2)}
   .modal h3{margin:0 0 4px;font-size:1.1rem}
   .modal p{color:var(--slate);font-size:.86rem;margin:.2em 0 .6em}
-  .modal textarea{width:100%;height:130px;font:inherit;font-size:.82rem;border:1px solid var(--line);border-radius:10px;padding:9px}
+  .modal textarea{width:100%;height:130px;font:inherit;font-size:.82rem;border:1px solid var(--line);border-radius:10px;padding:9px;background:var(--card);color:var(--ink)}
   .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
   .modal .btnp{background:var(--garden);color:#06210d;border:none;font-weight:700;padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
-  .modal .btng{background:none;border:1px solid var(--line);padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
-  .privacy{font-size:.76rem;color:var(--garden-deep);background:#e7f3e9;border-radius:8px;padding:6px 9px;margin-top:8px}
+  .modal .btng{background:none;border:1px solid var(--line);color:var(--ink);padding:.55em 1em;border-radius:10px;cursor:pointer;font:inherit}
+  .privacy{font-size:.76rem;color:var(--garden-deep);background:var(--aligned-bg);border-radius:8px;padding:6px 9px;margin-top:8px}
   /* compare-parcels modal */
   .modal .box.wide{max-width:860px}
   .cmpScroll{overflow-x:auto;margin-top:8px}
@@ -107,7 +126,7 @@
   .cmpTable th{color:var(--slate);font-weight:600;white-space:nowrap}
   .cmpTable td.lbl{color:var(--slate);white-space:nowrap}
   .cmpX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:1rem;padding:0 4px}
-  .cmpX:hover{color:#b33030}
+  .cmpX:hover{color:var(--danger-fg)}
   .cmpEmpty{color:var(--slate);font-size:.86rem}
   /* recently-viewed strip */
   .recentStrip{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 11px;margin-bottom:12px}
@@ -121,6 +140,10 @@
   .modes{display:flex;gap:0;background:#1f2c2a;border:1px solid #38514c;border-radius:10px;overflow:hidden}
   .mbtn{font:inherit;font-size:.85rem;font-weight:700;border:none;background:transparent;color:#cfe6d3;padding:.45em .9em;cursor:pointer}
   .mbtn.active{background:var(--garden);color:#06210d}
+  /* theme toggle */
+  .themebtn{font:inherit;font-size:.85rem;border:1px solid #38514c;background:#1f2c2a;color:#cfe6d3;
+    padding:.4em .6em;border-radius:9px;cursor:pointer;line-height:1}
+  .themebtn:hover{border-color:var(--leaf)}
   /* use selector card (side panel, "test a use" mode) */
   .usebar{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:12px}
   .usebar .lbl{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);margin-bottom:7px}
@@ -135,9 +158,9 @@
   /* "what could go here" fit list */
   .fitrow{display:flex;align-items:center;gap:9px;margin:7px 0;font-size:.9rem}
   .fitbadge{flex:0 0 auto;font-size:.72rem;font-weight:800;border-radius:999px;padding:.12em .55em}
-  .fitbadge.y{background:#e7f3e9;color:var(--garden-deep)} .fitbadge.n{background:#fdecec;color:#b33030}
+  .fitbadge.y{background:var(--aligned-bg);color:var(--garden-deep)} .fitbadge.n{background:var(--danger-bg);color:var(--danger-fg)}
   .fitrow .fl{flex:1} .fitrow .fl small{display:block;color:var(--slate);font-size:.78rem}
-  .testbtn{font:inherit;font-size:.76rem;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--garden-deep);border-radius:8px;padding:.25em .6em;cursor:pointer;white-space:nowrap}
+  .testbtn{font:inherit;font-size:.76rem;font-weight:700;border:1px solid var(--line);background:var(--surface);color:var(--garden-deep);border-radius:8px;padding:.25em .6em;cursor:pointer;white-space:nowrap}
   .testbtn:hover{border-color:var(--garden)}
   /* ---------- mobile ---------- */
   @media(max-width:760px){
@@ -151,6 +174,7 @@
     .modes{margin-left:auto}
     .mbtn{font-size:.76rem;padding:.42em .55em;white-space:nowrap}
     .hint{display:none}
+    .themebtn{font-size:.8rem;padding:.35em .5em}
     .legend{left:8px;right:8px;bottom:8px;font-size:.7rem;padding:5px 8px;line-height:1.35}
     .addrsearch{top:8px}
     .addrsearch input{width:min(180px,55vw);font-size:16px}     /* stop iOS auto-zoom on focus */
@@ -195,6 +219,7 @@
     </div>
     <span class="hint"><a href="#" id="compareOpen">⚖️ Compare (<span id="compareCount">0</span>)</a> ·
       <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
+    <button class="themebtn" id="themeToggle" type="button" aria-pressed="false" title="Toggle dark mode">🌙</button>
   </header>
   <div id="mapwrap"><div id="map"></div>
     <form id="addrForm" class="addrsearch" autocomplete="off">
@@ -1537,7 +1562,24 @@ function wireCTA(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); applyHash();
+function wireTheme(){
+  const btn=document.getElementById('themeToggle');
+  if(!btn) return;
+  const paint=theme=>{
+    btn.textContent = theme==="dark" ? "☀️" : "🌙";
+    btn.setAttribute("aria-pressed", theme==="dark" ? "true" : "false");
+    btn.title = theme==="dark" ? "Switch to light mode" : "Switch to dark mode";
+  };
+  paint(document.documentElement.getAttribute("data-theme")||"light");
+  btn.onclick=()=>{
+    const next = document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try{ localStorage.setItem("simy_theme", next); }catch(e){}
+    paint(next);
+  };
+}
+
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); wireTheme(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses
