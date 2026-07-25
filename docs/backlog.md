@@ -235,16 +235,39 @@ Ground rules for each run:
       choice to `localStorage`, all with zero console errors.
 
 ## Next (breadth) — newly added (2)
-- [ ] **Dark mode for the landing page.** `web/explore.html` now has a
-      light/dark toggle (`data-theme` + CSS custom properties); `web/index.html`
-      (the marketing/about page) was explicitly left light-only in that pass.
-      Extend the same pattern — move `index.html`'s `:root` colors onto custom
-      properties, add a `:root[data-theme="dark"]` override block, reuse the
-      same before-first-paint inline script and `localStorage` key
-      (`simy_theme`) so a visitor's choice carries over between the two pages,
-      and add the same 🌙/☀️ toggle to the nav. Needs its own contrast pass —
-      `index.html`'s hero section is already dark-on-image, but the light
-      sections (qcards, dependency diagram, etc.) aren't.
+- [x] **Dark mode for the landing page.** Extended `web/explore.html`'s
+      light/dark pattern to `web/index.html`: moved `:root`'s light-surface
+      colors (`--ink`, `--paper`, `--card`, `--slate`, `--line`,
+      `--garden-deep`, plus new `--tint-bg`/`--garden-grad-1`/`--garden-grad-2`
+      introduced to de-hardcode the four `#eef3ec` chip backgrounds and the
+      `.garden` section gradient) onto custom properties, added a
+      `:root[data-theme="dark"]` override block reusing explore.html's
+      already-vetted dark palette verbatim, and reused the same
+      before-first-paint inline script and `simy_theme` `localStorage` key so
+      a visitor's choice carries over between the two pages. Added a matching
+      🌙/☀️ toggle button to the nav. The hero and mission sections are
+      already dark-on-light-text by design (same exemption explore.html's
+      header/mode-switch chrome got) and needed no change. The "How it works"
+      dependency-diagram SVGs needed their own fix: the `REQUIRES`/`INDUCES`
+      labels, loop captions, and connector-arrow strokes were hardcoded
+      `#5b6b6a`/`#1f7a33` sitting directly on the panel background — switched
+      those to `fill="var(--slate)"`/`var(--garden-deep)` so they don't go
+      low-contrast against a darkened panel; the small colored accent chips
+      (Power/Water/Fiber, Fire/Grid/Roads) keep their fixed light backgrounds
+      on purpose, since their saturated text colors are tuned for a light
+      chip and swapping to a dark chip bg would tank that contrast instead of
+      improving it. Computed contrast ratios for every new dark pairing via
+      real rendered `getComputedStyle` values in headless Chromium (not just
+      hand math): body text 15.4:1, secondary/`.sub` text 8.1:1, links
+      9.3:1, code/tag chips on `--tint-bg` 7.1–8.2:1 — all clear AA, most
+      clear AAA. Verified in headless Chromium: both pages load with zero
+      console/page errors; the toggle flips `data-theme`, updates the
+      icon/`aria-pressed`, and persists to `localStorage` on both pages;
+      cold-loading with `simy_theme=dark` pre-set correctly renders dark from
+      first paint (no flash); and a pixel screenshot of light mode after this
+      change is unchanged from before it. `index.html` badge-icon circles and
+      the SVG accent chips mentioned above were left with their original
+      colors — a design choice, not an oversight.
 - [ ] **One more parcel county.** `PARCEL_SOURCES` covers five counties so far
       (Travis, Maricopa, Harris, Bexar, Los Angeles). Add a sixth — a good
       next candidate is Cook County, IL (Chicago) or King County, WA
