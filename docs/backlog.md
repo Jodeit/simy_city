@@ -268,17 +268,35 @@ Ground rules for each run:
       change is unchanged from before it. `index.html` badge-icon circles and
       the SVG accent chips mentioned above were left with their original
       colors — a design choice, not an oversight.
-- [ ] **One more parcel county.** `PARCEL_SOURCES` covers five counties so far
-      (Travis, Maricopa, Harris, Bexar, Los Angeles). Add a sixth — a good
-      next candidate is Cook County, IL (Chicago) or King County, WA
-      (Seattle), both of which publish public ArcGIS parcel MapServers. Same
-      approach as the prior five: find the live MapServer URL and field names
-      (web search, since this sandbox can't reach ArcGIS hosts directly to
-      introspect schemas), extend `pick()`'s candidate field lists only for
-      genuinely new field names, add a `zoning_note`/`county_state`, and — if
-      no stable per-parcel deep-link scheme is documented — link to the
-      assessor's search page rather than guessing a URL. A live spot-check
-      of the new source is a good human follow-up, same as every prior county.
+- [x] **One more parcel county.** Added King County, WA (Seattle) as a 6th
+      `PARCEL_SOURCES` entry — `gismaps.kingcounty.gov`'s
+      `Property/KingCo_Parcels/MapServer/0` (found via web search since this
+      sandbox gets a 403 on every ArcGIS REST introspection attempt, same
+      bot-blocking noted for Bexar/LA). The public layer exposes only `PIN`
+      (plus its `MAJOR`/`MINOR` halves) — no owner, situs address, land use,
+      acreage, or value, since Washington law broadly restricts owner-name
+      exposure on public parcel REST endpoints and this boundary layer
+      doesn't carry the assessor roll at all — added `PIN` to the shared
+      `pick()` id candidate list and left the rest gracefully unmapped, same
+      partial-field-coverage pattern as every prior county. Unlike
+      Harris/Bexar/LA though, King County's Parcel Viewer *does* document a
+      stable per-PIN deep link (`parcelviewer2/ParcelReport.aspx?pin=`), so
+      `record()` links straight to the parcel instead of a bare search page.
+      WA counties, like AZ/CA, zone unincorporated land under the state
+      Growth Management Act, so this gets its own `zoning_note` rather than
+      reusing the "doesn't zone" TX copy. Verified in headless Chromium: both
+      pages load with zero console/page errors; `inBbox` correctly routes a
+      downtown-Seattle point to the new source and still finds no source for
+      an out-of-coverage point (Denver); driving `showParcel` directly with a
+      mocked King County ArcGIS attribute payload (`PIN`/`MAJOR`/`MINOR`)
+      rendered the parcel ID row, the new WA zoning note, and the
+      `ParcelReport.aspx?pin=` record link correctly with the rest of the
+      rows correctly omitted; and a real simulated map click at that point
+      ran the whole parcel+demand fan-out without throwing, degrading to
+      "couldn't reach the county parcel service" since outbound network to
+      `gismaps.kingcounty.gov` is blocked from this sandbox — a live
+      spot-check on the real site is a good human follow-up, same as every
+      prior county addition.
 - [ ] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
       The `.loading` class (`web/explore.html`) uses an infinite `@keyframes
       pulse` opacity animation while parcel/topo/MUD/census reads are
