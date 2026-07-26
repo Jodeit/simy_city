@@ -268,17 +268,37 @@ Ground rules for each run:
       change is unchanged from before it. `index.html` badge-icon circles and
       the SVG accent chips mentioned above were left with their original
       colors — a design choice, not an oversight.
-- [ ] **One more parcel county.** `PARCEL_SOURCES` covers five counties so far
-      (Travis, Maricopa, Harris, Bexar, Los Angeles). Add a sixth — a good
-      next candidate is Cook County, IL (Chicago) or King County, WA
-      (Seattle), both of which publish public ArcGIS parcel MapServers. Same
-      approach as the prior five: find the live MapServer URL and field names
-      (web search, since this sandbox can't reach ArcGIS hosts directly to
-      introspect schemas), extend `pick()`'s candidate field lists only for
-      genuinely new field names, add a `zoning_note`/`county_state`, and — if
-      no stable per-parcel deep-link scheme is documented — link to the
-      assessor's search page rather than guessing a URL. A live spot-check
-      of the new source is a good human follow-up, same as every prior county.
+- [x] **One more parcel county.** Added Cook County, IL (Chicago) as a 6th
+      `PARCEL_SOURCES` entry — `gis12.cookcountyil.gov`'s (with `gis.` as a
+      fallback host, same per-host pattern as Travis County)
+      `CookViewer3Parcels/MapServer/0`, found via web search since this
+      sandbox 403s on direct ArcGIS REST introspection (same bot-blocking
+      noted for every prior county addition). The public layer only exposes
+      `PIN10`/`PIN14_dash`/`street_address` — no owner, land use, acreage, or
+      value (those live in the Assessor's separate non-GIS roll) — added
+      those three names to the shared `pick()` id/address candidate lists
+      and left the rest gracefully unmapped, same partial-field-coverage
+      pattern as every prior county. The Cook County Assessor's site
+      documents a stable per-PIN deep link (`cookcountyassessoril.gov/pin/`,
+      keyed by the 14-digit PIN with dashes stripped), so `record()` links
+      straight to the parcel instead of a bare search page. Illinois
+      counties, like AZ/CA, zone unincorporated land, so this gets its own
+      `zoning_note` rather than reusing the "doesn't zone" TX copy. Checked
+      off the corresponding item in `docs/backlog.md`.
+
+## Next (breadth) — newly added (3)
+- [ ] **One more parcel county.** `PARCEL_SOURCES` now covers six counties
+      (Travis, Maricopa, Harris, Bexar, Los Angeles, Cook). Add a seventh —
+      a good next candidate is King County, WA (Seattle) or Miami-Dade
+      County, FL, both of which publish public ArcGIS parcel MapServers.
+      Same approach as the prior six: find the live MapServer URL and field
+      names (web search, since this sandbox can't reach ArcGIS hosts
+      directly to introspect schemas), extend `pick()`'s candidate field
+      lists only for genuinely new field names, add a `zoning_note`/
+      `county_state`, and — if no stable per-parcel deep-link scheme is
+      documented — link to the assessor's search page rather than guessing a
+      URL. A live spot-check of the new source is a good human follow-up,
+      same as every prior county.
 - [x] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
       The `.loading` class (`web/explore.html`) used an infinite `@keyframes
       pulse` opacity animation while parcel/topo/MUD/census reads are
