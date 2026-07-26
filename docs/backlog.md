@@ -279,14 +279,23 @@ Ground rules for each run:
       no stable per-parcel deep-link scheme is documented — link to the
       assessor's search page rather than guessing a URL. A live spot-check
       of the new source is a good human follow-up, same as every prior county.
-- [ ] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
-      The `.loading` class (`web/explore.html`) uses an infinite `@keyframes
+- [x] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
+      The `.loading` class (`web/explore.html`) used an infinite `@keyframes
       pulse` opacity animation while parcel/topo/MUD/census reads are
-      in-flight. Wrap it in `@media (prefers-reduced-motion: no-preference)`
-      (or add a `(prefers-reduced-motion: reduce)` override that disables the
-      animation) so it doesn't run for people who've asked their OS to
-      minimize motion — the same accessibility rigor the keyboard/ARIA/
-      contrast pass already applied elsewhere in this app.
+      in-flight, unconditionally. Moved the `animation` declaration off the
+      base `.loading` rule and into a `@media (prefers-reduced-motion:
+      no-preference)` block, so people who've asked their OS to minimize
+      motion get a static (non-pulsing, still legible via its existing
+      italic/grey styling) loading indicator instead — same accessibility
+      rigor as the earlier keyboard/ARIA/contrast pass. `web/index.html`'s
+      decorative `dash`/`spin` SVG-diagram animations are a separate,
+      pre-existing case (not part of this backlog item's `.loading` scope)
+      and were left as a follow-up if wanted. Verified in headless Chromium:
+      both pages load with zero console/page errors; with
+      `page.emulateMedia({reducedMotion: 'no-preference'})` a fresh
+      `.loading` element's computed `animationName` is `pulse` (unchanged
+      behavior), and with `{reducedMotion: 'reduce'}` it's `none` (animation
+      correctly suppressed).
 
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
