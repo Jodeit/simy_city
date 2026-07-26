@@ -279,14 +279,19 @@ Ground rules for each run:
       no stable per-parcel deep-link scheme is documented — link to the
       assessor's search page rather than guessing a URL. A live spot-check
       of the new source is a good human follow-up, same as every prior county.
-- [ ] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
-      The `.loading` class (`web/explore.html`) uses an infinite `@keyframes
+- [x] **Respect `prefers-reduced-motion` for the loading-pulse animation.**
+      The `.loading` class (`web/explore.html`) used an infinite `@keyframes
       pulse` opacity animation while parcel/topo/MUD/census reads are
-      in-flight. Wrap it in `@media (prefers-reduced-motion: no-preference)`
-      (or add a `(prefers-reduced-motion: reduce)` override that disables the
-      animation) so it doesn't run for people who've asked their OS to
-      minimize motion — the same accessibility rigor the keyboard/ARIA/
-      contrast pass already applied elsewhere in this app.
+      in-flight, unconditionally. Moved the `animation` declaration off the
+      base `.loading` rule and into a `@media (prefers-reduced-motion:
+      no-preference)` override, so the element still gets its grey italic
+      styling either way but only animates for people who haven't asked their
+      OS to minimize motion — same accessibility rigor as the earlier
+      keyboard/ARIA/contrast pass. Verified in headless Chromium: both pages
+      load with zero console/page errors; with `prefers-reduced-motion:
+      reduce` emulated, a `.loading` element's computed
+      `animationName` is `"none"`; with no preference (or `no-preference`)
+      emulated, it's `"pulse"` as before.
 
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to

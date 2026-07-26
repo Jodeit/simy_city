@@ -75,7 +75,10 @@
   .drow>span{color:var(--slate);white-space:nowrap;flex:0 0 auto}
   .drow>b{text-align:right;font-weight:600}
   .drow a{color:var(--garden-deep)}
-  .loading{color:var(--slate);font-style:italic;font-size:.85rem;animation:pulse 1.3s ease-in-out infinite}
+  .loading{color:var(--slate);font-style:italic;font-size:.85rem}
+  @media (prefers-reduced-motion: no-preference){
+    .loading{animation:pulse 1.3s ease-in-out infinite}
+  }
   @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
   .unavail{color:var(--contested-fg);background:var(--contested-bg);border-radius:7px;padding:.2em .55em;font-size:.85rem;display:inline-block}
   .standoff{font-size:.85rem;background:var(--surface);border:1px dashed var(--amber);border-radius:10px;padding:9px 10px;margin:7px 0}
