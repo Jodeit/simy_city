@@ -431,6 +431,22 @@ const PARCEL_SOURCES=[
     county_state:"Los Angeles County, CA",
     zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
   },
+  {
+    name:"King County Assessor (King County, WA)",
+    urls:["https://gismaps.kingcounty.gov/arcgis/rest/services/Property/KingCo_Parcels/MapServer/0"],
+    bbox:[-122.54,47.08,-121.06,47.78],
+    // The public parcel layer exposes only the PIN (parcel ID, MAJOR+MINOR
+    // concatenated) and geometry — owner name and situs address are withheld
+    // from King County's public REST layers by Washington state law, and
+    // land use/acreage/appraised value live in the separate non-GIS Assessor
+    // roll, same graceful partial-field-coverage as every other county here.
+    // No documented per-PIN deep-link URL scheme either, so — same call as
+    // Harris/Bexar/LA — send people to the Assessor's own eMap search.
+    record:()=>"https://info.kingcounty.gov/assessor/emap/default.aspx",
+    source_label:"King County Assessor",
+    county_state:"King County, WA",
+    zoning_note:"unlike TX, WA counties do zone unincorporated land — check King County's unincorporated-area zoning, or the city if incorporated",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1066,7 +1082,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType"]);
