@@ -670,19 +670,27 @@ Ground rules for each run:
       search page rather than guessing a URL that might 404. A live
       spot-check of the new source is a good human follow-up, same as every
       prior county.
-- [ ] **Let people clear or remove individual recently-viewed sites.** The
+- [x] **Let people clear or remove individual recently-viewed sites.** The
       "Recently viewed" strip (`web/explore.html`, `recent`/`renderRecent`/
-      `recordRecent`, `RECENT_KEY="simy_recent_v1"`) only ever grows (capped
-      at 6, oldest evicted) — there's no way to remove an entry short of
+      `recordRecent`, `RECENT_KEY="simy_recent_v1"`) only ever grew (capped
+      at 6, oldest evicted) — there was no way to remove an entry short of
       clearing `localStorage` from devtools, unlike the Compare-pins list
-      which already has a per-row "✕" remove button and a "clear all". Add
-      the same affordance here: a small "✕" per `recentList` row (calling a
-      new `removeRecentSite(list, i)` pure helper in `web/logic.js`, mirrored
-      on the existing `addRecentSite` helper/tests) and a "clear" link on the
-      strip when non-empty. Verify with new unit tests for
-      `removeRecentSite` (removes the right index, no-ops on an out-of-range
-      index) and in headless Chromium that clicking ✕ on a recorded entry
-      updates the strip and `localStorage` with zero console errors.
+      which already has a per-row "✕" remove button and a "clear all". Added
+      the same affordance here: a pure `removeRecentSite(list, i)` helper in
+      `web/logic.js` (out-of-range/negative index no-ops rather than
+      throwing, mirrors `addRecentSite`'s style), a small "✕" per
+      `recentList` row (`removeRecent()` wired through `renderRecent()`,
+      same `savePins()`-style re-render-and-persist pattern as
+      `removePin()`), and a "clear" link on the strip that empties the whole
+      list. Added 6 new unit tests for `removeRecentSite` (remove by index,
+      remove-first shifts correctly, out-of-range and negative indices
+      no-op, null/undefined list handled, no in-place mutation). Verified in
+      headless Chromium: both pages load with zero console/page errors;
+      seeded two recent sites via `localStorage`, reloaded, clicked the
+      first row's ✕ end-to-end and confirmed exactly one entry remained in
+      both the DOM and `localStorage`; clicking "clear" then emptied the
+      strip (hidden) and `localStorage`; and driving `removeRecentSite`
+      directly in-page with an out-of-range index confirmed the no-op.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

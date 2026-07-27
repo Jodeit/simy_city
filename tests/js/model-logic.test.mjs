@@ -16,6 +16,7 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
+  removeRecentSite,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -739,4 +740,41 @@ test("addRecentSite: never mutates the existing list in place", () => {
   const existing = [{ lat: 1, lng: 1 }];
   addRecentSite(existing, { lat: 2, lng: 2 });
   assert.equal(existing.length, 1);
+});
+
+// ---- removeRecentSite ----
+
+test("removeRecentSite: removes the entry at the given index", () => {
+  const existing = [{ label: "A" }, { label: "B" }, { label: "C" }];
+  const list = removeRecentSite(existing, 1);
+  assert.deepEqual(list, [{ label: "A" }, { label: "C" }]);
+});
+
+test("removeRecentSite: removing the first index shifts the rest forward", () => {
+  const existing = [{ label: "A" }, { label: "B" }];
+  const list = removeRecentSite(existing, 0);
+  assert.deepEqual(list, [{ label: "B" }]);
+});
+
+test("removeRecentSite: no-ops on an out-of-range index (too high)", () => {
+  const existing = [{ label: "A" }];
+  const list = removeRecentSite(existing, 5);
+  assert.deepEqual(list, existing);
+});
+
+test("removeRecentSite: no-ops on a negative index", () => {
+  const existing = [{ label: "A" }];
+  const list = removeRecentSite(existing, -1);
+  assert.deepEqual(list, existing);
+});
+
+test("removeRecentSite: handles a missing/null list gracefully", () => {
+  assert.deepEqual(removeRecentSite(null, 0), []);
+  assert.deepEqual(removeRecentSite(undefined, 0), []);
+});
+
+test("removeRecentSite: never mutates the existing list in place", () => {
+  const existing = [{ label: "A" }, { label: "B" }];
+  removeRecentSite(existing, 0);
+  assert.equal(existing.length, 2);
 });

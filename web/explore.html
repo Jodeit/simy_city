@@ -139,6 +139,9 @@
   .recentStrip[open] summary::before{content:"▾ "}
   .recentList{margin-top:7px;font-size:.85rem;line-height:1.9}
   .recentList a{color:var(--garden-deep)}
+  .recentX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:.85rem;padding:0 0 0 6px;vertical-align:middle}
+  .recentX:hover{color:var(--danger-fg)}
+  .recentClear{display:inline-block;margin-top:7px;font-size:.78rem;color:var(--slate)}
   /* mode switch */
   .modes{display:flex;gap:0;background:#1f2c2a;border:1px solid #38514c;border-radius:10px;overflow:hidden}
   .mbtn{font:inherit;font-size:.85rem;font-weight:700;border:none;background:transparent;color:#cfe6d3;padding:.45em .9em;cursor:pointer}
@@ -240,6 +243,7 @@
     <details class="recentStrip" id="recentStrip" style="display:none">
       <summary>Recently viewed <span id="recentCount"></span></summary>
       <div class="recentList" id="recentList"></div>
+      <a href="#" id="recentClear" class="recentClear">clear</a>
     </details>
     <div class="empty" id="empty">
       <h2>Find your next move.</h2>
@@ -1399,23 +1403,32 @@ let recent=[];
 function loadRecent(){
   try{recent=JSON.parse(localStorage.getItem(RECENT_KEY)||"[]");}catch(e){recent=[];}
   renderRecent();
+  const clearBtn=document.getElementById("recentClear");
+  if(clearBtn)clearBtn.onclick=e=>{e.preventDefault();recent=[];saveRecent();};
 }
 function saveRecent(){ localStorage.setItem(RECENT_KEY,JSON.stringify(recent)); renderRecent(); }
 function recordRecent(snapshot){ recent=addRecentSite(recent,snapshot,6); saveRecent(); }
+function removeRecent(i){ recent=removeRecentSite(recent,i); saveRecent(); }
 function renderRecent(){
   const strip=document.getElementById("recentStrip"); if(!strip)return;
   if(!recent.length){strip.style.display="none";return;}
   strip.style.display="block";
   const count=document.getElementById("recentCount"); if(count)count.textContent=`(${recent.length})`;
   const list=document.getElementById("recentList");
-  list.innerHTML=recent.map((p,i)=>
-    `<a href="#" class="recentGo" data-i="${i}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`+
-    (p.use?` <span class="src">— ${esc(p.use)}</span>`:"")
-  ).join("<br>");
+  list.innerHTML=recent.map((p,i)=>{
+    const label=p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
+    return `<a href="#" class="recentGo" data-i="${i}">${esc(label)}</a>`+
+      (p.use?` <span class="src">— ${esc(p.use)}</span>`:"")+
+      ` <button class="recentX" title="remove" aria-label="Remove ${esc(label)} from recently viewed" data-i="${i}">✕</button>`;
+  }).join("<br>");
   list.querySelectorAll(".recentGo").forEach(a=>a.onclick=e=>{
     e.preventDefault();
     const p=recent[+a.dataset.i]; if(!p)return;
     map.setView([p.lat,p.lng],17); analyze(L.latLng(p.lat,p.lng));
+  });
+  list.querySelectorAll(".recentX").forEach(b=>b.onclick=e=>{
+    e.preventDefault(); e.stopPropagation();
+    removeRecent(+b.dataset.i);
   });
 }
 // Every lastParcelSummary assignment (whether or not a parcel actually
