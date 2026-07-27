@@ -642,6 +642,48 @@ Ground rules for each run:
       spot-check on the real site (actual field values, portal link) is a
       good human follow-up, same as every prior county addition.
 
+- [x] **Respect `prefers-reduced-motion` on the landing page's decorative SVG
+      animations.** The earlier reduced-motion pass covered `web/explore.html`'s
+      `.loading` pulse but explicitly scoped out `web/index.html`'s "How it
+      works" dependency-diagram SVGs: `.dash` (`stroke-dasharray` marching-ants,
+      `@keyframes dash`, 1.4s infinite) and `.spin` (`@keyframes spin`, 26s
+      infinite rotation). Moved both `animation` declarations off the base
+      `.dash`/`.spin` rules and into a `@media (prefers-reduced-motion:
+      no-preference)` block — same pattern already used for explore.html's
+      `.loading` pulse — so the diagrams render as static (still legible; the
+      arrows/loop shape don't depend on the animation) for visitors who've
+      asked their OS to minimize motion. Verified in headless Chromium: both
+      pages load with zero console/page errors; with
+      `page.emulateMedia({reducedMotion:'reduce'})`, a `.dash`/`.spin`
+      element's computed `animationName` is `none`, and with
+      `{reducedMotion:'no-preference'}` it's `dash`/`spin` (unchanged
+      behavior) — same assertion shape as the earlier explore.html check.
+- [ ] **One more parcel county.** `PARCEL_SOURCES` covers six counties so far
+      (Travis, Maricopa, Harris, Bexar, Los Angeles, King). A good next
+      candidate is Cook County, IL (Chicago; publishes a public ArcGIS
+      parcel MapServer) or Miami-Dade County, FL. Same approach as the prior
+      six: find the live MapServer URL and field names (web search, since
+      this sandbox can't reach ArcGIS hosts directly to introspect schemas),
+      extend `pick()`'s candidate field lists only for genuinely new field
+      names, add a `zoning_note`/`county_state`, and — if no stable
+      per-parcel deep-link scheme is documented — link to the assessor's
+      search page rather than guessing a URL that might 404. A live
+      spot-check of the new source is a good human follow-up, same as every
+      prior county.
+- [ ] **Let people clear or remove individual recently-viewed sites.** The
+      "Recently viewed" strip (`web/explore.html`, `recent`/`renderRecent`/
+      `recordRecent`, `RECENT_KEY="simy_recent_v1"`) only ever grows (capped
+      at 6, oldest evicted) — there's no way to remove an entry short of
+      clearing `localStorage` from devtools, unlike the Compare-pins list
+      which already has a per-row "✕" remove button and a "clear all". Add
+      the same affordance here: a small "✕" per `recentList` row (calling a
+      new `removeRecentSite(list, i)` pure helper in `web/logic.js`, mirrored
+      on the existing `addRecentSite` helper/tests) and a "clear" link on the
+      strip when non-empty. Verify with new unit tests for
+      `removeRecentSite` (removes the right index, no-ops on an out-of-range
+      index) and in headless Chromium that clicking ✕ on a recorded entry
+      updates the strip and `localStorage` with zero console errors.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).

@@ -92,9 +92,13 @@
   figure{margin:0}
   figcaption{color:var(--slate);font-size:.88rem;margin-top:8px}
   .flow line, .flow path{stroke-linecap:round}
-  .dash{stroke-dasharray:5 7;animation:dash 1.4s linear infinite}
+  .dash{stroke-dasharray:5 7}
+  .spin{transform-origin:center}
+  @media (prefers-reduced-motion: no-preference){
+    .dash{animation:dash 1.4s linear infinite}
+    .spin{animation:spin 26s linear infinite}
+  }
   @keyframes dash{to{stroke-dashoffset:-24}}
-  .spin{transform-origin:center;animation:spin 26s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
 
   /* giants */
