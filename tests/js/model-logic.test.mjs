@@ -16,7 +16,7 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite,
+  removeRecentSite, sortPins,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -777,4 +777,46 @@ test("removeRecentSite: never mutates the existing list in place", () => {
   const existing = [{ label: "A" }, { label: "B" }];
   removeRecentSite(existing, 0);
   assert.equal(existing.length, 2);
+});
+
+// ---- sortPins (Compare-parcels table sort) ----
+
+test("sortPins: sorts ascending by a numeric key by default", () => {
+  const pins = [{ label: "B", acres: 5 }, { label: "A", acres: 2 }, { label: "C", acres: 9 }];
+  const sorted = sortPins(pins, "acres", "asc");
+  assert.deepEqual(sorted.map(p => p.label), ["A", "B", "C"]);
+});
+
+test("sortPins: sorts descending when dir is 'desc'", () => {
+  const pins = [{ label: "B", value: 500 }, { label: "A", value: 200 }, { label: "C", value: 900 }];
+  const sorted = sortPins(pins, "value", "desc");
+  assert.deepEqual(sorted.map(p => p.label), ["C", "B", "A"]);
+});
+
+test("sortPins: pins missing the sort field sort last, in both directions", () => {
+  const pins = [{ label: "known", acres: 3 }, { label: "unknown" }, { label: "known2", acres: 1 }];
+  assert.deepEqual(sortPins(pins, "acres", "asc").map(p => p.label), ["known2", "known", "unknown"]);
+  assert.deepEqual(sortPins(pins, "acres", "desc").map(p => p.label), ["known", "known2", "unknown"]);
+});
+
+test("sortPins: treats an unspecified dir as ascending", () => {
+  const pins = [{ acres: 3 }, { acres: 1 }, { acres: 2 }];
+  assert.deepEqual(sortPins(pins, "acres").map(p => p.acres), [1, 2, 3]);
+});
+
+test("sortPins: handles a list where every pin is missing the field", () => {
+  const pins = [{ label: "A" }, { label: "B" }];
+  const sorted = sortPins(pins, "value", "asc");
+  assert.equal(sorted.length, 2);
+});
+
+test("sortPins: never mutates the input list in place", () => {
+  const pins = [{ acres: 3 }, { acres: 1 }];
+  sortPins(pins, "acres", "asc");
+  assert.equal(pins[0].acres, 3);
+});
+
+test("sortPins: handles a missing/null pins list gracefully", () => {
+  assert.deepEqual(sortPins(null, "acres", "asc"), []);
+  assert.deepEqual(sortPins(undefined, "acres", "asc"), []);
 });

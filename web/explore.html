@@ -130,6 +130,8 @@
   .cmpTable td.lbl{color:var(--slate);white-space:nowrap}
   .cmpX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:1rem;padding:0 4px}
   .cmpX:hover{color:var(--danger-fg)}
+  .cmpSortBtn{background:none;border:none;color:var(--slate);cursor:pointer;font:inherit;font-weight:inherit;padding:0;text-decoration:underline dotted}
+  .cmpSortBtn:hover,.cmpSortBtn[aria-pressed="true"]{color:var(--ink)}
   .cmpEmpty{color:var(--slate);font-size:.86rem}
   /* recently-viewed strip */
   .recentStrip{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 11px;margin-bottom:12px}
@@ -1483,26 +1485,45 @@ function addPin(){
   return {ok:true,msg:`pinned — ⚖️ Compare (${pins.length})`};
 }
 function removePin(i){ pins.splice(i,1); savePins(); }
+// Compare's table is transposed (fields as rows, pins as columns), so
+// "sortable columns" (backlog ask) becomes clickable *row labels* for the
+// two numeric fields — clicking re-sorts pins and re-renders; a second click
+// on the same field flips direction.
+let cmpSort={key:null,dir:"asc"};
+const CMP_SORT_KEYS={"Acreage":"acres","Appraised value":"value"};
 function renderCompare(){
   const el=document.getElementById("compareBody"); if(!el)return;
   if(!pins.length){el.innerHTML=`<p class="cmpEmpty">No pins yet. Analyze a parcel, then click 📌 <b>Pin to compare</b> in its toolbar.</p>`;return;}
+  const sorted=cmpSort.key?sortPins(pins,cmpSort.key,cmpSort.dir):pins;
   const fmtAcres=a=>a!=null?a.toFixed(2)+" ac":"—";
   const fmtVal=v=>v!=null?"$"+v.toLocaleString():"—";
+  const lbl=(text)=>{
+    const key=CMP_SORT_KEYS[text];
+    if(!key) return text;
+    const active=cmpSort.key===key;
+    const arrow=active?(cmpSort.dir==="desc"?" ▼":" ▲"):"";
+    return `<button type="button" class="cmpSortBtn" data-key="${key}" aria-pressed="${active}">${text}${arrow}</button>`;
+  };
   const rows=[
-    ["", pins.map((p,i)=>`<button class="cmpX" title="remove" aria-label="Remove pinned parcel: ${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}" data-i="${i}">✕</button>`)],
-    ["Site", pins.map(p=>`<a href="#" class="cmpGo" data-lat="${p.lat}" data-lng="${p.lng}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`)],
-    ["Owner", pins.map(p=>esc(p.owner||"—"))],
-    ["Acreage", pins.map(p=>fmtAcres(p.acres))],
-    ["Appraised value", pins.map(p=>fmtVal(p.value))],
-    ["Land use", pins.map(p=>esc(p.land||"—"))],
-    ["County", pins.map(p=>esc(p.county||"—"))],
-    ["Testing", pins.map(p=>esc(p.use||"—"))],
-    ["Verdict", pins.map(p=>esc(p.verdict||"—"))],
+    ["", sorted.map((p,i)=>`<button class="cmpX" title="remove" aria-label="Remove pinned parcel: ${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}" data-i="${pins.indexOf(p)}">✕</button>`)],
+    ["Site", sorted.map(p=>`<a href="#" class="cmpGo" data-lat="${p.lat}" data-lng="${p.lng}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`)],
+    ["Owner", sorted.map(p=>esc(p.owner||"—"))],
+    [lbl("Acreage"), sorted.map(p=>fmtAcres(p.acres))],
+    [lbl("Appraised value"), sorted.map(p=>fmtVal(p.value))],
+    ["Land use", sorted.map(p=>esc(p.land||"—"))],
+    ["County", sorted.map(p=>esc(p.county||"—"))],
+    ["Testing", sorted.map(p=>esc(p.use||"—"))],
+    ["Verdict", sorted.map(p=>esc(p.verdict||"—"))],
   ];
   el.innerHTML=`<table class="cmpTable"><tbody>`+
     rows.map(([label,cells])=>`<tr><td class="lbl">${label}</td>${cells.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")+
     `</tbody></table>`;
   el.querySelectorAll(".cmpX").forEach(b=>b.onclick=()=>removePin(+b.dataset.i));
+  el.querySelectorAll(".cmpSortBtn").forEach(b=>b.onclick=()=>{
+    const key=b.dataset.key;
+    cmpSort=(cmpSort.key===key)?{key,dir:cmpSort.dir==="asc"?"desc":"asc"}:{key,dir:"asc"};
+    renderCompare();
+  });
   el.querySelectorAll(".cmpGo").forEach(a=>a.onclick=e=>{e.preventDefault();
     const lat=+a.dataset.lat,lng=+a.dataset.lng;
     closeModal(document.getElementById("compareModal"));

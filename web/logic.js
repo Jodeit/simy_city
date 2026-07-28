@@ -377,8 +377,30 @@ function removeRecentSite(list,i){
   return list.slice(0,i).concat(list.slice(i+1));
 }
 
+/* ---- sorting the Compare-parcels list ----
+   Compare's table is transposed (fields as rows, pins as columns), so
+   "sortable columns" means reordering the underlying `pins` array — the
+   render just re-draws with the new order. Numeric-aware: a pin missing the
+   sort field (null/undefined, e.g. a county whose GIS layer doesn't expose
+   appraised value) always sorts to the end, regardless of direction, rather
+   than landing at the front on a "desc" sort (treating "unknown" as bigger
+   than every real value would be misleading). */
+function sortPins(pins,key,dir){
+  const list=(pins||[]).slice();
+  const sign=dir==="desc"?-1:1;
+  list.sort((a,b)=>{
+    const av=a?a[key]:null, bv=b?b[key]:null;
+    const aMissing=av==null, bMissing=bv==null;
+    if(aMissing&&bMissing) return 0;
+    if(aMissing) return 1;
+    if(bMissing) return -1;
+    return (av-bv)*sign;
+  });
+  return list;
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,sortPins};
 }

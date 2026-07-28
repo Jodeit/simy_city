@@ -318,15 +318,31 @@ Ground rules for each run:
       correctly suppressed).
 
 ## Next (breadth) — newly added (3)
-- [ ] **Sortable Compare-parcels table.** The "⚖️ Compare" modal's table
+- [x] **Sortable Compare-parcels table.** The "⚖️ Compare" modal's table
       (pinned parcels, address/owner/acreage/appraised value/land use/county)
-      always renders in pin order. Add clickable column headers (acreage,
-      appraised value) that sort the pinned list ascending/descending —
-      a pure `sortPins(pins, key, dir)` helper in `web/logic.js` (numeric-aware,
-      missing/unavailable values sort last) wired to `renderCompare()`, with
-      unit tests for each sort key, both directions, and missing-value
-      handling. No network involved — pure client-side reordering of
-      already-resolved snapshots.
+      always rendered in pin order. Compare's table is transposed (fields as
+      rows, pins as columns), so "sortable columns" became clickable *row
+      labels* for the two numeric fields (Acreage, Appraised value) instead
+      of `<th>` column headers — clicking re-sorts the pinned list and
+      re-renders; a second click on the same label flips direction (▲/▼
+      indicator, `aria-pressed`). Added a pure `sortPins(pins, key, dir)`
+      helper to `web/logic.js` (numeric-aware, non-mutating; a pin missing
+      the sort field always sorts last regardless of direction rather than
+      landing first on a "desc" sort) with 7 new unit tests (ascending,
+      descending, missing-value-sorts-last in both directions, default
+      direction, all-missing list, non-mutation, null/undefined list). The
+      per-row "✕" remove button now keys off `pins.indexOf(p)` on the sorted
+      view rather than the display index, so removing a pin while a
+      non-default sort is active still removes the correct underlying pin.
+      No network involved — pure client-side reordering of already-resolved
+      snapshots. Verified in headless Chromium: both pages load with zero
+      genuine console/page errors (only the expected sandbox-blocked
+      `ERR_TUNNEL_CONNECTION_FAILED` network errors); seeding three pins
+      with mixed/missing acreage and appraised-value data and driving the
+      real Compare-open + sort-button clicks end to end produced correct
+      ascending/descending orders for both fields, correctly sorted the
+      null-value pin last on an ascending sort, and confirmed the ✕ button's
+      target still mapped to the correct pin after sorting.
 - [ ] **Keyboard-shortcuts help overlay.** The accessibility pass already made
       path cards, mode/use toggles, and modals fully keyboard-operable, but
       there's no in-app way to discover this. Add a small "?" help overlay
