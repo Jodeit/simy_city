@@ -658,18 +658,41 @@ Ground rules for each run:
       element's computed `animationName` is `none`, and with
       `{reducedMotion:'no-preference'}` it's `dash`/`spin` (unchanged
       behavior) — same assertion shape as the earlier explore.html check.
-- [ ] **One more parcel county.** `PARCEL_SOURCES` covers six counties so far
-      (Travis, Maricopa, Harris, Bexar, Los Angeles, King). A good next
-      candidate is Cook County, IL (Chicago; publishes a public ArcGIS
-      parcel MapServer) or Miami-Dade County, FL. Same approach as the prior
-      six: find the live MapServer URL and field names (web search, since
-      this sandbox can't reach ArcGIS hosts directly to introspect schemas),
-      extend `pick()`'s candidate field lists only for genuinely new field
-      names, add a `zoning_note`/`county_state`, and — if no stable
-      per-parcel deep-link scheme is documented — link to the assessor's
-      search page rather than guessing a URL that might 404. A live
-      spot-check of the new source is a good human follow-up, same as every
-      prior county.
+- [x] **One more parcel county.** Added Cook County, IL (Chicago) as a 7th
+      `PARCEL_SOURCES` entry — `gis.cookcountyil.gov`'s public
+      `CookViewer3Parcels/MapServer/0` (found via web search since this
+      sandbox can't reach ArcGIS hosts directly to introspect schemas; search
+      results consistently confirmed the layer's field list —
+      `PIN10`/`PIN14_dash`/`street_address` — across multiple independent
+      hits). Added those field names to the shared `pick()` id/address
+      candidate lists. Unlike Harris/Bexar/LA/King (no documented per-parcel
+      deep-link, so those fall back to a search page), the Cook County
+      Assessor *does* publish a stable per-PIN URL
+      (`cookcountyassessoril.gov/pin/<14-digit PIN, no dashes>`), confirmed
+      live via search — so `record()` strips the dashes from `PIN14_dash`
+      (falling back to `PIN10`/`PIN`) and builds a real deep link instead of
+      guessing. The public layer doesn't expose owner name, land use,
+      acreage, or appraised value (those live in the county's separate,
+      non-GIS Assessor roll) — left unmapped rather than guessing a field
+      that isn't actually there, same graceful partial-field-coverage every
+      other thin-layer county (King) already established. Illinois counties
+      do zone unincorporated land (unlike TX, like AZ/CA/WA), so this needed
+      its own `zoning_note`. Verified in headless Chromium: both pages load
+      with zero console/page errors; `inBbox` correctly routes a
+      downtown-Chicago point to the new source and still finds no source for
+      an out-of-coverage point (Denver); `record()` was driven directly
+      through a dashed-`PIN14_dash` payload, a `PIN10`-only payload, and an
+      empty-attributes payload, producing the correct per-PIN deep link (or
+      search-page fallback) each time; `showParcel` was driven end-to-end
+      (via a real `analyze()` call building the panel first, then a mocked
+      Cook-County-shaped ArcGIS attribute payload) and rendered the parcel ID,
+      address, new IL zoning note, and record link correctly; and a real
+      simulated map click at that point with `warehouse_club` selected ran
+      the whole fan-out (parcel + demand) without throwing, degrading to
+      "couldn't reach the county parcel service" since outbound network to
+      `gis.cookcountyil.gov` is blocked from this sandbox — a live
+      spot-check on the real site (actual field values, PIN URL format) is a
+      good human follow-up, same as every prior county addition.
 - [x] **Let people clear or remove individual recently-viewed sites.** The
       "Recently viewed" strip (`web/explore.html`, `recent`/`renderRecent`/
       `recordRecent`, `RECENT_KEY="simy_recent_v1"`) only ever grew (capped
