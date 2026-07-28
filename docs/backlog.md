@@ -317,6 +317,34 @@ Ground rules for each run:
       behavior), and with `{reducedMotion: 'reduce'}` it's `none` (animation
       correctly suppressed).
 
+## Next (breadth) — newly added (3)
+- [ ] **Sortable Compare-parcels table.** The "⚖️ Compare" modal's table
+      (pinned parcels, address/owner/acreage/appraised value/land use/county)
+      always renders in pin order. Add clickable column headers (acreage,
+      appraised value) that sort the pinned list ascending/descending —
+      a pure `sortPins(pins, key, dir)` helper in `web/logic.js` (numeric-aware,
+      missing/unavailable values sort last) wired to `renderCompare()`, with
+      unit tests for each sort key, both directions, and missing-value
+      handling. No network involved — pure client-side reordering of
+      already-resolved snapshots.
+- [ ] **Keyboard-shortcuts help overlay.** The accessibility pass already made
+      path cards, mode/use toggles, and modals fully keyboard-operable, but
+      there's no in-app way to discover this. Add a small "?" help overlay
+      (opened via a visible button and the `?` key, closed via Escape or a
+      close button, reusing the existing `openModal()`/`closeModal()` focus-
+      trap pair) listing the actual shortcuts: Tab/Enter/Space to activate
+      path cards and toggles, Escape to close a modal, `?` to open this one.
+      Verify in headless Chromium that `?` opens it, Escape closes it and
+      returns focus, and it's reachable by Tab like the other modals.
+- [ ] **Undo for "clear all recently-viewed".** The recently-viewed list's
+      "clear all" link wipes `localStorage` immediately with no confirmation
+      or recovery. Add a brief inline "Cleared — Undo" affordance (a few
+      seconds, or until the next navigation) that restores the exact list
+      that was cleared — a pure `clearRecentSites(list)` / `undoClear(saved)`
+      pair in `web/logic.js` with unit tests for the restore-exact-list case
+      and the undo-window-expired case, wired into the existing recently-
+      viewed panel.
+
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
       the layer switcher, same opt-in/off-by-default pattern as the FEMA flood
