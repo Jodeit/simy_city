@@ -15,6 +15,77 @@ Ground rules for each run:
   docs/tests-only progress.
 
 ## Now (high value)
+- [ ] **Reverse search, step 1: pure grid-scan/ranking engine.** Everything
+      today starts from a clicked point ("tell me about *this* parcel"). The
+      requested flip: "I want to open a food-truck court far from established
+      restaurants but surrounded by residential — find me a few candidates."
+      That's a new *mode*, not a new land use, and it needs a computational
+      core before any UI. Add pure, tested helpers to `web/logic.js`:
+      `sampleGrid(center, radiusM, spacingM)` — returns an array of
+      `{lat,lng}` points covering a disc around `center` (bounded to a sane
+      count, e.g. ≤150 points, so a search never explodes into hundreds of
+      candidates); and `rankCandidates(points, competitors, demandPoints,
+      opts)` — for each grid point, reuses the existing `haversine()` helper
+      to compute distance to the nearest `competitors` entry and a count of
+      `demandPoints` within `opts.demandRadiusM` (e.g. residential
+      buildings/rooftops), combines those into a score (`opts.preferFar`:
+      reward distance from competitors vs. `opts.preferNear`: reward
+      proximity — the food-truck example wants *both* at once: far from
+      competitors, near residential), and returns the top `opts.limit`
+      (default 5–8) points sorted best-first, non-mutating, same style as
+      `sortPins`/`cheapest`. No network, no map, no UI in this item — just
+      the scoring primitive with unit tests covering: empty
+      competitors/demand lists, a point exactly at a competitor (distance 0
+      handling), ties, `preferFar` vs `preferNear` producing different
+      orders on the same synthetic data, and the point cap. This unblocks
+      the next two items without touching the live map yet.
+- [ ] **Reverse search, step 2: a "far from X, near Y" land use to search
+      for.** The four existing land uses (`data_center`, `warehouse_club`,
+      `fast_casual`, `residential_subdivision`) all gate on "enough nearby
+      demand" — none of them gate on "far from an existing competitor,"
+      which is exactly the food-truck-court example's core criterion. Add a
+      5th land use to `data_sources/layers.yaml`, e.g. `food_truck_court`
+      (label "Food Truck Court / Mobile Vending Site"): `requires.demand`
+      keeps the familiar nearby-rooftop reuse (small radius, ~1–1.5 km walk/
+      drive — a food-truck court draws a much tighter radius than a
+      fast-casual restaurant), `requires.parcel.min_buildable_acres` very
+      small (~0.25 ac — it's a paved lot, not a building), and a **new**
+      `requires.competition` shape this model doesn't have yet: something
+      like `min_distance_km_from_nearest: 1.0` on existing restaurants/food
+      vendors (`amenity=fast_food|restaurant`), inverting the usual "avoid
+      zero, allow crowding" competition read into "the *farther* the
+      better." `competition` is already a registered layer (used today by
+      `warehouse_club`'s `max_same_brand_in_trade_area`) and
+      `simy_city/registry.py`'s validator only checks that `requires` keys
+      name a *known layer id*, not a specific field shape — so this new
+      field needs no Python validator changes, just the YAML entry and the
+      JS-side code that reads it. Add the single-point verdict for this use in
+      `web/explore.html` (same wait-for-both-legs pattern as the other four
+      `maybeRender*Verdict` functions) so `food_truck_court` works properly
+      in today's click-a-point Test-a-use mode *before* step 3 tries to
+      search a whole area for it — a new land use should earn its keep on
+      its own first.
+- [ ] **Reverse search, step 3: the "🔍 Find candidate sites" search UI.**
+      Wires steps 1–2 into an actual area search. Add a mode (a toggle next
+      to today's "Explore" / "Test a use" path cards, or a button that
+      appears once a use is selected in Test-a-use mode) that takes a
+      search center (map center, or the result of the existing address
+      search box) and a radius, then: **one** Overpass bbox query for the
+      whole search area's relevant demand points (rooftops/residential) and
+      **one** for competitors (reusing the per-use `compQ` already defined
+      in `USE_DEMAND`, `web/explore.html`) — critically, *not* one query per
+      candidate grid point, which would either hammer the free Overpass API
+      or take forever; `sampleGrid` + `rankCandidates` from step 1 then do
+      all the per-point scoring locally from those two already-fetched
+      result sets. Render the top results as numbered markers distinct from
+      the normal single-parcel marker, each with a one-line "why" (e.g. "≈40
+      homes within 1 km · nearest food vendor 1.6 km away"), and clicking one
+      runs the existing single-point `analyze()` flow so a candidate flows
+      straight into the normal parcel/checklist read. Cap results (5–8) and
+      show a clear empty state ("no candidates matched — try a larger
+      radius") rather than silently returning nothing. Verify in headless
+      Chromium with a mocked Overpass response, same pattern as every other
+      network-backed feature in this app.
 - [x] **Real verdict for warehouse_club.** The last of the four land uses still
       judged on rooftop demand alone. Blended the existing rooftop trade-area
       read with the site-size gate `layers.yaml` already documents for it
