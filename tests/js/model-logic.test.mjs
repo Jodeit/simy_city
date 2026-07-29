@@ -16,7 +16,7 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, sortPins,
+  removeRecentSite, sortPins, sampleGrid, rankCandidates,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -819,4 +819,106 @@ test("sortPins: never mutates the input list in place", () => {
 test("sortPins: handles a missing/null pins list gracefully", () => {
   assert.deepEqual(sortPins(null, "acres", "asc"), []);
   assert.deepEqual(sortPins(undefined, "acres", "asc"), []);
+});
+
+// ---- reverse search step 1: sampleGrid / rankCandidates ----
+
+test("sampleGrid: every point falls within radiusM of center", () => {
+  const center = { lat: 30.2672, lng: -97.7431 };
+  const points = sampleGrid(center, 500, 100);
+  assert.ok(points.length > 1);
+  points.forEach(p => {
+    const km = haversine(center.lat, center.lng, p.lat, p.lng);
+    assert.ok(km * 1000 <= 500 * 1.05, `point ${km * 1000}m exceeded radius`);
+  });
+});
+
+test("sampleGrid: includes the center point itself", () => {
+  const center = { lat: 30.2672, lng: -97.7431 };
+  const points = sampleGrid(center, 300, 100);
+  assert.ok(points.some(p => Math.abs(p.lat - center.lat) < 1e-9 && Math.abs(p.lng - center.lng) < 1e-9));
+});
+
+test("sampleGrid: a zero radius returns just the center point", () => {
+  const center = { lat: 30.2672, lng: -97.7431 };
+  assert.deepEqual(sampleGrid(center, 0, 100), [{ lat: center.lat, lng: center.lng }]);
+});
+
+test("sampleGrid: caps the point count at 150 even for a huge radius / tiny spacing", () => {
+  const points = sampleGrid({ lat: 30.2672, lng: -97.7431 }, 5000, 50);
+  assert.ok(points.length <= 150, `got ${points.length} points`);
+  assert.ok(points.length > 50, "should still cover the area, not collapse to a handful");
+});
+
+test("sampleGrid: handles a missing/invalid center gracefully", () => {
+  assert.deepEqual(sampleGrid(null, 500, 100), []);
+  assert.deepEqual(sampleGrid({ lat: NaN, lng: -97 }, 500, 100), []);
+});
+
+test("rankCandidates: empty competitors and demand lists don't throw and everyone ties", () => {
+  const points = [{ lat: 30.27, lng: -97.74 }, { lat: 30.28, lng: -97.75 }];
+  const ranked = rankCandidates(points, [], [], { preferFar: true, preferNear: true, demandRadiusM: 500 });
+  assert.equal(ranked.length, 2);
+  assert.equal(ranked[0].score, ranked[1].score);
+});
+
+test("rankCandidates: a point exactly at a competitor gets distance 0, not null", () => {
+  const p = { lat: 30.27, lng: -97.74 };
+  const ranked = rankCandidates([p], [{ lat: 30.27, lng: -97.74 }], [], { preferFar: true });
+  assert.equal(ranked[0].nearestCompetitorKm, 0);
+});
+
+test("rankCandidates: ties preserve original point order (stable sort)", () => {
+  const points = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }, { lat: 3, lng: 3 }];
+  const ranked = rankCandidates(points, [], [], {});
+  assert.deepEqual(ranked.map(p => `${p.lat},${p.lng}`), ["1,1", "2,2", "3,3"]);
+});
+
+test("rankCandidates: preferFar and preferNear produce different orders on the same data", () => {
+  const near = { lat: 30.2700, lng: -97.7400 }; // close to the competitor, surrounded by demand
+  const far = { lat: 30.3200, lng: -97.7900 };  // far from the competitor, no demand nearby
+  const points = [near, far];
+  const competitors = [{ lat: 30.2701, lng: -97.7401 }];
+  const demandPoints = [
+    { lat: 30.2701, lng: -97.7401 }, { lat: 30.2702, lng: -97.7402 }, { lat: 30.2703, lng: -97.7403 },
+  ];
+  const byFar = rankCandidates(points, competitors, demandPoints, { preferFar: true, demandRadiusM: 500 });
+  const byNear = rankCandidates(points, competitors, demandPoints, { preferNear: true, demandRadiusM: 500 });
+  assert.equal(byFar[0].lat, far.lat);
+  assert.equal(byNear[0].lat, near.lat);
+});
+
+test("rankCandidates: a point with no competitors at all scores as maximally far", () => {
+  const ranked = rankCandidates([{ lat: 30.27, lng: -97.74 }], [], [], { preferFar: true });
+  assert.equal(ranked[0].nearestCompetitorKm, null);
+  assert.ok(ranked[0].score > 0);
+});
+
+test("rankCandidates: counts demandPoints only within demandRadiusM", () => {
+  const p = { lat: 30.2700, lng: -97.7400 };
+  const demandPoints = [
+    { lat: 30.2701, lng: -97.7401 }, // ~13m away
+    { lat: 30.5000, lng: -97.7400 }, // ~26km away
+  ];
+  const ranked = rankCandidates([p], [], demandPoints, { preferNear: true, demandRadiusM: 100 });
+  assert.equal(ranked[0].demandCount, 1);
+});
+
+test("rankCandidates: respects opts.limit and defaults to 6", () => {
+  const points = Array.from({ length: 10 }, (_, i) => ({ lat: 30 + i * 0.01, lng: -97 }));
+  assert.equal(rankCandidates(points, [], [], {}).length, 6);
+  assert.equal(rankCandidates(points, [], [], { limit: 3 }).length, 3);
+});
+
+test("rankCandidates: never mutates the input points array", () => {
+  const points = [{ lat: 1, lng: 1 }, { lat: 2, lng: 2 }];
+  const snapshot = points.map(p => ({ ...p }));
+  rankCandidates(points, [{ lat: 1, lng: 1 }], [], { preferFar: true });
+  assert.deepEqual(points, snapshot);
+});
+
+test("rankCandidates: handles missing competitors/demandPoints/opts gracefully", () => {
+  const ranked = rankCandidates([{ lat: 1, lng: 1 }], null, null, undefined);
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].score, 0);
 });

@@ -15,30 +15,43 @@ Ground rules for each run:
   docs/tests-only progress.
 
 ## Now (high value)
-- [ ] **Reverse search, step 1: pure grid-scan/ranking engine.** Everything
-      today starts from a clicked point ("tell me about *this* parcel"). The
-      requested flip: "I want to open a food-truck court far from established
-      restaurants but surrounded by residential — find me a few candidates."
-      That's a new *mode*, not a new land use, and it needs a computational
-      core before any UI. Add pure, tested helpers to `web/logic.js`:
-      `sampleGrid(center, radiusM, spacingM)` — returns an array of
-      `{lat,lng}` points covering a disc around `center` (bounded to a sane
-      count, e.g. ≤150 points, so a search never explodes into hundreds of
-      candidates); and `rankCandidates(points, competitors, demandPoints,
-      opts)` — for each grid point, reuses the existing `haversine()` helper
-      to compute distance to the nearest `competitors` entry and a count of
-      `demandPoints` within `opts.demandRadiusM` (e.g. residential
-      buildings/rooftops), combines those into a score (`opts.preferFar`:
-      reward distance from competitors vs. `opts.preferNear`: reward
-      proximity — the food-truck example wants *both* at once: far from
-      competitors, near residential), and returns the top `opts.limit`
-      (default 5–8) points sorted best-first, non-mutating, same style as
-      `sortPins`/`cheapest`. No network, no map, no UI in this item — just
-      the scoring primitive with unit tests covering: empty
-      competitors/demand lists, a point exactly at a competitor (distance 0
-      handling), ties, `preferFar` vs `preferNear` producing different
-      orders on the same synthetic data, and the point cap. This unblocks
-      the next two items without touching the live map yet.
+- [x] **Reverse search, step 1: pure grid-scan/ranking engine.** Added
+      `sampleGrid(center, radiusM, spacingM)` to `web/logic.js` — covers a
+      disc around `center` with a square grid at `spacingM` spacing (local
+      flat-earth offset math, same documented approximation style as
+      `sampleTradeAreaPoints`), keeping only points within `radiusM`;
+      hard-capped at 150 points via an evenly-strided subsample (not a
+      truncation) so a too-fine spacing/too-large radius combo still covers
+      the whole disc, just more sparsely, instead of exploding into hundreds
+      of per-point candidates. And `rankCandidates(points, competitors,
+      demandPoints, opts)` — for each grid point, reuses the existing
+      `haversine()` helper for distance to the nearest `competitors` entry
+      and a count of `demandPoints` within `opts.demandRadiusM`, combines
+      those into a score (`opts.preferFar` rewards distance from
+      competitors, `opts.preferNear` rewards demand proximity — both can be
+      on at once, which is what the food-truck-court example wants: far
+      from competitors, near residential), and returns the top `opts.limit`
+      (default 6) points sorted best-first, non-mutating, same "pure
+      transform, new array out" style as `sortPins`/`cheapest`. A point with
+      zero nearby competitors scores as maximally far rather than being
+      excluded. No network, no map, no UI in this item — just the scoring
+      primitives. Added 15 new unit tests covering: radius containment,
+      center-point inclusion, zero-radius edge case, the 150-point cap under
+      a huge-radius/tiny-spacing combo, missing/invalid center; empty
+      competitors/demand lists (score ties, no throw), a point exactly at a
+      competitor (distance-0 handling, not null), tie-order stability,
+      `preferFar` vs `preferNear` producing different top results on the
+      same synthetic data, no-competitors-scores-maximally-far,
+      demand-radius filtering, the `opts.limit`/default-6 behavior,
+      non-mutation of the input array, and missing
+      competitors/demandPoints/opts arguments. Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK), `node --test tests/js/*.test.mjs`
+      (125 passed, 15 new), and headless Chromium confirms both
+      `web/explore.html` and `web/index.html` still load with zero genuine
+      console/page errors (this item touches only `web/logic.js`/tests, no
+      HTML/UI wiring, so no page-load behavior changed). This unblocks the
+      next two reverse-search steps (a `food_truck_court` land use, then the
+      actual search UI) without touching the live map yet.
 - [ ] **Reverse search, step 2: a "far from X, near Y" land use to search
       for.** The four existing land uses (`data_center`, `warehouse_club`,
       `fast_casual`, `residential_subdivision`) all gate on "enough nearby

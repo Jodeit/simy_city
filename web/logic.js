@@ -399,8 +399,78 @@ function sortPins(pins,key,dir){
   return list;
 }
 
+/* ---- reverse search, step 1: grid-scan/ranking engine ----
+   Everything else in this app starts from a clicked point ("tell me about
+   *this* parcel"). This flips it: "find me a few candidate sites in an
+   area, ranked by how well they fit a use." Two pure, network-free
+   primitives — the actual Overpass area-query wiring is a later step; this
+   is just the scoring core, unit-testable in isolation.
+
+   `sampleGrid` covers a disc around `center` with a square grid at
+   `spacingM` spacing, keeping only points within `radiusM` of center — an
+   even areal sample, not a fixed count. Local flat-earth offset math (fine
+   at the city/neighborhood scale this is meant for) rather than proper
+   geodesics, matching `sampleTradeAreaPoints`'s documented approximation
+   above. Hard-capped at 150 points (a evenly-strided subsample, not a
+   truncation, so a too-fine spacing/too-large radius combo still covers the
+   whole disc, just more sparsely) so a search can never explode into
+   hundreds of per-point Overpass/scoring calls. */
+function sampleGrid(center,radiusM,spacingM){
+  if(!center||!isFinite(center.lat)||!isFinite(center.lng))return [];
+  const radius=(isFinite(radiusM)&&radiusM>0)?radiusM:0;
+  if(radius===0)return [{lat:center.lat,lng:center.lng}];
+  const spacing=(isFinite(spacingM)&&spacingM>0)?spacingM:100;
+  const R=6371000;
+  const metersPerDegLat=R*Math.PI/180;
+  const metersPerDegLng=metersPerDegLat*Math.cos(center.lat*Math.PI/180)||1e-9;
+  const steps=Math.max(1,Math.round(radius/spacing));
+  const raw=[];
+  for(let i=-steps;i<=steps;i++){
+    for(let j=-steps;j<=steps;j++){
+      const x=i*spacing,y=j*spacing;
+      if(Math.sqrt(x*x+y*y)>radius)continue;
+      raw.push({lat:center.lat+y/metersPerDegLat,lng:center.lng+x/metersPerDegLng});
+    }
+  }
+  const CAP=150;
+  if(raw.length<=CAP)return raw;
+  const stride=Math.ceil(raw.length/CAP);
+  return raw.filter((_,idx)=>idx%stride===0);
+}
+// Scores each candidate point by distance to the nearest `competitors` entry
+// and a count of `demandPoints` within `opts.demandRadiusM` — the two
+// signals a "find me a site" search actually cares about (the food-truck-
+// court example wants both: far from existing vendors, near residential).
+// `opts.preferFar`/`opts.preferNear` opt each signal into the combined
+// score independently (both can be on at once); a point with no competitors
+// at all is scored as maximally far rather than excluded. Non-mutating,
+// returns the top `opts.limit` (default 6) points best-score-first — same
+// "pure transform, new array out" style as `sortPins`/`cheapest`.
+function rankCandidates(points,competitors,demandPoints,opts){
+  opts=opts||{};
+  const demandRadiusM=opts.demandRadiusM||0;
+  const preferFar=!!opts.preferFar, preferNear=!!opts.preferNear;
+  const limit=opts.limit||6;
+  const comp=competitors||[], demand=demandPoints||[];
+  const NO_COMPETITOR_KM=1000; // sentinel: "no competitors nearby" reads as maximally far, not excluded
+  const scored=(points||[]).map(p=>{
+    let nearestCompetitorKm=null;
+    comp.forEach(c=>{
+      const km=haversine(p.lat,p.lng,c.lat,c.lng);
+      if(nearestCompetitorKm===null||km<nearestCompetitorKm)nearestCompetitorKm=km;
+    });
+    const demandCount=demand.reduce((n,d)=>haversine(p.lat,p.lng,d.lat,d.lng)*1000<=demandRadiusM?n+1:n,0);
+    let score=0;
+    if(preferFar)score+=nearestCompetitorKm===null?NO_COMPETITOR_KM:nearestCompetitorKm;
+    if(preferNear)score+=demandCount;
+    return {lat:p.lat,lng:p.lng,nearestCompetitorKm,demandCount,score};
+  });
+  scored.sort((a,b)=>b.score-a.score);
+  return scored.slice(0,limit);
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,sortPins};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,sortPins,sampleGrid,rankCandidates};
 }
