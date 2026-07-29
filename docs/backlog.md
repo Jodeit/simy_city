@@ -343,15 +343,23 @@ Ground rules for each run:
       ascending/descending orders for both fields, correctly sorted the
       null-value pin last on an ascending sort, and confirmed the ✕ button's
       target still mapped to the correct pin after sorting.
-- [ ] **Keyboard-shortcuts help overlay.** The accessibility pass already made
+- [x] **Keyboard-shortcuts help overlay.** The accessibility pass already made
       path cards, mode/use toggles, and modals fully keyboard-operable, but
-      there's no in-app way to discover this. Add a small "?" help overlay
-      (opened via a visible button and the `?` key, closed via Escape or a
-      close button, reusing the existing `openModal()`/`closeModal()` focus-
-      trap pair) listing the actual shortcuts: Tab/Enter/Space to activate
-      path cards and toggles, Escape to close a modal, `?` to open this one.
-      Verify in headless Chromium that `?` opens it, Escape closes it and
-      returns focus, and it's reachable by Tab like the other modals.
+      there was no in-app way to discover this. Added a "❓" header button and
+      a small help modal (reusing the existing `openModal()`/`closeModal()`
+      focus-trap pair, so Escape/backdrop-click/Tab-trap all come for free)
+      listing the actual shortcuts: Tab to move between controls, Enter/Space
+      to activate a focused path card or toggle, Escape to close a dialog,
+      and `?` to open this one. The `?` key is wired globally but ignored
+      while another modal is already open or while focus is in a text
+      input/textarea/select/contenteditable (so typing a literal "?" into
+      the address-search box doesn't hijack it). Verified in headless
+      Chromium: both pages load with zero console/page errors; clicking the
+      "❓" button opens the modal with focus moved inside; Escape closes it
+      and returns focus to the button; pressing `?` anywhere on the page
+      opens it; pressing `?` while focused in the address-search input does
+      *not* open it; the Close button closes it; and Tab keeps focus
+      trapped inside the modal (only its Close button is focusable).
 - [ ] **Undo for "clear all recently-viewed".** The recently-viewed list's
       "clear all" link wipes `localStorage` immediately with no confirmation
       or recovery. Add a brief inline "Cleared — Undo" affordance (a few

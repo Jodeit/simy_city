@@ -133,6 +133,8 @@
   .cmpSortBtn{background:none;border:none;color:var(--slate);cursor:pointer;font:inherit;font-weight:inherit;padding:0;text-decoration:underline dotted}
   .cmpSortBtn:hover,.cmpSortBtn[aria-pressed="true"]{color:var(--ink)}
   .cmpEmpty{color:var(--slate);font-size:.86rem}
+  .kbdList{list-style:none;margin:14px 0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:.9rem}
+  .kbdList kbd{background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:.05em .4em;font-size:.85em;margin-right:2px}
   /* recently-viewed strip */
   .recentStrip{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:8px 11px;margin-bottom:12px}
   .recentStrip summary{cursor:pointer;font-size:.82rem;font-weight:600;color:var(--ink);list-style:none}
@@ -227,6 +229,7 @@
     </div>
     <span class="hint"><a href="#" id="compareOpen">⚖️ Compare (<span id="compareCount">0</span>)</a> ·
       <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
+    <button class="themebtn" id="helpOpen" type="button" title="Keyboard shortcuts (?)">❓</button>
     <button class="themebtn" id="themeToggle" type="button" aria-pressed="false" title="Toggle dark mode">🌙</button>
   </header>
   <div id="mapwrap"><div id="map"></div>
@@ -301,6 +304,21 @@
       <button class="btng" id="byoClear">Clear</button>
       <button class="btng" id="byoCancel">Close</button>
       <button class="btnp" id="byoAdd">Add to map</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="helpModal">
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="helpModalTitle" tabindex="-1">
+    <h3 id="helpModalTitle">Keyboard shortcuts</h3>
+    <ul class="kbdList">
+      <li><kbd>Tab</kbd> move between path cards, mode/use toggles, and buttons</li>
+      <li><kbd>Enter</kbd> / <kbd>Space</kbd> activate the focused path card or toggle</li>
+      <li><kbd>Esc</kbd> close the open dialog (this one, Compare, or your data)</li>
+      <li><kbd>?</kbd> open this help</li>
+    </ul>
+    <div class="actions">
+      <button class="btng" id="helpCancel">Close</button>
     </div>
   </div>
 </div>
@@ -1632,6 +1650,24 @@ function wireCTA(){
   };
 }
 
+// "?" help overlay — reuses the openModal()/closeModal() focus-trap pair
+// every other modal (Compare, bring-your-own-data) already uses, so Escape
+// and Tab-trapping come for free.
+function wireHelp(){
+  const modal=document.getElementById('helpModal');
+  document.getElementById('helpOpen').onclick=e=>{e.preventDefault();openModal(modal);};
+  document.getElementById('helpCancel').onclick=()=>closeModal(modal);
+  modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
+  document.addEventListener("keydown",e=>{
+    if(e.key!=="?"||e.ctrlKey||e.metaKey||e.altKey)return;
+    if(document.querySelector(".modal.open"))return;
+    const tag=(e.target.tagName||"").toLowerCase();
+    if(tag==="input"||tag==="textarea"||tag==="select"||e.target.isContentEditable)return;
+    e.preventDefault();
+    openModal(modal);
+  });
+}
+
 function wireTheme(){
   const btn=document.getElementById('themeToggle');
   if(!btn) return;
@@ -1649,7 +1685,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); wireTheme(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); wireTheme(); wireHelp(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses
