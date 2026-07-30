@@ -714,6 +714,29 @@ window.SIMY_MODEL = {
         "traffic": "medium"
       },
       "notes": "The canonical SimCity feedback loop AND the chicken-and-egg crux: rooftops create the demand that makes retail viable \u2014 but developers build rooftops only when demand signals (jobs, amenities, absorption) are already present. When the amenity they're waiting for is itself waiting for rooftops, you get a standoff. See `enabling_edges` below and `simy standoffs`.\n"
+    },
+    "food_truck_court": {
+      "label": "Food Truck Court / Mobile Vending Site",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 1500,
+          "drive_time_min": 5
+        },
+        "parcel": {
+          "min_buildable_acres": 0.25
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "A much tighter radius than fast_casual \u2014 people walk or make a short local drive to a food truck court, they don't drive across town for one. The site itself barely needs anything (an empty paved lot), so the real gate is \"far enough from the nearest existing fast-food/restaurant that it isn't just eating an existing vendor's lunch crowd.\"\n"
     }
   },
   "actor_uses": {

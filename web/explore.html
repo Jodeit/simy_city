@@ -353,6 +353,8 @@ const USE_DEMAND={
     compQ:'nwr["amenity"="school"]', compLabel:"schools" },
   data_center:{ radius:8000, roofNeed:0, needLabel:"",
     compQ:'nwr["power"="substation"]', compLabel:"power substations" },
+  food_truck_court:{ radius:1200, roofNeed:1500, needLabel:"the tight walk/drive radius a food truck court needs",
+    compQ:'nwr["amenity"="fast_food"];nwr["amenity"="restaurant"]', compLabel:"food vendors" },
 };
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
@@ -379,6 +381,14 @@ let resState=null;
 // same wait-for-both-legs pattern as the other three real verdicts.
 const WC_MIN_ACRES=15;
 let wcState=null;
+// food_truck_court's real verdict: rooftop demand within a tight local radius,
+// blended with the site-size gate (`parcel.min_buildable_acres: 0.25` — a
+// paved lot, not a building) and a *farther-is-better* competition read (the
+// `competition.min_distance_km_from_nearest: 1.0` layers.yaml gate) — waits
+// for all three legs. Unlike every other use's competitor read, zero nearby
+// food vendors is the best possible outcome, not a data gap.
+const FTC_MIN_ACRES=0.25, FTC_MIN_COMPETITOR_KM=1.0;
+let ftcState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -555,7 +565,7 @@ function setLegend(){
     : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
 }
 function initUses(){
-  const order=["data_center","warehouse_club","fast_casual","residential_subdivision"];
+  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court"];
   const el=document.getElementById("uses");
   order.forEach(id=>{
     const b=document.createElement("button");
@@ -679,12 +689,14 @@ function analyze(latlng){
     fcState = current==="fast_casual" ? {seq} : null;
     resState = current==="residential_subdivision" ? {seq} : null;
     wcState = current==="warehouse_club" ? {seq} : null;
+    ftcState = current==="food_truck_court" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
     dcState=null;
     fcState=null;
     resState=null;
+    ftcState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -814,8 +826,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -824,6 +836,7 @@ function renderBuild(use,latlng){
               :isFC?"rooftops + nearby offices/shops (daytime population) blend into the verdict"
               :isRes?"parcel acreage (est. homes) vs. nearby school capacity decide the verdict"
               :isWC?"rooftops in the trade area + parcel acreage (needs a big flat pad) decide the verdict"
+              :isFTC?"nearby rooftops + parcel size + distance from the nearest existing food vendor (farther is better) decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -905,11 +918,13 @@ function runDemand(latlng,seq){
         : `🏠 <b>~${c.toLocaleString()}</b> rooftops within ${(cfg.radius/1000)} km <span class="src">(household proxy)</span>`);
       if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=c; maybeRenderFCVerdict(seq); }
       else if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=c; maybeRenderWCVerdict(seq); }
+      else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.roofs=c; maybeRenderFTCVerdict(seq); }
       else if(cfg.roofNeed) renderDemandVerdict(c,cfg);
     }, ()=>{
       setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works."));
       if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=null; maybeRenderFCVerdict(seq); }
       if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=null; maybeRenderWCVerdict(seq); }
+      if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.roofs=null; maybeRenderFTCVerdict(seq); }
     });
   // 1b) fast_casual only: daytime population proxy (offices/shops/workplaces) —
   // lunch traffic comes from workers and shoppers too, not just nearby homes.
@@ -939,11 +954,17 @@ function runDemand(latlng,seq){
       resState.schools = els.length;
       resState.nearestSchool = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderResVerdict(seq);
+    } else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){
+      // Farther-is-better: no competitor within radius is the best possible
+      // read (like rankCandidates' preferFar in logic.js), not a data gap.
+      ftcState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
+      maybeRenderFTCVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
     if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
     else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; resState.nearestSchool=null; maybeRenderResVerdict(seq); }
+    else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.compErr=true; maybeRenderFTCVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -1058,6 +1079,39 @@ function maybeRenderWCVerdict(seq){
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — clears the trade-area demand and the site-size gate"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// food_truck_court's real verdict — waits for the rooftop leg, the acreage
+// leg, and the competitor-distance leg (all from runDemand/showParcel)
+// before rendering once. Unlike every other use's competitor read (crowding
+// is bad, zero is a gap), this one is *farther-is-better*: no vendor within
+// the trade-area radius at all is the best possible outcome, same read
+// `rankCandidates`'s `preferFar` scoring already gives a zero-competitor
+// point in logic.js.
+function maybeRenderFTCVerdict(seq){
+  if(current!=="food_truck_court"||mode!=="build"||!ftcState||ftcState.seq!==seq)return;
+  const s=ftcState, cfg=USE_DEMAND.food_truck_court;
+  const haveComp = s.nearestComp!==undefined || s.compErr;
+  if(s.roofs===undefined||s.acres===undefined||!haveComp)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.roofs==null){ el.style.display="none"; return; } // no rooftop read at all — nothing to show
+  const demandOk=s.roofs>=cfg.roofNeed*0.85, siteOk=s.acres!=null&&s.acres>=FTC_MIN_ACRES;
+  const farOk = !s.compErr && (!s.nearestComp || s.nearestComp.km>=FTC_MIN_COMPETITOR_KM);
+  const pass=demandOk&&siteOk&&farOk;
+  const legs=[
+    demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
+      : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
+    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${FTC_MIN_ACRES} ac for a paved lot)`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${FTC_MIN_ACRES} ac for a paved lot)`,
+    s.compErr?`? nearest food vendor distance unavailable`
+      : !s.nearestComp?`✓ no existing food vendor within ${(cfg.radius/1000)} km — wide open`
+      : farOk?`✓ nearest food vendor <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${FTC_MIN_COMPETITOR_KM} km)`
+      : `✗ nearest food vendor <b>${esc(s.nearestComp.name)}</b> only ${s.nearestComp.km.toFixed(1)} km away (need ≥${FTC_MIN_COMPETITOR_KM} km)`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — enough nearby demand, room for a lot, and clear of existing vendors"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
@@ -1178,6 +1232,7 @@ function showParcel(geo,src,seq){
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
   if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
   if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.acres=acN; maybeRenderWCVerdict(seq); }
+  if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.acres=acN; maybeRenderFTCVerdict(seq); }
   setLastParcelSummary({seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,

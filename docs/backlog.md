@@ -52,32 +52,40 @@ Ground rules for each run:
       HTML/UI wiring, so no page-load behavior changed). This unblocks the
       next two reverse-search steps (a `food_truck_court` land use, then the
       actual search UI) without touching the live map yet.
-- [ ] **Reverse search, step 2: a "far from X, near Y" land use to search
-      for.** The four existing land uses (`data_center`, `warehouse_club`,
-      `fast_casual`, `residential_subdivision`) all gate on "enough nearby
-      demand" — none of them gate on "far from an existing competitor,"
-      which is exactly the food-truck-court example's core criterion. Add a
-      5th land use to `data_sources/layers.yaml`, e.g. `food_truck_court`
-      (label "Food Truck Court / Mobile Vending Site"): `requires.demand`
-      keeps the familiar nearby-rooftop reuse (small radius, ~1–1.5 km walk/
-      drive — a food-truck court draws a much tighter radius than a
-      fast-casual restaurant), `requires.parcel.min_buildable_acres` very
-      small (~0.25 ac — it's a paved lot, not a building), and a **new**
-      `requires.competition` shape this model doesn't have yet: something
-      like `min_distance_km_from_nearest: 1.0` on existing restaurants/food
-      vendors (`amenity=fast_food|restaurant`), inverting the usual "avoid
+- [x] **Reverse search, step 2: a "far from X, near Y" land use to search
+      for.** Added a 5th land use, `food_truck_court` (label "Food Truck
+      Court / Mobile Vending Site"), to `data_sources/layers.yaml` —
+      `requires.demand` reuses the familiar nearby-rooftop read but at a much
+      tighter radius (1.2 km vs. fast_casual's 6 km — a food-truck court
+      draws a walk/short-drive crowd, not a citywide one),
+      `requires.parcel.min_buildable_acres: 0.25` (a paved lot, not a
+      building), and a **new** `requires.competition` shape:
+      `min_distance_km_from_nearest: 1.0` on existing restaurants/food
+      vendors (`amenity=fast_food|restaurant`) — inverting the usual "avoid
       zero, allow crowding" competition read into "the *farther* the
-      better." `competition` is already a registered layer (used today by
-      `warehouse_club`'s `max_same_brand_in_trade_area`) and
-      `simy_city/registry.py`'s validator only checks that `requires` keys
-      name a *known layer id*, not a specific field shape — so this new
-      field needs no Python validator changes, just the YAML entry and the
-      JS-side code that reads it. Add the single-point verdict for this use in
-      `web/explore.html` (same wait-for-both-legs pattern as the other four
-      `maybeRender*Verdict` functions) so `food_truck_court` works properly
-      in today's click-a-point Test-a-use mode *before* step 3 tries to
-      search a whole area for it — a new land use should earn its keep on
-      its own first.
+      better," the same read `rankCandidates`'s `preferFar` scoring
+      (step 1) already gives a zero-competitor point. `competition` was
+      already a registered layer and `simy_city/registry.py`'s validator
+      only checks that `requires` keys name a known layer id, not a specific
+      field shape, so this needed no Python validator changes — confirmed
+      `simy validate` passes with 5 land uses and no new errors. Wired up
+      the single-point verdict in `web/explore.html`
+      (`maybeRenderFTCVerdict`, `ftcState`), same wait-for-all-legs pattern
+      as the other four `maybeRender*Verdict` functions (rooftop leg +
+      acreage leg + competitor-distance leg from the existing
+      `runDemand`/`showParcel` fan-out, no new network calls): PASS needs
+      enough nearby rooftops *and* a big-enough parcel *and* the nearest
+      food vendor at or beyond 1 km (or none in range at all, which reads as
+      the best case, not a data gap). Verified in headless Chromium: both
+      pages load with zero console/page errors; a real simulated map click
+      with `food_truck_court` selected renders the full result panel
+      end-to-end without throwing; and driving `maybeRenderFTCVerdict`
+      directly through PASS / SHORT-on-demand / SHORT-on-site-size /
+      SHORT-on-competitor-too-close / no-competitor-in-range (passes) /
+      acreage-unavailable / no-rooftop-read / wrong-use-selected states all
+      produced correct verdict text and CSS classes with zero throws. This
+      unblocks reverse-search step 3 (the actual area-search UI), since the
+      use it's meant to search for now has a real verdict of its own.
 - [ ] **Reverse search, step 3: the "🔍 Find candidate sites" search UI.**
       Wires steps 1–2 into an actual area search. Add a mode (a toggle next
       to today's "Explore" / "Test a use" path cards, or a button that
