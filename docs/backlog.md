@@ -52,32 +52,48 @@ Ground rules for each run:
       HTML/UI wiring, so no page-load behavior changed). This unblocks the
       next two reverse-search steps (a `food_truck_court` land use, then the
       actual search UI) without touching the live map yet.
-- [ ] **Reverse search, step 2: a "far from X, near Y" land use to search
-      for.** The four existing land uses (`data_center`, `warehouse_club`,
-      `fast_casual`, `residential_subdivision`) all gate on "enough nearby
-      demand" — none of them gate on "far from an existing competitor,"
-      which is exactly the food-truck-court example's core criterion. Add a
-      5th land use to `data_sources/layers.yaml`, e.g. `food_truck_court`
-      (label "Food Truck Court / Mobile Vending Site"): `requires.demand`
-      keeps the familiar nearby-rooftop reuse (small radius, ~1–1.5 km walk/
-      drive — a food-truck court draws a much tighter radius than a
-      fast-casual restaurant), `requires.parcel.min_buildable_acres` very
-      small (~0.25 ac — it's a paved lot, not a building), and a **new**
-      `requires.competition` shape this model doesn't have yet: something
-      like `min_distance_km_from_nearest: 1.0` on existing restaurants/food
-      vendors (`amenity=fast_food|restaurant`), inverting the usual "avoid
-      zero, allow crowding" competition read into "the *farther* the
-      better." `competition` is already a registered layer (used today by
-      `warehouse_club`'s `max_same_brand_in_trade_area`) and
-      `simy_city/registry.py`'s validator only checks that `requires` keys
-      name a *known layer id*, not a specific field shape — so this new
-      field needs no Python validator changes, just the YAML entry and the
-      JS-side code that reads it. Add the single-point verdict for this use in
-      `web/explore.html` (same wait-for-both-legs pattern as the other four
-      `maybeRender*Verdict` functions) so `food_truck_court` works properly
-      in today's click-a-point Test-a-use mode *before* step 3 tries to
-      search a whole area for it — a new land use should earn its keep on
-      its own first.
+- [x] **Reverse search, step 2: a "far from X, near Y" land use to search
+      for.** Added a 5th land use, `food_truck_court` (label "Food Truck
+      Court / Mobile Vending Site"), to `data_sources/layers.yaml`:
+      `requires.demand` reuses the familiar nearby-rooftop read at a much
+      tighter radius than a fast-casual restaurant (1.2 km), `requires.parcel.
+      min_buildable_acres: 0.25` (a paved lot, not a building), and a new
+      `requires.competition.min_distance_km_from_nearest: 1.0` on existing
+      restaurants/food vendors (`amenity=fast_food|restaurant`) — the
+      model's first *inverted* competition read: every other use rewards
+      proximity to (or absence of same-brand) competitors, this one rewards
+      *distance* from the nearest one. `competition` was already a
+      registered layer and `simy_city/registry.py`'s validator only checks
+      that `requires` keys name a known layer id, not a field shape, so this
+      needed no Python validator changes — confirmed via `simy validate`
+      (OK, 5 land uses) and `pytest` (15 passed, unaffected). Wired the full
+      single-point verdict into `web/explore.html`: a `USE_DEMAND.
+      food_truck_court` entry (plus a wider `compRadius:2000` — the
+      first use of a competition-scan radius wider than the demand radius,
+      generalized into the shared competitor-scan code as `cfg.compRadius||
+      cfg.radius` — so there's room past the 1 km gate to tell "just
+      outside" from "nowhere nearby" instead of only ever seeing a bare "no
+      competitor in range"), an `ftcState`/`maybeRenderFTCVerdict` pair
+      waiting for all three legs (rooftops from `runDemand`, nearest-vendor
+      distance from the same competitor scan, acreage from `showParcel`)
+      before rendering one PASS/SHORT verdict — same wait-for-all-legs
+      pattern as `data_center`/`warehouse_club`, plus added it to the
+      `initUses()` use-picker order so it's selectable in Test-a-use mode.
+      Verified in headless Chromium: both pages still load with zero
+      genuine console/page errors; the new use button renders and
+      `MODEL.land_uses.food_truck_court` is present; a real end-to-end
+      `analyze()` click with `food_truck_court` selected renders the full
+      panel without throwing; and driving `maybeRenderFTCVerdict` directly
+      through PASS, SHORT-on-demand, SHORT-on-competition-too-close,
+      SHORT-on-site-size, no-competitor-found-so-PASS (the inverted gate's
+      "far enough" case), competition-scan-unavailable,
+      acreage-unavailable, no-rooftop-read, and wrong-use-selected states
+      all produced the correct verdict text and CSS class each time.
+      Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
+      live end-to-end rooftop/vendor-distance/acreage fetch on the real
+      site is a good human spot-check. Unblocks reverse-search step 3 (the
+      area-search UI), which needs a land use with a real "farther is
+      better" gate to be worth building against.
 - [ ] **Reverse search, step 3: the "🔍 Find candidate sites" search UI.**
       Wires steps 1–2 into an actual area search. Add a mode (a toggle next
       to today's "Explore" / "Test a use" path cards, or a button that
