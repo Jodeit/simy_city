@@ -651,6 +651,29 @@
       },
       "notes": "The flagship dependency example. Power + water + fiber are the gating trio; ERCOT interconnection queue position determines real-world timeline. Its high carbon + water impacts make it the sharpest \"should we?\" case.\n"
     },
+    "food_truck_court": {
+      "label": "Food Truck Court / Mobile Vending Site",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 3000,
+          "drive_time_min": 5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.0
+        },
+        "parcel": {
+          "min_buildable_acres": 0.25
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "Needs a nearby rooftop base like any small food vendor, but at a much tighter walk/drive-up radius than a fast-casual restaurant, and a paved lot rather than a building. Its defining site-selection gate inverts the usual read: distance *from* existing fast-food/restaurant competition, not proximity to it \u2014 a court that opens next to three drive-thrus just competes for the same lunch crowd instead of filling a gap.\n"
+    },
     "residential_subdivision": {
       "label": "Residential Subdivision (housing-developer lens)",
       "requires": {

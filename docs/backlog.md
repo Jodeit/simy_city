@@ -52,32 +52,41 @@ Ground rules for each run:
       HTML/UI wiring, so no page-load behavior changed). This unblocks the
       next two reverse-search steps (a `food_truck_court` land use, then the
       actual search UI) without touching the live map yet.
-- [ ] **Reverse search, step 2: a "far from X, near Y" land use to search
+- [x] **Reverse search, step 2: a "far from X, near Y" land use to search
       for.** The four existing land uses (`data_center`, `warehouse_club`,
       `fast_casual`, `residential_subdivision`) all gate on "enough nearby
       demand" — none of them gate on "far from an existing competitor,"
-      which is exactly the food-truck-court example's core criterion. Add a
-      5th land use to `data_sources/layers.yaml`, e.g. `food_truck_court`
-      (label "Food Truck Court / Mobile Vending Site"): `requires.demand`
-      keeps the familiar nearby-rooftop reuse (small radius, ~1–1.5 km walk/
-      drive — a food-truck court draws a much tighter radius than a
-      fast-casual restaurant), `requires.parcel.min_buildable_acres` very
-      small (~0.25 ac — it's a paved lot, not a building), and a **new**
-      `requires.competition` shape this model doesn't have yet: something
-      like `min_distance_km_from_nearest: 1.0` on existing restaurants/food
-      vendors (`amenity=fast_food|restaurant`), inverting the usual "avoid
-      zero, allow crowding" competition read into "the *farther* the
-      better." `competition` is already a registered layer (used today by
-      `warehouse_club`'s `max_same_brand_in_trade_area`) and
-      `simy_city/registry.py`'s validator only checks that `requires` keys
-      name a *known layer id*, not a specific field shape — so this new
-      field needs no Python validator changes, just the YAML entry and the
-      JS-side code that reads it. Add the single-point verdict for this use in
-      `web/explore.html` (same wait-for-both-legs pattern as the other four
-      `maybeRender*Verdict` functions) so `food_truck_court` works properly
-      in today's click-a-point Test-a-use mode *before* step 3 tries to
-      search a whole area for it — a new land use should earn its keep on
-      its own first.
+      which is exactly the food-truck-court example's core criterion. Added
+      a 5th land use to `data_sources/layers.yaml`: `food_truck_court`
+      (label "Food Truck Court / Mobile Vending Site") with `requires.demand`
+      (small, 1.5-km-radius rooftop base — a much tighter ask than
+      fast_casual's), `requires.parcel.min_buildable_acres: 0.25` (a paved
+      lot, not a building), and a **new** `requires.competition` shape —
+      `min_distance_km_from_nearest: 1.0` on existing fast-food/restaurant
+      vendors — inverting the usual "avoid zero, allow crowding" competition
+      read into "the *farther* the better." No Python validator changes were
+      needed (`simy_city/registry.py` only checks that `requires` keys name a
+      known layer id). Added the real 3-gate PASS/SHORT verdict in
+      `web/explore.html` (`maybeRenderFTVerdict`, same wait-for-all-legs
+      pattern as the other four `maybeRender*Verdict` functions): rooftops in
+      the walk-up radius, nearest fast-food/restaurant distance (reusing the
+      existing per-use Overpass competitor scan — no competitor found within
+      the scan radius counts as a pass, not an unknown, since the scan
+      radius already exceeds the 1-km threshold), and parcel acreage. Wired
+      into the use-picker (`initUses`'s `order` array), `analyze()`'s
+      per-use state reset, and `runDemand`'s rooftop/competitor callbacks.
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 5
+      land uses), `node --test tests/js/*.test.mjs` (125 passed, unchanged —
+      this item only touches `explore.html`, not `logic.js`), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` load
+      with zero genuine console/page errors, the 5th use button renders and
+      selects, and driving `maybeRenderFTVerdict` directly through 8 states
+      (PASS-all, short-on-rooftops, short-on-distance, no-competitor-found-
+      still-passes, short-on-acreage, acreage-unlisted, competitor-scan-
+      unavailable, no-rooftop-read) all produced correct verdict text and CSS
+      classes — including the inverted-distance case, the novel part of this
+      land use. This unblocks reverse-search step 3 (the actual area-search
+      UI), which reuses this use's `compQ`.
 - [ ] **Reverse search, step 3: the "🔍 Find candidate sites" search UI.**
       Wires steps 1–2 into an actual area search. Add a mode (a toggle next
       to today's "Explore" / "Test a use" path cards, or a button that
