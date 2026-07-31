@@ -1656,22 +1656,53 @@ function wireBYO(){
    something they looked at a few clicks ago. addRecentSite (web/logic.js)
    does the pure dedupe/cap logic; this just persists + renders it. */
 const RECENT_KEY="simy_recent_v1";
+const RECENT_UNDO_WINDOW_MS=8000;
 let recent=[];
+// Set by "clear all" and read by the undo link — a brief "Cleared — Undo"
+// window (auto-dismisses after RECENT_UNDO_WINDOW_MS) instead of wiping
+// localStorage with no recovery. clearRecentSites/undoClear (web/logic.js)
+// do the pure list logic; this just holds the timer + persists/renders it.
+let clearedRecent=null, clearedRecentAt=0, recentUndoTimer=null;
 function loadRecent(){
   try{recent=JSON.parse(localStorage.getItem(RECENT_KEY)||"[]");}catch(e){recent=[];}
   renderRecent();
   const clearBtn=document.getElementById("recentClear");
-  if(clearBtn)clearBtn.onclick=e=>{e.preventDefault();recent=[];saveRecent();};
+  if(clearBtn)clearBtn.onclick=e=>{
+    e.preventDefault();
+    if(!recent.length)return;
+    clearedRecent=recent.slice();
+    clearedRecentAt=Date.now();
+    recent=clearRecentSites(recent);
+    saveRecent();
+    clearTimeout(recentUndoTimer);
+    recentUndoTimer=setTimeout(()=>{ clearedRecent=null; renderRecent(); },RECENT_UNDO_WINDOW_MS);
+  };
 }
 function saveRecent(){ localStorage.setItem(RECENT_KEY,JSON.stringify(recent)); renderRecent(); }
 function recordRecent(snapshot){ recent=addRecentSite(recent,snapshot,6); saveRecent(); }
 function removeRecent(i){ recent=removeRecentSite(recent,i); saveRecent(); }
 function renderRecent(){
   const strip=document.getElementById("recentStrip"); if(!strip)return;
-  if(!recent.length){strip.style.display="none";return;}
-  strip.style.display="block";
-  const count=document.getElementById("recentCount"); if(count)count.textContent=`(${recent.length})`;
+  const count=document.getElementById("recentCount");
   const list=document.getElementById("recentList");
+  if(!recent.length){
+    if(!clearedRecent){strip.style.display="none";return;}
+    strip.style.display="block";
+    if(count)count.textContent="";
+    list.innerHTML=`Cleared. <a href="#" id="recentUndo">Undo</a>`;
+    const undo=document.getElementById("recentUndo");
+    if(undo)undo.onclick=e=>{
+      e.preventDefault();
+      recent=undoClear(clearedRecent,Date.now()-clearedRecentAt,RECENT_UNDO_WINDOW_MS);
+      clearedRecent=null;
+      clearTimeout(recentUndoTimer);
+      saveRecent();
+    };
+    return;
+  }
+  clearedRecent=null; clearTimeout(recentUndoTimer);
+  strip.style.display="block";
+  if(count)count.textContent=`(${recent.length})`;
   list.innerHTML=recent.map((p,i)=>{
     const label=p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
     return `<a href="#" class="recentGo" data-i="${i}">${esc(label)}</a>`+

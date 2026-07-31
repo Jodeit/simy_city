@@ -494,14 +494,36 @@ Ground rules for each run:
       opens it; pressing `?` while focused in the address-search input does
       *not* open it; the Close button closes it; and Tab keeps focus
       trapped inside the modal (only its Close button is focusable).
-- [ ] **Undo for "clear all recently-viewed".** The recently-viewed list's
-      "clear all" link wipes `localStorage` immediately with no confirmation
-      or recovery. Add a brief inline "Cleared — Undo" affordance (a few
-      seconds, or until the next navigation) that restores the exact list
-      that was cleared — a pure `clearRecentSites(list)` / `undoClear(saved)`
-      pair in `web/logic.js` with unit tests for the restore-exact-list case
-      and the undo-window-expired case, wired into the existing recently-
-      viewed panel.
+- [x] **Undo for "clear all recently-viewed".** The recently-viewed list's
+      "clear all" link used to wipe `localStorage` immediately with no
+      recovery. Added pure `clearRecentSites(list)` (always returns `[]`) and
+      `undoClear(saved, elapsedMs, windowMs)` (restores `saved` verbatim
+      inside the window, defaults to a 5000ms window, no-ops to `[]` once
+      expired or when nothing was saved) to `web/logic.js`. Wired into
+      `web/explore.html`: clicking "clear" stashes the pre-clear list plus a
+      timestamp, clears immediately, and swaps the panel's contents for
+      "Cleared — Undo" for 8 seconds (`RECENT_UNDO_WINDOW_MS`) via a
+      `setTimeout` that re-renders once the window lapses — clicking Undo
+      restores the exact stashed list (including original MRU order) and
+      re-persists it; clicking "clear" again before undoing overwrites the
+      pending snapshot with the newer one, same "last clear wins" behavior
+      `addRecentSite`'s dedupe already implies elsewhere. Clicking "clear" on
+      an already-empty list no-ops rather than creating a stale undo state.
+      Since `clearedRecent` is a plain in-memory variable, it's naturally
+      gone on the next navigation/reload — matching "a few seconds, or until
+      the next navigation" from this item's original scope without extra
+      code. Added 6 new unit tests (`clearRecentSites` always-empty,
+      `undoClear` exact restore + non-mutation, window-expired case, default-
+      window behavior, nothing-saved case). Verified in headless Chromium:
+      both pages load with zero console/page errors; seeded two recent sites
+      via `localStorage`, reloaded, opened the panel and clicked the real
+      "clear" button end to end — the list emptied, `localStorage` went to
+      `[]`, and an "Undo" link rendered in its place; clicking that real Undo
+      link restored both sites in their original order to both the in-page
+      list and `localStorage`; driving `undoClear` directly with an elapsed
+      time past the window returned empty; and clicking "clear" again on the
+      now-empty list correctly no-op'd (no new undo state created, prior
+      snapshot untouched).
 
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to

@@ -16,7 +16,8 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, sortPins, sampleGrid, rankCandidates, parseOverpassPoints, reverseSearchSignals,
+  removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
+  parseOverpassPoints, reverseSearchSignals,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -777,6 +778,44 @@ test("removeRecentSite: never mutates the existing list in place", () => {
   const existing = [{ label: "A" }, { label: "B" }];
   removeRecentSite(existing, 0);
   assert.equal(existing.length, 2);
+});
+
+// ---- clearRecentSites / undoClear ("Cleared — Undo" for recently-viewed) ----
+
+test("clearRecentSites: always returns an empty list", () => {
+  const existing = [{ label: "A" }, { label: "B" }];
+  assert.deepEqual(clearRecentSites(existing), []);
+  assert.deepEqual(clearRecentSites([]), []);
+  assert.deepEqual(clearRecentSites(null), []);
+});
+
+test("undoClear: restores the exact list that was cleared, within the window", () => {
+  const saved = [{ label: "A", lat: 1, lng: 1 }, { label: "B", lat: 2, lng: 2 }];
+  const restored = undoClear(saved, 1000, 8000);
+  assert.deepEqual(restored, saved);
+});
+
+test("undoClear: restoring never mutates the saved snapshot", () => {
+  const saved = [{ label: "A" }];
+  const restored = undoClear(saved, 0, 8000);
+  restored.push({ label: "B" });
+  assert.equal(saved.length, 1);
+});
+
+test("undoClear: returns empty once the undo window has expired", () => {
+  const saved = [{ label: "A" }];
+  assert.deepEqual(undoClear(saved, 8001, 8000), []);
+});
+
+test("undoClear: defaults the window to 5000ms when not given", () => {
+  const saved = [{ label: "A" }];
+  assert.deepEqual(undoClear(saved, 4000), saved);
+  assert.deepEqual(undoClear(saved, 6000), []);
+});
+
+test("undoClear: no-ops to an empty list when nothing was saved", () => {
+  assert.deepEqual(undoClear(null, 0, 8000), []);
+  assert.deepEqual(undoClear(undefined, 0, 8000), []);
 });
 
 // ---- sortPins (Compare-parcels table sort) ----
