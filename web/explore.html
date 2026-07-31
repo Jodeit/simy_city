@@ -158,6 +158,21 @@
   .usebar{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:12px}
   .usebar .lbl{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);margin-bottom:7px}
   .usebar .chips{display:flex;gap:6px;flex-wrap:wrap}
+  /* reverse search: "find candidate sites" panel inside the use-selector card */
+  .searchToggleRow{margin-top:9px}
+  .searchPanel{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+  .searchRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .searchRow select{font:inherit;font-size:.82rem;padding:.35em .5em;border-radius:8px;
+    border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .candList{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+  .candRow{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid var(--line);
+    border-radius:9px;background:var(--surface);cursor:pointer;font-size:.84rem}
+  .candRow:hover,.candRow:focus{border-color:var(--garden);outline:none}
+  .candNum{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:#2f6fb0;color:#fff;
+    font-weight:800;font-size:.72rem;display:flex;align-items:center;justify-content:center}
+  .candMarker{width:22px;height:22px;border-radius:50%;background:#2f6fb0;color:#fff;font-weight:800;
+    font-size:.72rem;display:flex;align-items:center;justify-content:center;border:2px solid #fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.4)}
   /* explore-mode CTA cards on empty state */
   .paths{display:grid;gap:12px;margin-top:14px}
   .path{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--card);cursor:pointer;box-shadow:var(--shadow)}
@@ -244,6 +259,18 @@
     <div id="useBar" class="usebar" style="display:none">
       <div class="lbl">What do you want to build?</div>
       <div class="chips" id="uses"></div>
+      <div class="searchToggleRow">
+        <button class="toolbtn" id="searchToggle" type="button" aria-expanded="false">🔍 Find candidate sites</button>
+      </div>
+      <div class="searchPanel" id="searchPanel" style="display:none">
+        <div class="lbl">Search radius (around map center)</div>
+        <div class="searchRow">
+          <select id="searchRadius" aria-label="Search radius"></select>
+          <button class="toolbtn" id="searchGo" type="button">Search here</button>
+        </div>
+        <div class="live" id="searchStatus" style="display:none"></div>
+        <div id="searchResults"></div>
+      </div>
     </div>
     <details class="recentStrip" id="recentStrip" style="display:none">
       <summary>Recently viewed <span id="recentCount"></span></summary>
@@ -517,9 +544,10 @@ const FLOOD_SOURCE="https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/
 const FCC_BLOCK_API="https://geo.fcc.gov/api/census/area";
 const ACS_YEARS=[2023,2022,2021];
 
-let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, lastLatLng=null, current="data_center";
+let MODEL=null, map=null, marker=null, ring=null, probeLayer=null, byoLayer=null, parcelLayer=null, candLayer=null, lastLatLng=null, current="data_center";
 let mode="explore"; // "explore" (scout) | "build" (test a use)
 let reqSeq=0; // bumped each click; async callbacks bail if they're stale
+let searchReqSeq=0; // bumped each reverse-search run; independent of reqSeq so a search in flight isn't invalidated by re-rendering the same clicked parcel, and vice versa
 // Snapshot of the currently-displayed parcel, filled in by showParcel/runParcel
 // once resolved — the 📌 Pin button reads this rather than the DOM. `seq` lets
 // the pin button refuse a stale snapshot left over from a superseded click.
@@ -529,7 +557,7 @@ let lastParcelSummary=null;
 if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;boot();}
 else{fetch("model.json").then(r=>r.json()).then(m=>{MODEL=m;boot();});}
 
-function boot(){ initUses(); initModes(); setLegend(); }
+function boot(){ initUses(); initModes(); initSearch(); setLegend(); }
 
 // Wires both a click and an Enter/Space keydown to `fn` — used for elements
 // (like the explore-mode path cards) that need button-like keyboard behavior
@@ -552,6 +580,7 @@ function applyModeUI(m){
     b.setAttribute("aria-pressed",on?"true":"false");
   });
   document.getElementById("useBar").style.display = m==="build" ? "block" : "none";
+  if(m!=="build")closeSearchPanel();
   setLegend();
 }
 function setMode(m){
@@ -576,6 +605,7 @@ function initUses(){
     b.onclick=()=>{selectUse(id);if(lastLatLng)analyze(lastLatLng);};
     el.appendChild(b);
   });
+  updateSearchAvailability();
 }
 function selectUse(id){
   current=id;
@@ -584,6 +614,10 @@ function selectUse(id){
     b.classList.toggle("active",on);
     b.setAttribute("aria-pressed",on?"true":"false");
   });
+  updateSearchAvailability();
+  // A different use has its own trade-area radius and demand/competition
+  // signals — any prior search's radius options/results/markers no longer apply.
+  closeSearchPanel();
 }
 
 // A tiny ArcGIS "dynamic export" tile layer: the county MapServer renders parcel
@@ -895,8 +929,12 @@ const OVERPASS=["https://overpass-api.de/api/interpreter","https://overpass.kumi
 // map back to one, reuses this session's answers instead of re-hitting those
 // services. Data at a point doesn't change mid-session, so no TTL is needed.
 const netCache=makeSessionCache(300);
-function overpass(ql,seq,ok,fail){
-  netCache("op:"+ql, ()=>new Promise((resolve,reject)=>{
+// Shared fetch-with-fallback-endpoint core, cached per query text. Returns the
+// raw parsed response — callers that need to gate on staleness (the single-
+// point flow's reqSeq, the reverse-search flow's own searchReqSeq below) do
+// that themselves rather than baking one counter into this helper.
+function overpassRaw(ql){
+  return netCache("op:"+ql, ()=>new Promise((resolve,reject)=>{
     (function attempt(eps){
       if(!eps.length){reject();return;}
       fetch(eps[0],{method:"POST",body:"data="+encodeURIComponent(ql)})
@@ -904,7 +942,10 @@ function overpass(ql,seq,ok,fail){
         .then(resolve)
         .catch(()=>attempt(eps.slice(1)));
     })(OVERPASS.slice());
-  })).then(d=>{if(seq===reqSeq)ok(d);}).catch(()=>{if(seq===reqSeq&&fail)fail();});
+  }));
+}
+function overpass(ql,seq,ok,fail){
+  overpassRaw(ql).then(d=>{if(seq===reqSeq)ok(d);}).catch(()=>{if(seq===reqSeq&&fail)fail();});
 }
 function setHTML(id,html){const el=document.getElementById(id);if(el){el.classList.remove("loading");el.innerHTML=html;}}
 function errHTML(t){return `<span class="unavail">⚠ ${t}</span>`;}
@@ -1113,6 +1154,130 @@ function maybeRenderFTCVerdict(seq){
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — enough nearby demand, room for a lot, and clear of existing vendors"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+
+/* ---- reverse search, step 3: the "🔍 Find candidate sites" search UI ----
+   Everything before this flips a clicked point into an answer. This flips
+   the flow: pick an area (map center + a radius) and get back a handful of
+   ranked candidate points to click into, using the pure sampleGrid/
+   rankCandidates engine from step 1 and the food_truck_court-style "farther
+   from competitors is better" signal from step 2 — reverseSearchSignals
+   (web/logic.js) decides which of the two signals apply to the current use.
+   Only **one** Overpass query for the whole search area's demand points and
+   **one** for competitors, no matter how many grid points get scored — a
+   per-candidate query would either hammer the free Overpass API or take
+   forever for an 8-point result set drawn from a 150-point grid. */
+function initSearch(){
+  document.getElementById("searchToggle").onclick=toggleSearchPanel;
+  document.getElementById("searchGo").onclick=runCandidateSearch;
+}
+// Disables the toggle entirely for a use with neither reverse-search signal
+// (data_center, residential_subdivision as of this writing) rather than
+// letting someone run a search that can only ever tie every candidate at
+// score 0 — a disabled button with a title explaining why beats a search
+// that silently returns meaningless "top 6" noise.
+function updateSearchAvailability(){
+  if(!MODEL)return;
+  const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
+  const sig=reverseSearchSignals(use.requires,cfg.roofNeed);
+  const btn=document.getElementById("searchToggle"); if(!btn)return;
+  const supported=sig.preferFar||sig.preferNear;
+  btn.disabled=!supported;
+  btn.title=supported?"":"Reverse search isn't tuned for this use yet";
+}
+function toggleSearchPanel(){
+  const btn=document.getElementById("searchToggle");
+  if(btn.disabled)return;
+  const panel=document.getElementById("searchPanel");
+  const opening=panel.style.display==="none";
+  panel.style.display=opening?"block":"none";
+  btn.setAttribute("aria-expanded",opening?"true":"false");
+  if(opening)fillSearchRadiusOptions();
+}
+function closeSearchPanel(){
+  const panel=document.getElementById("searchPanel"); if(panel)panel.style.display="none";
+  const btn=document.getElementById("searchToggle"); if(btn)btn.setAttribute("aria-expanded","false");
+  const results=document.getElementById("searchResults"); if(results)results.innerHTML="";
+  const status=document.getElementById("searchStatus"); if(status)status.style.display="none";
+  if(candLayer){candLayer.remove();candLayer=null;}
+}
+// Offers 0.5x/1x/2x the use's own trade-area radius (USE_DEMAND[current].radius)
+// as search-radius choices — scaled to whatever's sensible for the current use
+// (1.2 km for food_truck_court, 15 km for warehouse_club) rather than one
+// fixed set of distances that would be wrong at either end of that range.
+function fillSearchRadiusOptions(){
+  const cfg=USE_DEMAND[current];
+  const sel=document.getElementById("searchRadius");
+  const opts=[Math.round(cfg.radius*0.5),cfg.radius,Math.round(cfg.radius*2)];
+  sel.innerHTML=opts.map(m=>`<option value="${m}">${(m/1000).toFixed(m<2000?1:0)} km</option>`).join("");
+  sel.value=String(cfg.radius);
+}
+function runCandidateSearch(){
+  const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
+  const sig=reverseSearchSignals(use.requires,cfg.roofNeed);
+  if(!sig.preferFar&&!sig.preferNear)return;
+  const center=map.getCenter();
+  const radiusM=parseInt(document.getElementById("searchRadius").value,10)||cfg.radius;
+  const seq=++searchReqSeq;
+  if(candLayer){candLayer.remove();candLayer=null;}
+  const resEl=document.getElementById("searchResults"); resEl.innerHTML="";
+  const statusEl=document.getElementById("searchStatus");
+  statusEl.style.display="block"; statusEl.className="live loading"; statusEl.textContent="scanning the area…";
+
+  let demandDone=false, compDone=false, demandPts=null, compPts=null, demandErr=false, compErr=false;
+  function finish(){
+    if(!demandDone||!compDone||seq!==searchReqSeq)return;
+    if(demandErr&&compErr){
+      statusEl.className="live";
+      statusEl.innerHTML=errHTML("couldn’t reach OpenStreetMap to scan this area.");
+      return;
+    }
+    statusEl.style.display="none";
+    const spacing=Math.max(75,Math.round(radiusM/12));
+    const grid=sampleGrid({lat:center.lat,lng:center.lng},radiusM,spacing);
+    const results=rankCandidates(grid,compPts||[],demandPts||[],
+      {demandRadiusM:cfg.radius,preferFar:sig.preferFar,preferNear:sig.preferNear,limit:8});
+    renderCandidates(results,sig,cfg);
+  }
+  const dParts=`way["building"](around:${radiusM},${center.lat},${center.lng});`+
+    `relation["building"](around:${radiusM},${center.lat},${center.lng});`;
+  overpassRaw(`[out:json][timeout:25];(${dParts});out center 400;`)
+    .then(d=>{ if(seq!==searchReqSeq)return; demandPts=parseOverpassPoints(d); demandDone=true; finish(); })
+    .catch(()=>{ if(seq!==searchReqSeq)return; demandErr=true; demandDone=true; finish(); });
+  const cParts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${radiusM},${center.lat},${center.lng});`).join("");
+  overpassRaw(`[out:json][timeout:25];(${cParts});out center 400;`)
+    .then(d=>{ if(seq!==searchReqSeq)return; compPts=parseOverpassPoints(d); compDone=true; finish(); })
+    .catch(()=>{ if(seq!==searchReqSeq)return; compErr=true; compDone=true; finish(); });
+}
+function candWhyText(r,sig,cfg){
+  const parts=[];
+  if(sig.preferNear)parts.push(`≈${r.demandCount} rooftop${r.demandCount===1?"":"s"} within ${(cfg.radius/1000)} km`);
+  if(sig.preferFar)parts.push(r.nearestCompetitorKm==null
+    ? `no ${esc(cfg.compLabel)} in range`
+    : `nearest ${esc(cfg.compLabel.replace(/s$/,""))} ${r.nearestCompetitorKm.toFixed(1)} km away`);
+  return parts.length?parts.join(" · "):`${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`;
+}
+function renderCandidates(results,sig,cfg){
+  const resEl=document.getElementById("searchResults");
+  if(!results.length){
+    resEl.innerHTML=`<p class="src">No candidates matched — try a larger radius.</p>`;
+    return;
+  }
+  const icon=n=>L.divIcon({className:"",html:`<div class="candMarker">${n}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
+  candLayer=L.layerGroup(results.map((r,i)=>{
+    const ll=L.latLng(r.lat,r.lng);
+    return L.marker(ll,{icon:icon(i+1)})
+      .bindPopup(`<b>#${i+1}</b> — ${esc(candWhyText(r,sig,cfg))}`)
+      .on("click",()=>analyze(ll));
+  })).addTo(map);
+  resEl.innerHTML=`<div class="candList">`+results.map((r,i)=>
+    `<div class="candRow" data-i="${i}" role="button" tabindex="0">
+       <span class="candNum">${i+1}</span><span>${esc(candWhyText(r,sig,cfg))}</span>
+     </div>`).join("")+`</div>`;
+  resEl.querySelectorAll(".candRow").forEach(row=>{
+    const r=results[parseInt(row.dataset.i,10)];
+    wireActivate(row,()=>analyze(L.latLng(r.lat,r.lng)));
+  });
 }
 
 /* ---- parcel identification (real property boundary + county record) ---- */

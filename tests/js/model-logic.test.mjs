@@ -16,7 +16,7 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, sortPins, sampleGrid, rankCandidates,
+  removeRecentSite, sortPins, sampleGrid, rankCandidates, parseOverpassPoints, reverseSearchSignals,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -921,4 +921,61 @@ test("rankCandidates: handles missing competitors/demandPoints/opts gracefully",
   const ranked = rankCandidates([{ lat: 1, lng: 1 }], null, null, undefined);
   assert.equal(ranked.length, 1);
   assert.equal(ranked[0].score, 0);
+});
+
+// ---- reverse search, step 3: parseOverpassPoints / reverseSearchSignals ----
+
+test("parseOverpassPoints: reads lat/lon directly off node elements", () => {
+  const json = { elements: [{ type: "node", lat: 30.1, lon: -97.1 }] };
+  assert.deepEqual(parseOverpassPoints(json), [{ lat: 30.1, lng: -97.1 }]);
+});
+
+test("parseOverpassPoints: reads a way/relation's `center` object instead", () => {
+  const json = { elements: [{ type: "way", center: { lat: 30.2, lon: -97.2 } }] };
+  assert.deepEqual(parseOverpassPoints(json), [{ lat: 30.2, lng: -97.2 }]);
+});
+
+test("parseOverpassPoints: drops elements with neither lat/lon nor a center", () => {
+  const json = { elements: [{ type: "node" }, { type: "way", center: null }] };
+  assert.deepEqual(parseOverpassPoints(json), []);
+});
+
+test("parseOverpassPoints: keeps a real 0,0 coordinate rather than treating it as missing", () => {
+  const json = { elements: [{ type: "node", lat: 0, lon: 0 }] };
+  assert.deepEqual(parseOverpassPoints(json), [{ lat: 0, lng: 0 }]);
+});
+
+test("parseOverpassPoints: handles a missing/malformed response gracefully", () => {
+  assert.deepEqual(parseOverpassPoints(null), []);
+  assert.deepEqual(parseOverpassPoints({}), []);
+  assert.deepEqual(parseOverpassPoints({ elements: null }), []);
+});
+
+test("reverseSearchSignals: a min_distance_km_from_nearest competition read turns preferFar on", () => {
+  const sig = reverseSearchSignals({ competition: { min_distance_km_from_nearest: 1.0 } }, 0);
+  assert.equal(sig.preferFar, true);
+  assert.equal(sig.preferNear, false);
+});
+
+test("reverseSearchSignals: a rooftop-need threshold turns preferNear on", () => {
+  const sig = reverseSearchSignals({}, 100000);
+  assert.equal(sig.preferFar, false);
+  assert.equal(sig.preferNear, true);
+});
+
+test("reverseSearchSignals: both signals can be on at once (the food-truck-court case)", () => {
+  const sig = reverseSearchSignals({ competition: { min_distance_km_from_nearest: 1.0 } }, 1500);
+  assert.equal(sig.preferFar, true);
+  assert.equal(sig.preferNear, true);
+});
+
+test("reverseSearchSignals: a use with neither (e.g. data_center) gets both signals off", () => {
+  const sig = reverseSearchSignals({ competition: { max_same_brand_in_trade_area: 0 } }, 0);
+  assert.equal(sig.preferFar, false);
+  assert.equal(sig.preferNear, false);
+});
+
+test("reverseSearchSignals: handles a missing requires/competition block gracefully", () => {
+  assert.deepEqual(reverseSearchSignals(null, 0), { preferFar: false, preferNear: false });
+  assert.deepEqual(reverseSearchSignals(undefined, 5000), { preferFar: false, preferNear: true });
 });

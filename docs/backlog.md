@@ -86,27 +86,69 @@ Ground rules for each run:
       produced correct verdict text and CSS classes with zero throws. This
       unblocks reverse-search step 3 (the actual area-search UI), since the
       use it's meant to search for now has a real verdict of its own.
-- [ ] **Reverse search, step 3: the "🔍 Find candidate sites" search UI.**
-      Wires steps 1–2 into an actual area search. Add a mode (a toggle next
-      to today's "Explore" / "Test a use" path cards, or a button that
-      appears once a use is selected in Test-a-use mode) that takes a
-      search center (map center, or the result of the existing address
-      search box) and a radius, then: **one** Overpass bbox query for the
-      whole search area's relevant demand points (rooftops/residential) and
-      **one** for competitors (reusing the per-use `compQ` already defined
-      in `USE_DEMAND`, `web/explore.html`) — critically, *not* one query per
-      candidate grid point, which would either hammer the free Overpass API
-      or take forever; `sampleGrid` + `rankCandidates` from step 1 then do
-      all the per-point scoring locally from those two already-fetched
-      result sets. Render the top results as numbered markers distinct from
-      the normal single-parcel marker, each with a one-line "why" (e.g. "≈40
-      homes within 1 km · nearest food vendor 1.6 km away"), and clicking one
-      runs the existing single-point `analyze()` flow so a candidate flows
-      straight into the normal parcel/checklist read. Cap results (5–8) and
-      show a clear empty state ("no candidates matched — try a larger
-      radius") rather than silently returning nothing. Verify in headless
-      Chromium with a mocked Overpass response, same pattern as every other
-      network-backed feature in this app.
+- [x] **Reverse search, step 3: the "🔍 Find candidate sites" search UI.**
+      Wired steps 1–2 into an actual area search. Added a "🔍 Find candidate
+      sites" button to the use-selector card (`web/explore.html`, visible
+      whenever a use is selected in Test-a-use mode) that expands a small
+      panel: a radius `<select>` (0.5x/1x/2x the current use's own
+      `USE_DEMAND[current].radius` trade-area, so the choices scale
+      correctly whether the use is food_truck_court's 1.2 km or warehouse_club's
+      15 km) and a "Search here" button that takes the current **map center**
+      as the search center (so re-centering via the existing address search
+      box before searching just works, no extra wiring needed). On submit:
+      exactly **one** Overpass query for rooftops in the search radius and
+      **one** for competitors (reusing the per-use `compQ` already defined in
+      `USE_DEMAND`) — never one query per candidate grid point — then
+      `sampleGrid` + `rankCandidates` (step 1) do all the per-point scoring
+      locally from those two already-fetched result sets. Added a new pure
+      `reverseSearchSignals(requires, roofNeed)` to `web/logic.js` that
+      decides which of `rankCandidates`' two signals apply to the *current*
+      use from its model.json `requires` block: `preferFar` turns on for a
+      "farther is better" competition read
+      (`requires.competition.min_distance_km_from_nearest`, today only
+      food_truck_court's inverted saturation check from step 2), `preferNear`
+      turns on for any use with a rooftop-demand threshold (warehouse_club,
+      fast_casual, food_truck_court). A use with neither signal (data_center,
+      residential_subdivision) has no ranking signal yet, so the search
+      button is disabled with an explanatory title rather than letting
+      someone run a search that can only ever tie every candidate at score 0.
+      Also added `parseOverpassPoints(json)` to `web/logic.js` (shared
+      element-shape parsing — nodes carry lat/lon directly, ways/relations
+      carry a `center` object instead — same handling the single-point
+      competitor scan already did inline) so both area queries parse the
+      same way. Results render as numbered blue circular markers distinct
+      from the single-parcel marker/pin/probe-dot colors already in use,
+      each with a one-line "why" (e.g. "≈12 rooftops within 1.2 km · nearest
+      food vendor 1.6 km away") in both a map popup and a matching list row
+      in the side panel; clicking either a marker or its list row runs the
+      existing single-point `analyze()` flow, so a candidate flows straight
+      into the normal parcel/checklist read. Capped at 8 results; an empty
+      grid (degenerate center) shows a clear "no candidates matched — try a
+      larger radius" state instead of silently rendering nothing, and a
+      total Overpass failure (both queries unreachable) shows a distinct
+      "couldn't reach OpenStreetMap" state rather than a fake empty result.
+      Uses its own `searchReqSeq` counter (not the single-point flow's
+      `reqSeq`) so a reverse search in flight and a map click in flight can't
+      invalidate each other. Added 11 new unit tests for
+      `parseOverpassPoints`/`reverseSearchSignals` (node/way/relation element
+      shapes, missing-coords elements, a real `0,0` coordinate kept rather
+      than treated as missing, malformed responses, each signal
+      independently, both on at once, both off, missing `requires`/
+      `competition`). Verified in headless Chromium: both pages load with
+      zero console/page errors beyond the expected sandbox-blocked
+      `ERR_TUNNEL_CONNECTION_FAILED` network errors; selecting
+      food_truck_court enables the search button with the correct 0.6/1.2/2 km
+      radius options, while selecting data_center correctly disables it and
+      closes the panel; running a real search end-to-end with a mocked
+      `overpassRaw` produced 8 ranked candidate markers/rows with correct
+      "why" text, clicking a result row ran a real `analyze()` (result panel
+      rendered) with zero console errors; an all-empty mocked response
+      rendered the "no candidates matched" state; a rejected mocked response
+      rendered the "couldn't reach OpenStreetMap" state; and switching back
+      to Explore mode correctly closed the panel and removed the candidate
+      markers. Outbound network to Overpass is blocked from this sandbox, so
+      a live end-to-end area search on the real site is a good human
+      spot-check.
 - [x] **Real verdict for warehouse_club.** The last of the four land uses still
       judged on rooftop demand alone. Blended the existing rooftop trade-area
       read with the site-size gate `layers.yaml` already documents for it

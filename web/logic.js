@@ -469,8 +469,41 @@ function rankCandidates(points,competitors,demandPoints,opts){
   return scored.slice(0,limit);
 }
 
+/* ---- reverse search, step 3 helpers: area-query parsing + per-use signals ----
+   `parseOverpassPoints` turns an Overpass `out center` response into a plain
+   {lat,lng} point list — nodes carry lat/lon directly, ways/relations (e.g.
+   building footprints) carry a `center` object instead. Shared by both area
+   queries a reverse search issues (rooftops, competitors), same element-shape
+   handling `runDemand`'s single-point competitor scan already does inline. */
+function parseOverpassPoints(json){
+  return ((json&&json.elements)||[]).map(e=>{
+    const lat=e.lat!=null?e.lat:(e.center&&e.center.lat);
+    const lng=e.lon!=null?e.lon:(e.center&&e.center.lon);
+    return (lat!=null&&lng!=null)?{lat,lng}:null;
+  }).filter(Boolean);
+}
+// Decides which of rankCandidates' two scoring signals apply to a given land
+// use, from its model.json `requires` block plus the use's own rooftop-need
+// threshold (USE_DEMAND[id].roofNeed in explore.html — requires.demand's
+// shape varies use-to-use, so roofNeed is passed in rather than re-parsed
+// here). `preferFar` turns on for a "farther is better" competition read
+// (requires.competition.min_distance_km_from_nearest, currently only
+// food_truck_court's inverted saturation check); `preferNear` turns on for
+// any use with a rooftop-demand threshold (warehouse_club, fast_casual,
+// food_truck_court). A use with neither (data_center, residential_subdivision)
+// has no signal a grid-scan ranking can use yet — the caller should treat
+// that as "reverse search not supported for this use" rather than ranking on
+// an all-zero score.
+function reverseSearchSignals(requires,roofNeed){
+  const comp=(requires&&requires.competition)||{};
+  return {
+    preferFar: comp.min_distance_km_from_nearest!=null,
+    preferNear: !!roofNeed,
+  };
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,sortPins,sampleGrid,rankCandidates};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
 }
