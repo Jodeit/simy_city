@@ -276,6 +276,7 @@
       <summary>Recently viewed <span id="recentCount"></span></summary>
       <div class="recentList" id="recentList"></div>
       <a href="#" id="recentClear" class="recentClear">clear</a>
+      <span id="recentUndo" class="recentClear" style="display:none">Cleared — <a href="#" id="recentUndoLink">Undo</a></span>
     </details>
     <div class="empty" id="empty">
       <h2>Find your next move.</h2>
@@ -1656,15 +1657,56 @@ function wireBYO(){
    something they looked at a few clicks ago. addRecentSite (web/logic.js)
    does the pure dedupe/cap logic; this just persists + renders it. */
 const RECENT_KEY="simy_recent_v1";
+const RECENT_UNDO_WINDOW_MS=8000;
 let recent=[];
+let recentClearedSnapshot=null, recentClearedAt=0, recentUndoTimer=null;
 function loadRecent(){
   try{recent=JSON.parse(localStorage.getItem(RECENT_KEY)||"[]");}catch(e){recent=[];}
   renderRecent();
   const clearBtn=document.getElementById("recentClear");
-  if(clearBtn)clearBtn.onclick=e=>{e.preventDefault();recent=[];saveRecent();};
+  if(clearBtn)clearBtn.onclick=e=>{
+    e.preventDefault();
+    if(!recent.length)return;
+    recentClearedSnapshot=recent; recentClearedAt=Date.now();
+    recent=clearRecentSites(recent);
+    saveRecent();
+    armRecentUndo();
+  };
+  const undoLink=document.getElementById("recentUndoLink");
+  if(undoLink)undoLink.onclick=e=>{
+    e.preventDefault();
+    const restored=undoClear(recentClearedSnapshot,recentClearedAt,Date.now(),RECENT_UNDO_WINDOW_MS);
+    if(!restored)return;
+    recentClearedSnapshot=null;
+    disarmRecentUndo();
+    recent=restored;
+    saveRecent();
+  };
+}
+// "Cleared — Undo" affordance: shown for RECENT_UNDO_WINDOW_MS after a "clear"
+// click, restorable via undoClear (web/logic.js) as long as that window hasn't
+// elapsed. Recording a fresh site (recordRecent, below) disarms it — once a new
+// entry has been added, "undo" would silently drop that entry too, so it's
+// simplest to just retire the offer rather than let it linger inconsistently.
+function armRecentUndo(){
+  clearTimeout(recentUndoTimer);
+  const strip=document.getElementById("recentStrip"); if(strip){strip.style.display="block"; strip.open=true;}
+  const list=document.getElementById("recentList"); if(list)list.innerHTML="";
+  const count=document.getElementById("recentCount"); if(count)count.textContent="";
+  const undo=document.getElementById("recentUndo"); if(undo)undo.style.display="inline";
+  const clearBtn=document.getElementById("recentClear"); if(clearBtn)clearBtn.style.display="none";
+  recentUndoTimer=setTimeout(()=>{ recentClearedSnapshot=null; disarmRecentUndo(); renderRecent(); },RECENT_UNDO_WINDOW_MS);
+}
+function disarmRecentUndo(){
+  clearTimeout(recentUndoTimer); recentUndoTimer=null;
+  const undo=document.getElementById("recentUndo"); if(undo)undo.style.display="none";
+  const clearBtn=document.getElementById("recentClear"); if(clearBtn)clearBtn.style.display="inline-block";
 }
 function saveRecent(){ localStorage.setItem(RECENT_KEY,JSON.stringify(recent)); renderRecent(); }
-function recordRecent(snapshot){ recent=addRecentSite(recent,snapshot,6); saveRecent(); }
+function recordRecent(snapshot){
+  if(recentClearedSnapshot){recentClearedSnapshot=null; disarmRecentUndo();}
+  recent=addRecentSite(recent,snapshot,6); saveRecent();
+}
 function removeRecent(i){ recent=removeRecentSite(recent,i); saveRecent(); }
 function renderRecent(){
   const strip=document.getElementById("recentStrip"); if(!strip)return;

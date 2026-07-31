@@ -376,6 +376,24 @@ function removeRecentSite(list,i){
   if(!list||i<0||i>=list.length) return list||[];
   return list.slice(0,i).concat(list.slice(i+1));
 }
+// Pure pair backing the "clear all" undo affordance. clearRecentSites just
+// returns the empty list a "clear" click should persist — the caller is the
+// one who needs to hang onto the list it's replacing (there's nothing left
+// to snapshot once this returns) if it wants an undo option. undoClear
+// decides whether a snapshot is still restorable: `now`/`clearedAt` are
+// passed in rather than read via Date.now() so this stays a pure, easily
+// tested function (no clock to mock). An expired or empty snapshot returns
+// null — the caller's job is to tell "nothing to restore" apart from "here's
+// your list back", not to guess.
+function clearRecentSites(list){
+  return [];
+}
+function undoClear(saved,clearedAt,now,windowMs){
+  windowMs=(windowMs==null)?8000:windowMs;
+  if(!saved||!saved.length) return null;
+  if(now-clearedAt>windowMs) return null;
+  return saved;
+}
 
 /* ---- sorting the Compare-parcels list ----
    Compare's table is transposed (fields as rows, pins as columns), so
@@ -505,5 +523,5 @@ function reverseSearchSignals(requires,roofNeed){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
 }

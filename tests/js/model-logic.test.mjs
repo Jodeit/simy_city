@@ -16,7 +16,8 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, sortPins, sampleGrid, rankCandidates, parseOverpassPoints, reverseSearchSignals,
+  removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
+  parseOverpassPoints, reverseSearchSignals,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -777,6 +778,48 @@ test("removeRecentSite: never mutates the existing list in place", () => {
   const existing = [{ label: "A" }, { label: "B" }];
   removeRecentSite(existing, 0);
   assert.equal(existing.length, 2);
+});
+
+// ---- clearRecentSites / undoClear ("clear all" + undo) ----
+
+test("clearRecentSites: returns an empty list regardless of input", () => {
+  assert.deepEqual(clearRecentSites([{ label: "A" }, { label: "B" }]), []);
+  assert.deepEqual(clearRecentSites([]), []);
+});
+
+test("clearRecentSites: never mutates the existing list in place", () => {
+  const existing = [{ label: "A" }, { label: "B" }];
+  clearRecentSites(existing);
+  assert.equal(existing.length, 2);
+});
+
+test("undoClear: restores the exact list that was cleared, within the window", () => {
+  const saved = [{ label: "A" }, { label: "B" }];
+  const restored = undoClear(saved, 1000, 1500, 8000);
+  assert.deepEqual(restored, saved);
+  assert.equal(restored, saved); // same reference — the exact list, not a copy
+});
+
+test("undoClear: returns null once the undo window has elapsed", () => {
+  const saved = [{ label: "A" }];
+  assert.equal(undoClear(saved, 1000, 9001, 8000), null);
+});
+
+test("undoClear: right at the window boundary still restores", () => {
+  const saved = [{ label: "A" }];
+  assert.deepEqual(undoClear(saved, 1000, 9000, 8000), saved);
+});
+
+test("undoClear: defaults the window to 8000ms when not given", () => {
+  const saved = [{ label: "A" }];
+  assert.deepEqual(undoClear(saved, 0, 7999), saved);
+  assert.equal(undoClear(saved, 0, 8001), null);
+});
+
+test("undoClear: returns null when there is nothing saved (already used, or never cleared)", () => {
+  assert.equal(undoClear(null, 0, 100, 8000), null);
+  assert.equal(undoClear(undefined, 0, 100, 8000), null);
+  assert.equal(undoClear([], 0, 100, 8000), null);
 });
 
 // ---- sortPins (Compare-parcels table sort) ----

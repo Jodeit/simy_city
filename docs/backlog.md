@@ -494,14 +494,34 @@ Ground rules for each run:
       opens it; pressing `?` while focused in the address-search input does
       *not* open it; the Close button closes it; and Tab keeps focus
       trapped inside the modal (only its Close button is focusable).
-- [ ] **Undo for "clear all recently-viewed".** The recently-viewed list's
-      "clear all" link wipes `localStorage` immediately with no confirmation
-      or recovery. Add a brief inline "Cleared — Undo" affordance (a few
-      seconds, or until the next navigation) that restores the exact list
-      that was cleared — a pure `clearRecentSites(list)` / `undoClear(saved)`
-      pair in `web/logic.js` with unit tests for the restore-exact-list case
-      and the undo-window-expired case, wired into the existing recently-
-      viewed panel.
+- [x] **Undo for "clear all recently-viewed".** The recently-viewed list's
+      "clear all" link used to wipe `localStorage` immediately with no
+      confirmation or recovery. Added a pure `clearRecentSites(list)` /
+      `undoClear(saved,clearedAt,now,windowMs)` pair to `web/logic.js` —
+      `clearRecentSites` returns the empty list a "clear" click should
+      persist (the caller snapshots what it's replacing, since there's
+      nothing left to snapshot once this returns); `undoClear` takes
+      `now`/`clearedAt` as plain arguments rather than reading `Date.now()`
+      internally, so the expiry check stays pure and testable without
+      mocking the clock, returning `null` (not the stale list) once
+      `windowMs` (default 8000) has elapsed. Wired into `web/explore.html`'s
+      recently-viewed panel: clicking "clear" now shows an inline
+      "Cleared — Undo" affordance in place of the clear link for 8s (real
+      `setTimeout`, not just the pure-function math) — clicking "Undo"
+      restores the exact snapshot and re-persists it; letting the window
+      elapse (or recording a fresh site in the meantime, which would
+      otherwise silently drop that new entry on an undo) retires the offer
+      and reveals "clear" again. Added 8 new unit tests (`clearRecentSites`
+      on a populated/empty list, non-mutation, restore-exact-list — same
+      array reference — within the window, past-the-window returns null,
+      right-at-the-boundary still restores, default-window behavior,
+      nothing-saved returns null). Verified in headless Chromium: both pages
+      load with zero console/page errors; driving the real
+      clear→undo→localStorage round trip end to end restored the exact
+      2-entry list; and a real (not simulated) 8.3s wait past a "clear"
+      click auto-hid the undo affordance, restored the "clear" link, and
+      correctly re-hid the (now-empty) recently-viewed strip — the full
+      timer-driven UI path, not just the pure function in isolation.
 
 ## Polish / stretch
 - [x] Slope/contour overlay (USGS) toggle. Added a "USGS slope map" overlay to
