@@ -921,6 +921,78 @@ Ground rules for each run:
       strip (hidden) and `localStorage`; and driving `removeRecentSite`
       directly in-page with an out-of-range index confirmed the no-op.
 
+## Next (breadth) — newly added (4)
+- [ ] **6th land use: EV charging hub.** All five existing land uses
+      (`data_sources/layers.yaml`) either read rooftop/office demand or,
+      for `food_truck_court`, invert competition into "farther is better."
+      None reads *power* infrastructure the way `data_center` does at
+      developer scale, applied to a small commercial site — a real gap. Add
+      `ev_charging_hub` (label "EV Charging Hub"): `requires.power` reuses
+      `data_center`'s `prefer_substation_within_km` shape at a much smaller
+      radius (e.g. 3 km, since a charging hub needs meaningful grid
+      capacity nearby but not a dedicated substation upgrade), `requires
+      .demand` reads nearby multifamily/apartment density (a proxy for
+      people who can't charge at home — `overpassRaw` query on
+      `building=apartments` or `building:levels` won't be reliable; simplest
+      real signal is total nearby rooftops the same way `food_truck_court`
+      already does, just documented as an imperfect proxy in `notes`), and
+      a new `requires.competition.min_distance_km_from_nearest` gate against
+      existing chargers (`amenity=charging_station` in OSM/Overpass — a real,
+      already-tagged category, confirm via a web search of the Overpass tag
+      docs before wiring the query) — same inverted "farther is better" read
+      `food_truck_court` established, so `rankCandidates`'s existing
+      `preferFar` scoring and `reverseSearchSignals` (`web/logic.js`) need
+      **no changes** to support this in reverse search once the
+      `requires.competition.min_distance_km_from_nearest` field is present.
+      Add the single-point verdict (`maybeRenderEVVerdict` in
+      `web/explore.html`, same wait-for-both-legs pattern as
+      `maybeRenderFTCVerdict`) before relying on reverse search to find
+      sites for it — a new land use should work standalone first, same
+      sequencing the food-truck-court work followed. Verify in headless
+      Chromium: both pages load clean, PASS/SHORT/no-competitor-in-range/
+      data-unavailable states render correctly when driven directly, and a
+      real simulated map click with the use selected renders end to end
+      without throwing.
+- [ ] **One more parcel county: Miami-Dade County, FL.** `PARCEL_SOURCES`
+      (`web/explore.html`) covers 7 counties (Travis, Maricopa, Harris,
+      Bexar, LA, King, Cook) — Miami-Dade isn't one of them, and Florida's
+      a real gap in the current TX/AZ/CA/WA/IL spread. Find Miami-Dade's
+      public parcel ArcGIS MapServer via web search (this sandbox can't
+      reach ArcGIS hosts to introspect field names directly — every prior
+      county followed this same discovery path), confirm the field list for
+      parcel id/owner/address/land-use/acreage/value from the layer's
+      published schema or docs, and extend the shared `pick()` candidate
+      lists with any genuinely new field names (don't guess a field that
+      isn't documented — every prior county left unconfirmed fields
+      unmapped rather than rendering a bogus value). Florida counties zone
+      unincorporated land, so this needs its own `zoning_note` (not the
+      "TX counties don't zone" text). Add a per-parcel deep link only if a
+      stable URL scheme is confirmed live; otherwise link to the property
+      appraiser's search page, same fallback every prior thin-schema county
+      used. Verify in headless Chromium: `inBbox` correctly routes a
+      downtown-Miami point to the new source and still finds no source for
+      an out-of-coverage point; `showParcel` driven directly with a mocked
+      Miami-Dade-shaped ArcGIS payload (including an empty-attributes case)
+      renders correctly; both pages still load with zero console/page
+      errors.
+- [ ] **Printable single-parcel report.** The result panel (parcel details +
+      developer checklist + verdict) has a PNG "make the case" image export
+      and Compare has a CSV export, but there's no way to get a clean,
+      printed page of a single analysis — right now printing the live page
+      would print the map, nav chrome, and side panel exactly as laid out
+      on screen. Add a `@media print` stylesheet to `web/explore.html` that
+      hides the map, header controls, mode/use switchers, and any open
+      modals, and lays out just the current result panel (address/owner,
+      parcel facts, checklist rows, verdict text) as a single readable
+      column — reuse the same case-text assembly `downloadCaseImage()`
+      already builds from rather than writing new copy logic. A "🖨️ Print
+      report" button next to "Make the case" calls `window.print()`; no new
+      network calls, no new state. Verify in headless Chromium: both pages
+      load with zero console/page errors, and with `page.emulateMedia({media:
+      'print'})` the map/nav/mode-switcher elements compute to
+      `display:none` while the result-panel content stays visible — a real
+      print-preview render, not just a static CSS review.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
