@@ -967,28 +967,38 @@ Ground rules for each run:
       classes with zero throws. Outbound network to Overpass is blocked from
       this sandbox, so a live end-to-end power/competitor fetch on the real
       site is a good human spot-check.
-- [ ] **One more parcel county: Miami-Dade County, FL.** `PARCEL_SOURCES`
-      (`web/explore.html`) covers 7 counties (Travis, Maricopa, Harris,
-      Bexar, LA, King, Cook) — Miami-Dade isn't one of them, and Florida's
-      a real gap in the current TX/AZ/CA/WA/IL spread. Find Miami-Dade's
-      public parcel ArcGIS MapServer via web search (this sandbox can't
-      reach ArcGIS hosts to introspect field names directly — every prior
-      county followed this same discovery path), confirm the field list for
-      parcel id/owner/address/land-use/acreage/value from the layer's
-      published schema or docs, and extend the shared `pick()` candidate
-      lists with any genuinely new field names (don't guess a field that
-      isn't documented — every prior county left unconfirmed fields
-      unmapped rather than rendering a bogus value). Florida counties zone
-      unincorporated land, so this needs its own `zoning_note` (not the
-      "TX counties don't zone" text). Add a per-parcel deep link only if a
-      stable URL scheme is confirmed live; otherwise link to the property
-      appraiser's search page, same fallback every prior thin-schema county
-      used. Verify in headless Chromium: `inBbox` correctly routes a
-      downtown-Miami point to the new source and still finds no source for
-      an out-of-coverage point; `showParcel` driven directly with a mocked
-      Miami-Dade-shaped ArcGIS payload (including an empty-attributes case)
-      renders correctly; both pages still load with zero console/page
-      errors.
+- [x] **One more parcel county: Miami-Dade County, FL.** Added Miami-Dade
+      County, FL as an 8th `PARCEL_SOURCES` entry —
+      `gisweb.miamidade.gov`'s `MD_LandInformation/MapServer/26` (found via
+      web search since this sandbox can't reach ArcGIS hosts to introspect
+      schemas directly, same discovery path every prior county followed;
+      multiple independent search-indexed sources confirmed the field
+      list). Added `FOLIO` (parcel id), `TRUE_OWNER1` (owner),
+      `TRUE_SITE_ADDR` (address), `DOR_CODE_CUR` (FL Dept-of-Revenue land
+      use code), and `TOTAL_VAL_CUR` (appraised value) to the shared
+      `pick()` candidate lists. The layer's only area field, `LND_SQFOOT`,
+      is square feet — same unit mismatch LA County's `Shape.STArea()` hit —
+      so it was left unmapped rather than rendering a bogus "12000.00 ac"
+      the way a naive `pick()` would, same graceful partial-field-coverage
+      every thin-schema county already established. The Property
+      Appraiser's search app (`apps.miamidadepa.gov/propertysearch`) is a
+      client-rendered SPA with no documented per-folio deep-link URL, so —
+      same call as Harris/Bexar/LA/King — `record()` links to the search
+      page rather than guessing a URL shape that might 404. Florida
+      counties zone unincorporated land (unlike TX, like AZ/CA/WA/IL), so
+      this needed its own `zoning_note`. Verified in headless Chromium:
+      `inBbox` correctly routes a downtown-Miami point to the new source
+      and still finds no source for an out-of-coverage point (Denver); a
+      real `analyze()` call built the panel, then `showParcel` was driven
+      directly with a mocked Miami-Dade-shaped ArcGIS attribute payload and
+      rendered the parcel ID/owner/address/land-use/appraised-value rows,
+      the new FL zoning note, and the record link correctly; an
+      empty-attributes edge case rendered without throwing; and both pages
+      still load with zero genuine console/page errors (only the expected
+      sandbox-blocked `ERR_TUNNEL_CONNECTION_FAILED` for the live GIS
+      hosts). Live endpoint reachability and the exact field formats
+      couldn't be confirmed from this sandbox — a live spot-check is a good
+      human follow-up, same as every prior county.
 - [ ] **Printable single-parcel report.** The result panel (parcel details +
       developer checklist + verdict) has a PNG "make the case" image export
       and Compare has a CSV export, but there's no way to get a clean,

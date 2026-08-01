@@ -538,6 +538,24 @@ const PARCEL_SOURCES=[
     county_state:"Cook County, IL",
     zoning_note:"unlike TX, IL counties do zone unincorporated land — check Cook County's zoning ordinance, or the city/village if incorporated",
   },
+  {
+    name:"Miami-Dade Property Appraiser (Miami-Dade County, FL)",
+    urls:["https://gisweb.miamidade.gov/arcgis/rest/services/MD_LandInformation/MapServer/26"],
+    bbox:[-80.87,25.14,-80.12,25.98],
+    // FOLIO/TRUE_OWNER1/TRUE_SITE_ADDR/DOR_CODE_CUR/TOTAL_VAL_CUR are confirmed
+    // field names on this layer. LND_SQFOOT (land area) is square feet, not
+    // acres — same unit mismatch LA County's Shape.STArea() hit — so it's left
+    // unmapped rather than rendering a bogus "12000.00 ac" the way a naive
+    // pick() would. The Property Appraiser's search app
+    // (apps.miamidadepa.gov/propertysearch) is a client-rendered SPA with no
+    // documented per-folio deep-link URL, so — same call as Harris/Bexar/LA/
+    // King — send people to the search page with the folio already visible
+    // in the panel rather than guess a link shape that might 404.
+    record:()=>"https://apps.miamidadepa.gov/propertysearch/",
+    source_label:"Miami-Dade Property Appraiser",
+    county_state:"Miami-Dade County, FL",
+    zoning_note:"unlike TX, FL counties do zone unincorporated land — check Miami-Dade's unincorporated-area zoning, or the city's if incorporated",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1412,12 +1430,12 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR"]);
   let rows="";
   const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
