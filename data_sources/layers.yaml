@@ -240,6 +240,32 @@ land_uses:
       is "far enough from the nearest existing fast-food/restaurant that it
       isn't just eating an existing vendor's lunch crowd."
 
+  ev_charging_hub:       # a small commercial DC fast-charging site, not a building
+    label: EV Charging Hub
+    requires:
+      power:       { prefer_substation_within_km: 3 }
+      demand:      { min_households_drive_time: 800, drive_time_min: 5 }
+      # Same inverted "farther is better" competition read food_truck_court
+      # established: the closer an existing charging station, the more this
+      # site is just splitting an already-served crowd rather than opening up
+      # a new one.
+      competition: { min_distance_km_from_nearest: 0.8 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a handful of charging bays + canopy, not a building pad
+      carbon: low              # net-positive for transport emissions, but not modeled here
+      traffic: low
+    notes: >
+      Unlike data_center (which needs a dedicated substation upgrade), a charging
+      hub just needs *meaningful nearby grid capacity* — the same
+      prefer_substation_within_km field data_center uses, at a much smaller
+      radius (3 km vs. data_center's 5 km, since this is a load, not a
+      megawatt-scale draw). Nearby rooftops are a documented imperfect proxy
+      for "people who can't charge at home" — Overpass doesn't reliably tag
+      building=apartments/building:levels everywhere, so the same total-rooftop
+      count food_truck_court already uses stands in for it here.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

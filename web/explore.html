@@ -383,6 +383,9 @@ const USE_DEMAND={
     compQ:'nwr["power"="substation"]', compLabel:"power substations" },
   food_truck_court:{ radius:1200, roofNeed:1500, needLabel:"the tight walk/drive radius a food truck court needs",
     compQ:'nwr["amenity"="fast_food"];nwr["amenity"="restaurant"]', compLabel:"food vendors" },
+  ev_charging_hub:{ radius:3000, roofNeed:800, needLabel:"the nearby rooftop base (a documented proxy for people who can't charge at home) an EV charging hub needs",
+    compQ:'nwr["amenity"="charging_station"]', compLabel:"EV charging stations",
+    powerQ:'nwr["power"="substation"]', powerLabel:"power substations" },
 };
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
@@ -417,6 +420,15 @@ let wcState=null;
 // food vendors is the best possible outcome, not a data gap.
 const FTC_MIN_ACRES=0.25, FTC_MIN_COMPETITOR_KM=1.0;
 let ftcState=null;
+// ev_charging_hub's real verdict: rooftop demand (imperfect multifamily-density
+// proxy, same read food_truck_court uses) blended with a power-siting gate
+// (`power.prefer_substation_within_km: 3` — a charging hub needs meaningful
+// nearby grid capacity, same field data_center uses at a smaller radius) and a
+// *farther-is-better* competition read against existing chargers
+// (`competition.min_distance_km_from_nearest: 0.8`) — waits for all three legs,
+// same wait-for-all-legs pattern as food_truck_court.
+const EV_SUB_KM=3, EV_MIN_COMPETITOR_KM=0.8;
+let evState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -595,7 +607,7 @@ function setLegend(){
     : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
 }
 function initUses(){
-  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court"];
+  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub"];
   const el=document.getElementById("uses");
   order.forEach(id=>{
     const b=document.createElement("button");
@@ -725,6 +737,7 @@ function analyze(latlng){
     resState = current==="residential_subdivision" ? {seq} : null;
     wcState = current==="warehouse_club" ? {seq} : null;
     ftcState = current==="food_truck_court" ? {seq} : null;
+    evState = current==="ev_charging_hub" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
@@ -732,6 +745,7 @@ function analyze(latlng){
     fcState=null;
     resState=null;
     ftcState=null;
+    evState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -861,8 +875,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -872,6 +886,7 @@ function renderBuild(use,latlng){
               :isRes?"parcel acreage (est. homes) vs. nearby school capacity decide the verdict"
               :isWC?"rooftops in the trade area + parcel acreage (needs a big flat pad) decide the verdict"
               :isFTC?"nearby rooftops + parcel size + distance from the nearest existing food vendor (farther is better) decide the verdict"
+              :isEV?"nearby rooftops + nearest substation distance + distance from the nearest existing charger (farther is better) decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -961,12 +976,14 @@ function runDemand(latlng,seq){
       if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=c; maybeRenderFCVerdict(seq); }
       else if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=c; maybeRenderWCVerdict(seq); }
       else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.roofs=c; maybeRenderFTCVerdict(seq); }
+      else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.roofs=c; maybeRenderEVVerdict(seq); }
       else if(cfg.roofNeed) renderDemandVerdict(c,cfg);
     }, ()=>{
       setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works."));
       if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.roofs=null; maybeRenderFCVerdict(seq); }
       if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=null; maybeRenderWCVerdict(seq); }
       if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.roofs=null; maybeRenderFTCVerdict(seq); }
+      if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.roofs=null; maybeRenderEVVerdict(seq); }
     });
   // 1b) fast_casual only: daytime population proxy (offices/shops/workplaces) —
   // lunch traffic comes from workers and shoppers too, not just nearby homes.
@@ -975,6 +992,17 @@ function runDemand(latlng,seq){
     overpass(`[out:json][timeout:25];(${dparts});out count;`, seq, d=>{
       if(fcState&&fcState.seq===seq){ fcState.daytime=countOf(d); maybeRenderFCVerdict(seq); }
     }, ()=>{ if(fcState&&fcState.seq===seq){ fcState.daytime=null; fcState.daytimeErr=true; maybeRenderFCVerdict(seq); } });
+  }
+  // 1c) ev_charging_hub only: power leg — nearest substation, same query shape
+  // data_center's siting check already uses, just via a dedicated field since
+  // ev_charging_hub's own compQ position is taken by the charger-competition leg.
+  if(current==="ev_charging_hub"&&cfg.powerQ){
+    const pparts=cfg.powerQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
+    overpass(`[out:json][timeout:25];(${pparts});out center 60;`, seq, d=>{
+      const els=(d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
+        return (la&&lo)?haversine(lat,lng,la,lo):null;}).filter(v=>v!=null).sort((a,b)=>a-b);
+      if(evState&&evState.seq===seq){ evState.subKm = els.length ? els[0] : null; maybeRenderEVVerdict(seq); }
+    }, ()=>{ if(evState&&evState.seq===seq){ evState.subErr=true; maybeRenderEVVerdict(seq); } });
   }
   // 2) competitors / context with nearest
   const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
@@ -1001,12 +1029,17 @@ function runDemand(latlng,seq){
       // read (like rankCandidates' preferFar in logic.js), not a data gap.
       ftcState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderFTCVerdict(seq);
+    } else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){
+      // Same farther-is-better read as food_truck_court, against existing chargers.
+      evState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
+      maybeRenderEVVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
     if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
     else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; resState.nearestSchool=null; maybeRenderResVerdict(seq); }
     else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.compErr=true; maybeRenderFTCVerdict(seq); }
+    else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.compErr=true; maybeRenderEVVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -1154,6 +1187,42 @@ function maybeRenderFTCVerdict(seq){
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — enough nearby demand, room for a lot, and clear of existing vendors"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// ev_charging_hub's real verdict — waits for the rooftop leg, the power
+// (nearest-substation) leg, and the competitor-distance leg (all from
+// runDemand) before rendering once. Like food_truck_court, the competitor read
+// is farther-is-better: no existing charger within the trade-area radius at
+// all is the best possible outcome, not a data gap. Unlike food_truck_court,
+// there's no acreage gate here — a charging hub is a handful of bays on an
+// existing commercial lot, not a use that needs its own site-size check.
+function maybeRenderEVVerdict(seq){
+  if(current!=="ev_charging_hub"||mode!=="build"||!evState||evState.seq!==seq)return;
+  const s=evState, cfg=USE_DEMAND.ev_charging_hub;
+  const haveComp = s.nearestComp!==undefined || s.compErr;
+  const haveSub = s.subKm!==undefined || s.subErr;
+  if(s.roofs===undefined||!haveComp||!haveSub)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.roofs==null){ el.style.display="none"; return; } // no rooftop read at all — nothing to show
+  const demandOk=s.roofs>=cfg.roofNeed*0.85;
+  const subOk = !s.subErr && s.subKm!=null && s.subKm<=EV_SUB_KM;
+  const farOk = !s.compErr && (!s.nearestComp || s.nearestComp.km>=EV_MIN_COMPETITOR_KM);
+  const pass=demandOk&&subOk&&farOk;
+  const legs=[
+    demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
+      : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
+    subOk?`✓ substation ${s.subKm.toFixed(1)} km away (≤${EV_SUB_KM} km)`
+      : s.subErr?`? substation distance unavailable`
+      : s.subKm==null?`✗ no substation within ${(cfg.radius/1000)} km`
+      : `✗ nearest substation ${s.subKm.toFixed(1)} km away (need ≤${EV_SUB_KM} km)`,
+    s.compErr?`? nearest EV charger distance unavailable`
+      : !s.nearestComp?`✓ no existing charger within ${(cfg.radius/1000)} km — wide open`
+      : farOk?`✓ nearest charger <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${EV_MIN_COMPETITOR_KM} km)`
+      : `✗ nearest charger <b>${esc(s.nearestComp.name)}</b> only ${s.nearestComp.km.toFixed(1)} km away (need ≥${EV_MIN_COMPETITOR_KM} km)`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — enough nearby demand, grid capacity, and clear of existing chargers"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 

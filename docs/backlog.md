@@ -922,37 +922,51 @@ Ground rules for each run:
       directly in-page with an out-of-range index confirmed the no-op.
 
 ## Next (breadth) — newly added (4)
-- [ ] **6th land use: EV charging hub.** All five existing land uses
-      (`data_sources/layers.yaml`) either read rooftop/office demand or,
-      for `food_truck_court`, invert competition into "farther is better."
-      None reads *power* infrastructure the way `data_center` does at
-      developer scale, applied to a small commercial site — a real gap. Add
-      `ev_charging_hub` (label "EV Charging Hub"): `requires.power` reuses
-      `data_center`'s `prefer_substation_within_km` shape at a much smaller
-      radius (e.g. 3 km, since a charging hub needs meaningful grid
-      capacity nearby but not a dedicated substation upgrade), `requires
-      .demand` reads nearby multifamily/apartment density (a proxy for
-      people who can't charge at home — `overpassRaw` query on
-      `building=apartments` or `building:levels` won't be reliable; simplest
-      real signal is total nearby rooftops the same way `food_truck_court`
-      already does, just documented as an imperfect proxy in `notes`), and
-      a new `requires.competition.min_distance_km_from_nearest` gate against
-      existing chargers (`amenity=charging_station` in OSM/Overpass — a real,
-      already-tagged category, confirm via a web search of the Overpass tag
-      docs before wiring the query) — same inverted "farther is better" read
-      `food_truck_court` established, so `rankCandidates`'s existing
-      `preferFar` scoring and `reverseSearchSignals` (`web/logic.js`) need
-      **no changes** to support this in reverse search once the
-      `requires.competition.min_distance_km_from_nearest` field is present.
-      Add the single-point verdict (`maybeRenderEVVerdict` in
-      `web/explore.html`, same wait-for-both-legs pattern as
-      `maybeRenderFTCVerdict`) before relying on reverse search to find
-      sites for it — a new land use should work standalone first, same
-      sequencing the food-truck-court work followed. Verify in headless
-      Chromium: both pages load clean, PASS/SHORT/no-competitor-in-range/
-      data-unavailable states render correctly when driven directly, and a
-      real simulated map click with the use selected renders end to end
-      without throwing.
+- [x] **6th land use: EV charging hub.** Added `ev_charging_hub` (label
+      "EV Charging Hub") to `data_sources/layers.yaml`: `requires.power`
+      reuses `data_center`'s `prefer_substation_within_km` shape at 3 km
+      (vs. data_center's 5 km — meaningful nearby grid capacity, not a
+      dedicated substation upgrade), `requires.demand` reads nearby total
+      rooftops as a documented imperfect proxy for "people who can't charge
+      at home" (same call `food_truck_court` already made — Overpass can't
+      reliably filter to `building=apartments`), and a new
+      `requires.competition.min_distance_km_from_nearest: 0.8` gate against
+      existing chargers (`amenity=charging_station`, a standard, widely-used
+      OSM tag) — same inverted "farther is better" read `food_truck_court`
+      established. Confirmed `reverseSearchSignals` (`web/logic.js`) needed
+      **no changes**: it already turns `preferFar` on for any
+      `competition.min_distance_km_from_nearest` field and `preferNear` on
+      for any `roofNeed`, so the reverse-search "🔍 Find candidate sites"
+      button picks this use up automatically with both signals live.
+      Wired the single-point verdict in `web/explore.html`
+      (`maybeRenderEVVerdict`, `evState`, `EV_SUB_KM=3`/
+      `EV_MIN_COMPETITOR_KM=0.8`), same wait-for-all-legs pattern as
+      `maybeRenderFTCVerdict` — but 3 different legs (no acreage gate, since
+      a charging hub is a handful of bays on an existing commercial lot, not
+      a use with its own site-size check): rooftop demand (existing leg),
+      a new power leg (`USE_DEMAND.ev_charging_hub.powerQ`, a dedicated
+      substation-distance Overpass query added to `runDemand` since
+      `compQ`'s position was already taken by the charger-competition
+      query — same query shape data_center's siting check uses), and the
+      charger-competition leg (farther-is-better, reusing the existing
+      `compQ`/competitor-scan machinery). Added to the use-selector button
+      order and both `analyze()`'s state-reset branches. Verified: `python -m
+      pytest -q` (15 passed), `simy validate` (OK, 6 land uses), `node --test
+      tests/js/*.test.mjs` (142 passed, all pre-existing — no new pure logic
+      was needed since `reverseSearchSignals` already generalized), and
+      headless Chromium confirms both `web/explore.html` and
+      `web/index.html` load with zero console/page errors; selecting
+      `ev_charging_hub` enables the reverse-search button with both
+      `preferFar`/`preferNear` signals on; a real simulated map click with
+      it selected runs the whole fan-out (parcel + rooftop + power leg +
+      competitor leg) without throwing; and driving `maybeRenderEVVerdict`
+      directly through PASS / SHORT-on-power / SHORT-on-competitor-too-close
+      / no-competitor-in-range (passes) / no-rooftop-read (hides) /
+      substation-unavailable / competitor-scan-unavailable / wrong-use
+      (stale-seq no-op) states all produced correct verdict text and CSS
+      classes with zero throws. Outbound network to Overpass is blocked from
+      this sandbox, so a live end-to-end power/competitor fetch on the real
+      site is a good human spot-check.
 - [ ] **One more parcel county: Miami-Dade County, FL.** `PARCEL_SOURCES`
       (`web/explore.html`) covers 7 counties (Travis, Maricopa, Harris,
       Bexar, LA, King, Cook) — Miami-Dade isn't one of them, and Florida's

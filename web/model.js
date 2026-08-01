@@ -737,6 +737,29 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "A much tighter radius than fast_casual \u2014 people walk or make a short local drive to a food truck court, they don't drive across town for one. The site itself barely needs anything (an empty paved lot), so the real gate is \"far enough from the nearest existing fast-food/restaurant that it isn't just eating an existing vendor's lunch crowd.\"\n"
+    },
+    "ev_charging_hub": {
+      "label": "EV Charging Hub",
+      "requires": {
+        "power": {
+          "prefer_substation_within_km": 3
+        },
+        "demand": {
+          "min_households_drive_time": 800,
+          "drive_time_min": 5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 0.8
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "Unlike data_center (which needs a dedicated substation upgrade), a charging hub just needs *meaningful nearby grid capacity* \u2014 the same prefer_substation_within_km field data_center uses, at a much smaller radius (3 km vs. data_center's 5 km, since this is a load, not a megawatt-scale draw). Nearby rooftops are a documented imperfect proxy for \"people who can't charge at home\" \u2014 Overpass doesn't reliably tag building=apartments/building:levels everywhere, so the same total-rooftop count food_truck_court already uses stands in for it here.\n"
     }
   },
   "actor_uses": {
