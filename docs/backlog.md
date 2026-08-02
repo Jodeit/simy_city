@@ -999,23 +999,32 @@ Ground rules for each run:
       hosts). Live endpoint reachability and the exact field formats
       couldn't be confirmed from this sandbox — a live spot-check is a good
       human follow-up, same as every prior county.
-- [ ] **Printable single-parcel report.** The result panel (parcel details +
-      developer checklist + verdict) has a PNG "make the case" image export
-      and Compare has a CSV export, but there's no way to get a clean,
-      printed page of a single analysis — right now printing the live page
-      would print the map, nav chrome, and side panel exactly as laid out
-      on screen. Add a `@media print` stylesheet to `web/explore.html` that
-      hides the map, header controls, mode/use switchers, and any open
-      modals, and lays out just the current result panel (address/owner,
-      parcel facts, checklist rows, verdict text) as a single readable
-      column — reuse the same case-text assembly `downloadCaseImage()`
-      already builds from rather than writing new copy logic. A "🖨️ Print
-      report" button next to "Make the case" calls `window.print()`; no new
-      network calls, no new state. Verify in headless Chromium: both pages
-      load with zero console/page errors, and with `page.emulateMedia({media:
-      'print'})` the map/nav/mode-switcher elements compute to
-      `display:none` while the result-panel content stays visible — a real
-      print-preview render, not just a static CSS review.
+- [x] **Printable single-parcel report.** Added a `@media print` stylesheet to
+      `web/explore.html` that hides `header`, `#mapwrap`, `#useBar`,
+      `#recentStrip`, `.toolbar` (the button row, including the collapsed
+      "make the case" controls), and any open `.modal`, and lets `#panel`/
+      `#result` lay out as a single unconstrained-height column (`overflow:
+      visible`, no border). A new `<pre class="printCase">` element (sibling
+      of `.toolbar`, so hiding `.toolbar` in print doesn't hide it) is filled
+      with the exact same text `buildCaseText()`/`downloadCaseImage()` already
+      assemble — reused verbatim, no new copy logic — and is `display:none`
+      on screen but `display:block` (monospace, wrapped) in print, giving the
+      printed page the full case narrative (stakeholder verdict, reasons,
+      standoffs, requires) that isn't otherwise present as plain HTML in the
+      panel. A "🖨️ Print report" button next to "Download image" in the
+      Test-a-use "Make the case" row calls `window.print()`; no new network
+      calls, no new persisted state. Scoped to Test-a-use mode only (same as
+      the rest of the "make the case" tools) since Explore mode has no case
+      text to print. Verified: `python -m pytest -q` (15 passed), `simy
+      validate` (OK), `node --test tests/js/*.test.mjs` (142 passed, no new
+      pure logic needed since this only reuses existing `buildCaseText`
+      output), and headless Chromium confirms both pages load with zero
+      console/page errors; a real simulated map click with `data_center`
+      selected populates `#printCase` with the real case text; and
+      `page.emulateMedia({media:'print'})` computes `header`/`#mapwrap`/
+      `.toolbar` to `display:none` while `#panel`/`#result`/`.printCase`
+      stay visible — a real print-preview render, not just a static CSS
+      review.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

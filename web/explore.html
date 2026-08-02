@@ -232,6 +232,16 @@
     .path b{font-size:1rem}
     .tinker{padding:11px;font-size:.82rem}
   }
+  /* ---------- print: single-parcel report ---------- */
+  .printCase{display:none}
+  @media print{
+    header,#mapwrap,#useBar,#recentStrip,.toolbar,.modal{display:none !important}
+    #app{display:block;height:auto}
+    #panel{border:none;overflow:visible;padding:0;background:#fff;color:#000}
+    .block{break-inside:avoid;box-shadow:none}
+    .printCase{display:block;white-space:pre-wrap;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+      color:#000;border-top:1px dashed #999;margin-top:14px;padding-top:10px}
+  }
 </style>
 </head>
 <body>
@@ -816,6 +826,7 @@ function fillTools(latlng){
        `<div class="row"><button class="toolbtn" id="caseCopy">Copy text</button>`+
        `<a class="toolbtn" id="caseMail" href="#">Email it</a>`+
        `<button class="toolbtn" id="caseImg">🖼️ Download image</button>`+
+       `<button class="toolbtn" id="casePrint">🖨️ Print report</button>`+
        `<span class="ok" id="toolMsg"></span></div></details>`;
   }
   el.innerHTML=h;
@@ -835,6 +846,9 @@ function fillTools(latlng){
       const m=document.getElementById("toolMsg");
       if(m){m.textContent="✓ image downloaded";setTimeout(()=>m.textContent="",2500);}
     };
+    const pc=document.getElementById("printCase");
+    if(pc)pc.textContent=txt;
+    document.getElementById("casePrint").onclick=()=>window.print();
   }
 }
 // Renders "make the case" text onto a from-scratch canvas (no map/DOM
@@ -875,6 +889,7 @@ function renderBuild(use,latlng){
   const label=use.label;
   let h=`<h2>${label}</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)} — testing this site</div>`;
   h+=`<div class="toolbar" id="tools"></div>`;
+  h+=`<pre class="printCase" id="printCase"></pre>`;
 
   // PARCEL identity (filled async by runParcel) — "what am I actually looking at?"
   h+=`<div class="block" id="parcelBlock"><h3>Parcel / property</h3>
