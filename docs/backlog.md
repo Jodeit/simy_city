@@ -1059,16 +1059,51 @@ Ground rules for each run:
       "≈2 rooftops within 15 km · nearest warehouse club 15.9 km away" —
       the competitor clause that was previously always missing for this use
       — with markers rendered and zero console errors.
-- [ ] **Reverse search: let a shared/pinned search's radius+use travel in the
+- [x] **Reverse search: let a shared/pinned search's radius+use travel in the
       URL.** The single-point permalink (`encodeHash`) and the Compare-pins
-      list (`cmp=`) are both shareable via URL; the area search
-      (`searchRadius`/`runCandidateSearch`, step 3) isn't — reopening a
-      shared link always starts from the default map center/radius for
-      whatever use is selected. Add a `search=` hash segment (radius + maybe
-      the chosen use) so "here's a good spot to search" is a link, not just
-      a screenshot, using the same encode/decode-pure-helper +
-      `applyHash()`-wiring pattern the other two shareable pieces of state
-      already established.
+      list (`cmp=`) were already shareable via URL; the area search
+      (`searchRadius`/`runCandidateSearch`, step 3) wasn't — reopening a
+      shared link always started from the default map center/radius for
+      whatever use was selected. Added a standalone `search=` hash segment
+      (`encodeSearch`/`decodeSearch` in `web/logic.js`, same independent-
+      segment pattern `cmp=` already established — packs the search center,
+      radius in meters, and use id as URI-encoded JSON, kept separate from
+      `encodeHash`'s mode/use/lat/lng since a search center doesn't have to
+      be a point anyone's analyzed) so "here's a good spot to search" is a
+      link, not just a screenshot. `decodeSearch` returns `null` outright
+      for an absent segment or unparseable JSON, and `null` per-field for a
+      non-finite lat/lng or non-positive radius, same defensive shape as
+      `decodeHash`/`decodeComparePins`. Wired a new `applySearchHash()`
+      (`web/explore.html`) into `applyHash()`: switches to Test-a-use mode
+      with the shared use, frames the map on the shared center/radius via
+      Leaflet's `L.latLng(...).toBounds(radiusM*2)` (picks a sensible zoom
+      for any radius, no hardcoded zoom level needed), opens the search
+      panel with the shared radius selected — injecting it as an extra
+      `<option>` if it doesn't match the use's own 0.5x/1x/2x choices, so
+      the exact shared radius survives even when it doesn't line up with
+      the receiving use's own trade-area scale — and runs the search
+      immediately, since the point of sharing a search is seeing the same
+      candidates, not an extra click. Added a "🔗 Share search" button next
+      to "Search here" in the search panel that builds the link from the
+      current map center + selected radius + use and copies it (reuses the
+      existing `copy()` helper). Added 7 new unit tests for
+      `encodeSearch`/`decodeSearch` (round trip, radius rounding, leading
+      `#`, absent/malformed segment, per-field null on bad data, rejecting
+      a non-positive radius, coexistence with a mode/use/lat/lng hash).
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 6
+      land uses), `node --test tests/js/*.test.mjs` (150 passed, 7 new), and
+      headless Chromium: both pages load with zero genuine console/page
+      errors; a real `applySearchHash()` run against a synthetic
+      `#search=...` hash (with `overpassRaw` mocked, since Overpass is
+      blocked in this sandbox) switched mode/use, opened the panel with the
+      shared radius selected, and rendered real ranked candidate rows end to
+      end; a shared radius that doesn't match any of the receiving use's
+      own radius options was correctly injected as its own `<option>` and
+      selected; and driving the real "🔗 Share search" button produced a
+      copied link containing a valid `search=` segment for the current
+      map center/radius/use. Outbound network to Overpass is blocked from
+      this sandbox, so a live end-to-end shared-search link on the real
+      site is a good human spot-check.
 - [ ] **Reverse search coverage for fast_casual.** `reverseSearchSignals`
       currently gives fast_casual `preferNear` only (rooftop + daytime-POI
       demand) since its `layers.yaml` entry has no `competition` block at
