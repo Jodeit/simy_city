@@ -277,6 +277,7 @@
         <div class="searchRow">
           <select id="searchRadius" aria-label="Search radius"></select>
           <button class="toolbtn" id="searchGo" type="button">Search here</button>
+          <button class="toolbtn" id="searchShare" type="button">🔗 Share search</button><span class="ok" id="searchShareMsg"></span>
         </div>
         <div class="live" id="searchStatus" style="display:none"></div>
         <div id="searchResults"></div>
@@ -1273,6 +1274,16 @@ function maybeRenderEVVerdict(seq){
 function initSearch(){
   document.getElementById("searchToggle").onclick=toggleSearchPanel;
   document.getElementById("searchGo").onclick=runCandidateSearch;
+  document.getElementById("searchShare").onclick=shareCandidateSearch;
+}
+// Shares the search itself (center + radius + use), not any one candidate
+// result — reopening the link re-runs the same area scan via applySearchHash.
+function shareCandidateSearch(){
+  const radiusM=parseInt(document.getElementById("searchRadius").value,10);
+  if(!radiusM)return;
+  const center=map.getCenter();
+  const link=location.href.split("#")[0]+"#"+encodeSearch(center.lat,center.lng,radiusM,current);
+  copy(link,"link copied — carries the search area, radius & use","searchShareMsg");
 }
 // Disables the toggle entirely for a use with neither reverse-search signal
 // (data_center, residential_subdivision as of this writing) rather than
@@ -1950,17 +1961,52 @@ function wireCompare(){
 }
 
 /* ---- honor an incoming share link (#mode=..&use=..&lat=..&lng=.. and/or
-   #cmp=.. for a shared Compare list — see encodeHash/encodeComparePins in
+   #cmp=.. for a shared Compare list, and/or #search=.. for a shared reverse-
+   search area — see encodeHash/encodeComparePins/encodeSearch in
    web/logic.js). A shared Compare list merges into (never replaces) any
    pins already saved in this browser. ---- */
+// Re-runs a shared "🔍 Find candidate sites" area search from its own
+// `search=` hash segment: switches to Test-a-use mode with the shared use,
+// frames the map on the shared search center/radius (L.latLng.toBounds
+// picks a sensible zoom for any radius, no hardcoded zoom level needed),
+// opens the search panel with the shared radius selected (added as an extra
+// option if it doesn't match one of the use's own 0.5x/1x/2x choices), and
+// runs the search immediately — the point of sharing a search is seeing the
+// same candidates, not an extra click. selectUse() always closes the search
+// panel (a different use invalidates any prior search), so the panel is
+// reopened *after* selecting the use, not before.
+function applySearchHash(){
+  if(!MODEL)return false;
+  const s=decodeSearch(location.hash);
+  if(!s||s.lat==null||s.lng==null||!s.radiusM||!s.use||!MODEL.land_uses[s.use])return false;
+  applyModeUI("build");
+  selectUse(s.use);
+  const btn=document.getElementById("searchToggle");
+  if(!btn||btn.disabled)return false; // shared use has no reverse-search signal
+  map.fitBounds(L.latLng(s.lat,s.lng).toBounds(s.radiusM*2));
+  fillSearchRadiusOptions();
+  const sel=document.getElementById("searchRadius");
+  if(![...sel.options].some(o=>parseInt(o.value,10)===s.radiusM)){
+    const opt=document.createElement("option");
+    opt.value=String(s.radiusM);
+    opt.textContent=(s.radiusM/1000).toFixed(s.radiusM<2000?1:0)+" km";
+    sel.appendChild(opt);
+  }
+  sel.value=String(s.radiusM);
+  document.getElementById("searchPanel").style.display="block";
+  btn.setAttribute("aria-expanded","true");
+  runCandidateSearch();
+  return true;
+}
 function applyHash(){
   const cmp=decodeComparePins(location.hash);
   if(cmp&&cmp.length){pins=mergeComparePins(pins,cmp);savePins();}
-  const q=decodeHash(location.hash); if(!q)return !!(cmp&&cmp.length);
+  const search=applySearchHash();
+  const q=decodeHash(location.hash); if(!q)return !!(cmp&&cmp.length)||search;
   if(q.mode)applyModeUI(q.mode);
   if(q.use&&MODEL.land_uses[q.use])selectUse(q.use);
   if(q.lat!=null&&q.lng!=null){map.setView([q.lat,q.lng],15);analyze(L.latLng(q.lat,q.lng));return true;}
-  return !!(cmp&&cmp.length);
+  return !!(cmp&&cmp.length)||search;
 }
 
 /* ---- address search (Nominatim OSM geocoder, submit-only) ----

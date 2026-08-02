@@ -15,6 +15,7 @@ const {
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
+  encodeSearch, decodeSearch,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals,
@@ -592,6 +593,63 @@ test("mergeComparePins: never mutates the existing list in place", () => {
   const existing = [{ lat: 1, lng: 1 }];
   mergeComparePins(existing, [{ lat: 2, lng: 2 }]);
   assert.equal(existing.length, 1);
+});
+
+// ---- encodeSearch / decodeSearch (shareable reverse-search area) ----
+
+test("encodeSearch/decodeSearch: round trips center, radius, and use", () => {
+  const seg = encodeSearch(30.372015, -97.982042, 1200, "food_truck_court");
+  const back = decodeSearch(seg);
+  assert.equal(back.lat, 30.37202);  // rounded to 5 decimals, same as encodeHash
+  assert.equal(back.lng, -97.98204);
+  assert.equal(back.radiusM, 1200);
+  assert.equal(back.use, "food_truck_court");
+});
+
+test("encodeSearch: radiusM is rounded to a whole meter", () => {
+  const back = decodeSearch(encodeSearch(1, 1, 1234.6, "ev_charging_hub"));
+  assert.equal(back.radiusM, 1235);
+});
+
+test("decodeSearch: accepts a leading '#' (as read straight off location.hash)", () => {
+  const seg = encodeSearch(1, 2, 500, "warehouse_club");
+  const back = decodeSearch("#" + seg);
+  assert.equal(back.radiusM, 500);
+});
+
+test("decodeSearch: absent hash, no search segment, or malformed JSON all return null (not throw)", () => {
+  assert.equal(decodeSearch(""), null);
+  assert.equal(decodeSearch("#"), null);
+  assert.equal(decodeSearch(undefined), null);
+  assert.equal(decodeSearch("mode=explore&lat=1&lng=2"), null);
+  assert.equal(decodeSearch("search=%7Bnot-valid-json"), null);
+  assert.equal(decodeSearch("search=" + encodeURIComponent(JSON.stringify("not an object"))), null);
+});
+
+test("decodeSearch: missing/unparseable fields come back null per-field, not NaN", () => {
+  const seg = "search=" + encodeURIComponent(JSON.stringify({ lat: "nope", lng: 2 }));
+  const back = decodeSearch(seg);
+  assert.equal(back.lat, null);
+  assert.equal(back.lng, 2);
+  assert.equal(back.radiusM, null);
+  assert.equal(back.use, null);
+});
+
+test("decodeSearch: a non-positive radiusM is rejected rather than trusted verbatim", () => {
+  const seg = "search=" + encodeURIComponent(JSON.stringify({ lat: 1, lng: 2, radiusM: 0, use: "data_center" }));
+  assert.equal(decodeSearch(seg).radiusM, null);
+  const seg2 = "search=" + encodeURIComponent(JSON.stringify({ lat: 1, lng: 2, radiusM: -50, use: "data_center" }));
+  assert.equal(decodeSearch(seg2).radiusM, null);
+});
+
+test("decodeSearch: coexists with a mode/use/lat/lng hash without corrupting either", () => {
+  const searchSeg = encodeSearch(30.2, -97.7, 3000, "fast_casual");
+  const hash = `mode=build&use=data_center&lat=30.1&lng=-97.5&${searchSeg}`;
+  const q = decodeHash(hash);
+  assert.deepEqual(q, { mode: "build", use: "data_center", lat: 30.1, lng: -97.5 });
+  const s = decodeSearch(hash);
+  assert.equal(s.use, "fast_casual");
+  assert.equal(s.radiusM, 3000);
 });
 
 // ---- nominatimUrl / parseNominatimResult (address search) ----

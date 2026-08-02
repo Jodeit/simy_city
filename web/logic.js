@@ -301,6 +301,47 @@ function mergeComparePins(existing,incoming){
   return out.slice(0,6);
 }
 
+/* ---- shareable reverse-search area (URL hash) encode/decode ----
+   Same shape of problem as encodeHash/encodeComparePins above, for the
+   "🔍 Find candidate sites" area search (reverse search step 3): a visitor
+   should be able to share "search this area for X" as a link, independent
+   of both the single clicked-point permalink and the Compare-pins list —
+   a search's center doesn't have to be a parcel anyone has analyzed.
+   Packed into a standalone `search=` hash segment (not merged into
+   encodeHash's mode/use/lat/lng) as URI-encoded JSON: the search center
+   (5-decimal rounded, same precision as encodeHash), the radius in meters,
+   and the use id. `decodeSearch` returns null if there's no `search`
+   segment or it doesn't parse to an object; missing/non-finite lat/lng,
+   a non-positive radiusM, or a missing use each come back null in their
+   own field (not a trusted-verbatim value) so the caller only applies what
+   actually decoded. */
+function encodeSearch(lat,lng,radiusM,use){
+  return "search="+encodeURIComponent(JSON.stringify({
+    lat:+(+lat).toFixed(5), lng:+(+lng).toFixed(5),
+    radiusM:Math.round(radiusM), use:use||null,
+  }));
+}
+function decodeSearch(hash){
+  const h=String(hash||"").replace(/^#/,"");
+  if(!h)return null;
+  let raw=null;
+  h.split("&").forEach(kv=>{
+    const i=kv.indexOf("=");if(i<0)return;
+    if(kv.slice(0,i)==="search")raw=kv.slice(i+1);
+  });
+  if(raw==null)return null;
+  let o;
+  try{o=JSON.parse(decodeURIComponent(raw));}catch(e){return null;}
+  if(!o||typeof o!=="object")return null;
+  const lat=parseFloat(o.lat), lng=parseFloat(o.lng), radiusM=parseInt(o.radiusM,10);
+  return {
+    lat:isFinite(lat)?lat:null,
+    lng:isFinite(lng)?lng:null,
+    radiusM:(isFinite(radiusM)&&radiusM>0)?radiusM:null,
+    use:o.use||null,
+  };
+}
+
 /* ---- address search (Nominatim OSM geocoder) ----
    Free, keyless forward-geocoding so someone who only knows a street address
    (not a lat/lng) can jump straight to a site. `nominatimUrl` builds the
@@ -526,5 +567,5 @@ function reverseSearchSignals(requires,roofNeed){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearch,decodeSearch,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
 }
