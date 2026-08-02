@@ -504,18 +504,21 @@ function parseOverpassPoints(json){
 // use, from its model.json `requires` block plus the use's own rooftop-need
 // threshold (USE_DEMAND[id].roofNeed in explore.html — requires.demand's
 // shape varies use-to-use, so roofNeed is passed in rather than re-parsed
-// here). `preferFar` turns on for a "farther is better" competition read
-// (requires.competition.min_distance_km_from_nearest, currently only
-// food_truck_court's inverted saturation check); `preferNear` turns on for
-// any use with a rooftop-demand threshold (warehouse_club, fast_casual,
-// food_truck_court). A use with neither (data_center, residential_subdivision)
-// has no signal a grid-scan ranking can use yet — the caller should treat
-// that as "reverse search not supported for this use" rather than ranking on
-// an all-zero score.
+// here). `preferFar` turns on for either shape layers.yaml uses for a
+// "farther is better" competition read: an explicit
+// `min_distance_km_from_nearest` (food_truck_court, ev_charging_hub) or a
+// zero-tolerance `max_same_brand_in_trade_area` (warehouse_club — "don't
+// build a second Costco inside another Costco's trade area" is exactly the
+// same avoid-the-competitor shape, just phrased as a cap instead of a
+// distance). `preferNear` turns on for any use with a rooftop-demand
+// threshold (warehouse_club, fast_casual, food_truck_court, ev_charging_hub).
+// A use with neither (data_center, residential_subdivision) has no signal a
+// grid-scan ranking can use yet — the caller should treat that as "reverse
+// search not supported for this use" rather than ranking on an all-zero score.
 function reverseSearchSignals(requires,roofNeed){
   const comp=(requires&&requires.competition)||{};
   return {
-    preferFar: comp.min_distance_km_from_nearest!=null,
+    preferFar: comp.min_distance_km_from_nearest!=null || comp.max_same_brand_in_trade_area!=null,
     preferNear: !!roofNeed,
   };
 }

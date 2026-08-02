@@ -1026,6 +1026,62 @@ Ground rules for each run:
       stay visible — a real print-preview render, not just a static CSS
       review.
 
+## Next (breadth) — newly added (5)
+- [x] **Bug fix: warehouse_club's reverse search ignored its own
+      competition gate.** `reverseSearchSignals` (`web/logic.js`, added
+      alongside the "🔍 Find candidate sites" search UI) only recognized the
+      `requires.competition.min_distance_km_from_nearest` shape as a
+      "farther is better" signal — food_truck_court's and ev_charging_hub's
+      shape. warehouse_club's own competition gate
+      (`max_same_brand_in_trade_area: 0`, `data_sources/layers.yaml`) uses a
+      *different* field name for the exact same "avoid this competitor
+      entirely" semantics, so it fell through unrecognized: the search
+      button was enabled for warehouse_club (rooftop `roofNeed` alone turned
+      `preferNear` on) and looked like a real "far from existing Costcos"
+      search, but silently ranked on rooftop demand only — a misleading
+      result, not a crash, which is why it slipped through the original
+      session's verification. (A pre-existing unit test even encoded this
+      gap: `reverseSearchSignals: a use with neither (e.g. data_center) gets
+      both signals off` passed `{ competition: { max_same_brand_in_trade_area:
+      0 } }` — warehouse_club's actual shape, not data_center's — and
+      asserted `preferFar: false`, which the fixed test would now fail.)
+      Extended `reverseSearchSignals` to also turn `preferFar` on for
+      `max_same_brand_in_trade_area!=null`. Fixed the mislabeled test (now a
+      correct data_center-shaped `{}` case) and added a new one asserting
+      `max_same_brand_in_trade_area` turns `preferFar` on. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 6 land uses),
+      `node --test tests/js/*.test.mjs` (143 passed, 1 new), and headless
+      Chromium: both pages load with zero console/page errors; selecting
+      `warehouse_club` now reports `{preferFar:true, preferNear:true}` from
+      `reverseSearchSignals` (previously `preferFar:false`); and running
+      `runCandidateSearch()` with mocked `overpassRaw` (synthetic rooftops +
+      a synthetic competing warehouse club) produced result text like
+      "≈2 rooftops within 15 km · nearest warehouse club 15.9 km away" —
+      the competitor clause that was previously always missing for this use
+      — with markers rendered and zero console errors.
+- [ ] **Reverse search: let a shared/pinned search's radius+use travel in the
+      URL.** The single-point permalink (`encodeHash`) and the Compare-pins
+      list (`cmp=`) are both shareable via URL; the area search
+      (`searchRadius`/`runCandidateSearch`, step 3) isn't — reopening a
+      shared link always starts from the default map center/radius for
+      whatever use is selected. Add a `search=` hash segment (radius + maybe
+      the chosen use) so "here's a good spot to search" is a link, not just
+      a screenshot, using the same encode/decode-pure-helper +
+      `applyHash()`-wiring pattern the other two shareable pieces of state
+      already established.
+- [ ] **Reverse search coverage for fast_casual.** `reverseSearchSignals`
+      currently gives fast_casual `preferNear` only (rooftop + daytime-POI
+      demand) since its `layers.yaml` entry has no `competition` block at
+      all — unlike warehouse_club/food_truck_court/ev_charging_hub, a new
+      fast-casual restaurant isn't modeled as needing distance from existing
+      fast-food outlets. Decide (a product call, not just a code change)
+      whether that's actually correct — fast-food clustering is a real
+      real-estate pattern (shared drive-thru traffic can help more than
+      hurt) — or whether fast_casual should get a real competition gate
+      added to `layers.yaml` (e.g. a saturation cap) the way warehouse_club
+      and food_truck_court already have, which `reverseSearchSignals` would
+      then need to recognize.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).

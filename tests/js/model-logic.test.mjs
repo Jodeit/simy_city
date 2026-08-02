@@ -1013,9 +1013,15 @@ test("reverseSearchSignals: both signals can be on at once (the food-truck-court
 });
 
 test("reverseSearchSignals: a use with neither (e.g. data_center) gets both signals off", () => {
-  const sig = reverseSearchSignals({ competition: { max_same_brand_in_trade_area: 0 } }, 0);
+  const sig = reverseSearchSignals({}, 0);
   assert.equal(sig.preferFar, false);
   assert.equal(sig.preferNear, false);
+});
+
+test("reverseSearchSignals: a max_same_brand_in_trade_area competition read also turns preferFar on (warehouse_club's shape)", () => {
+  const sig = reverseSearchSignals({ competition: { max_same_brand_in_trade_area: 0 } }, 100000);
+  assert.equal(sig.preferFar, true);
+  assert.equal(sig.preferNear, true);
 });
 
 test("reverseSearchSignals: handles a missing requires/competition block gracefully", () => {
