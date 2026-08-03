@@ -277,7 +277,9 @@
         <div class="searchRow">
           <select id="searchRadius" aria-label="Search radius"></select>
           <button class="toolbtn" id="searchGo" type="button">Search here</button>
+          <button class="toolbtn" id="searchShare" type="button" title="Copy a link to this search (center + radius + use)">🔗 Share</button>
         </div>
+        <span class="ok" id="searchShareMsg"></span>
         <div class="live" id="searchStatus" style="display:none"></div>
         <div id="searchResults"></div>
       </div>
@@ -1273,6 +1275,16 @@ function maybeRenderEVVerdict(seq){
 function initSearch(){
   document.getElementById("searchToggle").onclick=toggleSearchPanel;
   document.getElementById("searchGo").onclick=runCandidateSearch;
+  document.getElementById("searchShare").onclick=shareSearchLink;
+}
+// Carries the search's center (current map center), radius, and use into a
+// standalone `#search=..` link (encodeSearchHash, web/logic.js) — same
+// copy-to-clipboard pattern as the Compare-list "🔗 Share list" button.
+function shareSearchLink(){
+  const center=map.getCenter();
+  const radiusM=parseInt(document.getElementById("searchRadius").value,10)||USE_DEMAND[current].radius;
+  const link=location.href.split("#")[0]+"#"+encodeSearchHash(center.lat,center.lng,radiusM,current);
+  copy(link,"search link copied","searchShareMsg");
 }
 // Disables the toggle entirely for a use with neither reverse-search signal
 // (data_center, residential_subdivision as of this writing) rather than
@@ -1950,12 +1962,32 @@ function wireCompare(){
 }
 
 /* ---- honor an incoming share link (#mode=..&use=..&lat=..&lng=.. and/or
-   #cmp=.. for a shared Compare list — see encodeHash/encodeComparePins in
+   #cmp=.. for a shared Compare list, and/or #search=.. for a shared reverse
+   search — see encodeHash/encodeComparePins/encodeSearchHash in
    web/logic.js). A shared Compare list merges into (never replaces) any
-   pins already saved in this browser. ---- */
+   pins already saved in this browser. A shared search takes priority over a
+   plain point link (mutually exclusive in practice — a search link never
+   also carries mode/lat/lng) since it re-selects the use, re-centers the
+   map, and re-runs the actual search rather than just analyzing one point. */
 function applyHash(){
   const cmp=decodeComparePins(location.hash);
   if(cmp&&cmp.length){pins=mergeComparePins(pins,cmp);savePins();}
+  const srch=decodeSearchHash(location.hash);
+  if(srch&&srch.lat!=null&&srch.lng!=null&&srch.radius!=null&&srch.use&&MODEL.land_uses[srch.use]){
+    applyModeUI("build");
+    selectUse(srch.use);
+    map.setView([srch.lat,srch.lng],13);
+    const panel=document.getElementById("searchPanel"), btn=document.getElementById("searchToggle");
+    if(panel&&btn&&!btn.disabled){
+      panel.style.display="block";
+      btn.setAttribute("aria-expanded","true");
+      fillSearchRadiusOptions();
+      const sel=document.getElementById("searchRadius");
+      if(sel)sel.value=String(srch.radius);
+      runCandidateSearch();
+    }
+    return true;
+  }
   const q=decodeHash(location.hash); if(!q)return !!(cmp&&cmp.length);
   if(q.mode)applyModeUI(q.mode);
   if(q.use&&MODEL.land_uses[q.use])selectUse(q.use);

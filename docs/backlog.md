@@ -1059,16 +1059,51 @@ Ground rules for each run:
       "≈2 rooftops within 15 km · nearest warehouse club 15.9 km away" —
       the competitor clause that was previously always missing for this use
       — with markers rendered and zero console errors.
-- [ ] **Reverse search: let a shared/pinned search's radius+use travel in the
+- [x] **Reverse search: let a shared/pinned search's radius+use travel in the
       URL.** The single-point permalink (`encodeHash`) and the Compare-pins
       list (`cmp=`) are both shareable via URL; the area search
-      (`searchRadius`/`runCandidateSearch`, step 3) isn't — reopening a
-      shared link always starts from the default map center/radius for
-      whatever use is selected. Add a `search=` hash segment (radius + maybe
-      the chosen use) so "here's a good spot to search" is a link, not just
-      a screenshot, using the same encode/decode-pure-helper +
-      `applyHash()`-wiring pattern the other two shareable pieces of state
-      already established.
+      (`searchRadius`/`runCandidateSearch`, step 3) wasn't — reopening a
+      shared link always started from the default map center/radius for
+      whatever use is selected. Added `encodeSearchHash(lat,lng,radiusM,use)`/
+      `decodeSearchHash(hash)` to `web/logic.js` — a standalone `search=` JSON
+      blob (own hash segment, same "own key, own JSON payload" shape as
+      `cmp=`, deliberately independent of `encodeHash`'s mode/use/lat/lng
+      since a search center isn't "the clicked point"), rounding lat/lng to
+      5 decimals and radius to the nearest meter; `decodeSearchHash` returns
+      `null` outright for an absent/malformed `search` segment and `null`
+      per-field for anything unparseable or a non-positive radius, same
+      don't-trust-verbatim contract the other decoders use. Added a "🔗
+      Share" button next to "Search here" in the search panel
+      (`web/explore.html`) that captures the *current* map center + the
+      selected radius + the current use into a copyable link (same `copy()`
+      clipboard helper the Compare list's "🔗 Share list" button already
+      uses). Wired the read side into `applyHash()`: a valid `search=`
+      segment now re-selects the use, re-centers the map, opens the search
+      panel, sets the radius `<select>` to the shared value, and re-runs
+      `runCandidateSearch()` — so opening a shared link reproduces the same
+      ranked results, not just the same panel state — while a
+      use/radius/center that no longer resolves (stale link, or a use with
+      neither reverse-search signal) safely falls through without throwing.
+      Added 6 new unit tests for `encodeSearchHash`/`decodeSearchHash`
+      (round trip, decimal/meter rounding, absent/malformed-JSON/non-object
+      payload → null, missing/unparseable fields → null per-field not NaN, a
+      zero/negative radius rejected, coexistence with a `mode=`/`cmp=` hash
+      without cross-corruption). Verified: `python -m pytest -q` (15
+      passed), `simy validate` (OK, 6 land uses), `node --test
+      tests/js/*.test.mjs` (149 passed, 6 new), and headless Chromium:
+      both pages load with zero console/page errors; loading `explore.html`
+      with a synthetic
+      `#search={lat:30.372,lng:-97.982,radius:1200,use:"food_truck_court"}`
+      hash already in the URL correctly switched to Test-a-use mode,
+      selected `food_truck_court`, centered the map, opened the search panel
+      with the radius `<select>` at `1200`, and (with `overpassRaw` mocked)
+      running the resulting search produced real ranked candidate rows end
+      to end; and clicking the new "🔗 Share" button with clipboard
+      permissions granted produced a well-formed `#search=...` link on the
+      clipboard that decodes back to the exact center/radius/use it was
+      built from. Outbound network to Overpass is blocked from this
+      sandbox, so a live end-to-end shared-search link on the real site is a
+      good human spot-check.
 - [ ] **Reverse search coverage for fast_casual.** `reverseSearchSignals`
       currently gives fast_casual `preferNear` only (rooftop + daytime-POI
       demand) since its `layers.yaml` entry has no `competition` block at

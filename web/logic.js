@@ -301,6 +301,46 @@ function mergeComparePins(existing,incoming){
   return out.slice(0,6);
 }
 
+/* ---- shareable reverse-search (URL hash) encode/decode ----
+   Same shape of problem as encodeHash/encodeComparePins above, for the
+   "🔍 Find candidate sites" area search (sampleGrid/rankCandidates, via
+   runCandidateSearch()): the search center (map center at search time),
+   radius, and use weren't part of any shareable link, so reopening a
+   shared/pinned search always started from whatever the default map
+   center/radius happened to be. `encodeSearchHash` packs all four into a
+   single `search=` JSON blob (own hash segment, deliberately independent of
+   encodeHash's mode/use/lat/lng — a search center isn't "the clicked
+   point" and mixing them would make applyHash() ambiguous about which flow
+   to run). `decodeSearchHash` returns null for an absent/malformed `search`
+   segment, and null per-field for anything that doesn't parse — same
+   "don't clobber with a trusted-verbatim bad value" contract as the other
+   decoders — so the caller only re-runs a search when every field is
+   actually usable. */
+function encodeSearchHash(lat,lng,radiusM,use){
+  const obj={lat:+(+lat).toFixed(5),lng:+(+lng).toFixed(5),radius:Math.round(radiusM),use:use||null};
+  return "search="+encodeURIComponent(JSON.stringify(obj));
+}
+function decodeSearchHash(hash){
+  const h=String(hash||"").replace(/^#/,"");
+  if(!h)return null;
+  let raw=null;
+  h.split("&").forEach(kv=>{
+    const i=kv.indexOf("=");if(i<0)return;
+    if(kv.slice(0,i)==="search")raw=kv.slice(i+1);
+  });
+  if(raw==null)return null;
+  let obj;
+  try{obj=JSON.parse(decodeURIComponent(raw));}catch(e){return null;}
+  if(!obj||typeof obj!=="object")return null;
+  const lat=parseFloat(obj.lat), lng=parseFloat(obj.lng), radius=parseInt(obj.radius,10);
+  return {
+    lat:isFinite(lat)?lat:null,
+    lng:isFinite(lng)?lng:null,
+    radius:(isFinite(radius)&&radius>0)?radius:null,
+    use:obj.use||null,
+  };
+}
+
 /* ---- address search (Nominatim OSM geocoder) ----
    Free, keyless forward-geocoding so someone who only knows a street address
    (not a lat/lng) can jump straight to a site. `nominatimUrl` builds the
@@ -526,5 +566,5 @@ function reverseSearchSignals(requires,roofNeed){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
 }
