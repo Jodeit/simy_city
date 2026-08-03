@@ -1129,6 +1129,71 @@ Ground rules for each run:
       Chromium confirms both `web/explore.html` and `web/index.html` still
       load with zero console/page errors.
 
+## Next (breadth) — newly added (6)
+- [ ] **7th land use: Self-storage facility.** Add `self_storage` to
+      `data_sources/layers.yaml`, reusing existing primitives rather than
+      inventing new ones: `requires.demand` reads nearby total rooftops (same
+      imperfect proxy `food_truck_court`/`ev_charging_hub` already use) at a
+      ~3 km radius (a storage unit draws from a wider ring than a food truck
+      but narrower than a warehouse club's regional pull), `requires.parcel.
+      min_buildable_acres` around 1.5–2 ac (a single-story facility footprint
+      + drive aisles, smaller than warehouse_club's 15 ac), and a
+      `requires.competition.min_distance_km_from_nearest` gate against
+      existing facilities (`amenity=storage_rental` or `shop=storage_rental`
+      — check which OSM tag actually has coverage) at ~2 km, the same
+      inverted "farther is better" shape `food_truck_court`/`ev_charging_hub`
+      established. Because `reverseSearchSignals` (`web/logic.js`) already
+      generalizes on the *shape* of `requires.competition`/`requires.demand`
+      rather than per-use-id, this should need **zero** changes there — the
+      reverse-search "🔍 Find candidate sites" button should pick the new use
+      up automatically with both `preferFar`/`preferNear` on (confirm this
+      with a quick manual check rather than assuming). Wire a single-point
+      verdict (`maybeRenderSelfStorageVerdict`) following the
+      `maybeRenderFTCVerdict`/`maybeRenderEVVerdict` wait-for-all-legs
+      pattern (rooftop leg + acreage leg + competitor-distance leg). Add it
+      to the use-selector button order and both `analyze()` state-reset
+      branches. Verify: `pytest`, `simy validate` (7 land uses), `node --test
+      tests/js/*.test.mjs`, and headless Chromium through PASS/SHORT/
+      no-competitor-in-range/data-unavailable/wrong-use states, same rigor as
+      every prior land-use addition.
+- [ ] **CSV export for reverse-search candidate results.** The "⚖️ Compare"
+      modal has a "⬇️ Download CSV" button (`toCsv`/`toCsvRow`/`toCsvField`
+      in `web/logic.js`) for pinned parcels, but the "🔍 Find candidate
+      sites" search results (numbered markers + side-panel list rows,
+      `runCandidateSearch()` in `web/explore.html`) have no export at all —
+      the only way to keep a search's results is pinning each one to Compare
+      individually. Add a small "⬇️ Download CSV" button to the search
+      results panel that reuses the existing `toCsv` helper on the current
+      ranked-candidate list (rank, lat/lng, score/"why" text — whatever
+      `rankCandidates` already returns plus the rendered why-string), same
+      client-side `Blob` + anchor-click pattern, no network call. Add unit
+      tests only if any new pure formatting logic is needed beyond the
+      existing `toCsv`/`toCsvRow` (a thin wrapper likely needs none). Verify
+      in headless Chromium: both pages load clean, and a real (or mocked)
+      candidate search followed by clicking the new download button produces
+      correctly-escaped CSV text via a driven `downloadSearchResultsCsv()`-
+      style call, mirroring how `downloadCompareCsv()` was verified.
+- [ ] **Retry affordance for failed network reads.** Every point-query
+      checklist row (topography, MUD/water district, FEMA flood, parcel
+      lookup, Census/ACS) and the reverse-search panel already distinguish a
+      genuine fetch failure ("couldn't reach X") from a real "no data here"
+      result — but the only way to retry a failed one today is re-clicking
+      the map point (which re-runs *every* leg, not just the failed one) or
+      reloading the page. Add a small inline "retry" link/button to each
+      "couldn't reach …" / "unavailable" render state that re-issues just
+      that one fetch (reusing the existing per-leg fetch function directly,
+      not the whole `analyze()` fan-out) and re-renders in place on success.
+      Since `netCache` (the session cache added earlier) caches by key
+      including in-flight failures get evicted already
+      (`makeSessionCache`'s eviction-on-failure), a retry should be a plain
+      re-call of the same fetch helper — check whether a cache-bypass is
+      needed or whether the existing failure-eviction already makes a retry
+      "just work." Verify in headless Chromium: mock a fetch to fail once
+      then succeed, drive the real retry click, and confirm the row updates
+      from the failure state to the real rendered data with zero console
+      errors; also confirm a retry on a row that fails *again* still shows
+      the correct failure state (no infinite spinner, no thrown error).
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
