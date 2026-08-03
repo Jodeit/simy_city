@@ -1104,18 +1104,30 @@ Ground rules for each run:
       built from. Outbound network to Overpass is blocked from this
       sandbox, so a live end-to-end shared-search link on the real site is a
       good human spot-check.
-- [ ] **Reverse search coverage for fast_casual.** `reverseSearchSignals`
-      currently gives fast_casual `preferNear` only (rooftop + daytime-POI
-      demand) since its `layers.yaml` entry has no `competition` block at
-      all — unlike warehouse_club/food_truck_court/ev_charging_hub, a new
-      fast-casual restaurant isn't modeled as needing distance from existing
-      fast-food outlets. Decide (a product call, not just a code change)
-      whether that's actually correct — fast-food clustering is a real
-      real-estate pattern (shared drive-thru traffic can help more than
-      hurt) — or whether fast_casual should get a real competition gate
-      added to `layers.yaml` (e.g. a saturation cap) the way warehouse_club
-      and food_truck_court already have, which `reverseSearchSignals` would
-      then need to recognize.
+- [x] **Reverse search coverage for fast_casual.** Made the product call this
+      item asked for: fast_casual deliberately keeps `preferNear`-only
+      (no `preferFar`), rather than gaining an inverted competition gate like
+      warehouse_club/food_truck_court/ev_charging_hub. Those three model a
+      fixed nearby demand pool that one more entrant just splits (a second
+      Costco, food truck, or charger competes for the same rooftops/drivers),
+      so distance from the nearest existing one is the right gate. A
+      fast-casual restaurant is different — real commercial-real-estate
+      practice ("restaurant row") is that nearby QSR/fast-casual competitors
+      share drive-thru/parking traffic and benefit from cross-shopping, so
+      proximity to existing competitors isn't a bad sign the way it is for
+      the other three. Documented the reasoning directly in
+      `data_sources/layers.yaml`'s `fast_casual` entry (a comment, since
+      "deliberately absent" is otherwise indistinguishable from "someone
+      forgot it") and cross-referenced it from `reverseSearchSignals`'s
+      existing doc comment in `web/logic.js`, which already implements this
+      behavior correctly (`preferNear` only) — no functional/scoring change
+      needed, this closes the open design question the item raised. Verified:
+      `python tools/build_model_json.py` (unchanged output — a YAML comment,
+      no data field changed), `python -m pytest -q` (15 passed), `simy
+      validate` (OK, 6 land uses), `node --test tests/js/*.test.mjs` (149
+      passed, no new tests needed since no behavior changed), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` still
+      load with zero console/page errors.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

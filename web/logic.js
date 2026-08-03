@@ -555,6 +555,10 @@ function parseOverpassPoints(json){
 // A use with neither (data_center, residential_subdivision) has no signal a
 // grid-scan ranking can use yet — the caller should treat that as "reverse
 // search not supported for this use" rather than ranking on an all-zero score.
+// fast_casual is `preferNear`-only on purpose, not an oversight — see the
+// `competition`-block comment on `fast_casual` in data_sources/layers.yaml
+// for why clustering near existing competitors doesn't get penalized there
+// the way it does for the other three.
 function reverseSearchSignals(requires,roofNeed){
   const comp=(requires&&requires.competition)||{};
   return {

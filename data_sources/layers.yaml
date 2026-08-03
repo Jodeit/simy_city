@@ -148,6 +148,17 @@ land_uses:
       demand:        { min_daytime_population: 20000, drive_time_min: 10 }
       transportation: { near_arterial_aadt: 20000 }
       parcel:        { min_buildable_acres: 0.7 }
+      # Deliberately no `competition` block, unlike warehouse_club/
+      # food_truck_court/ev_charging_hub: those model a fixed nearby demand
+      # pool one more entrant just splits (a second Costco, food truck, or
+      # charger competes for the same rooftops), so distance from the
+      # nearest existing one is the right gate. A fast-casual restaurant
+      # instead benefits from co-location — shared drive-thru/parking
+      # traffic and cross-shopping between nearby QSR/fast-casual spots is
+      # a real commercial-real-estate pattern ("restaurant row"), so being
+      # near existing competitors is not a bad sign the way it is for the
+      # other three. `reverseSearchSignals` (web/logic.js) reflects this: it
+      # gives fast_casual `preferNear` only, no `preferFar`.
     induces: {}
     impacts:
       habitat: low
