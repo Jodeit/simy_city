@@ -1129,6 +1129,56 @@ Ground rules for each run:
       Chromium confirms both `web/explore.html` and `web/index.html` still
       load with zero console/page errors.
 
+## Next (breadth) — newly added (6)
+- [ ] **Undo for Compare "clear all".** The Compare modal's "Clear all" button
+      (`compareClear`, `web/explore.html` around lines 328/1949) wipes `pins`/
+      `localStorage` immediately with no confirmation or recovery — unlike the
+      recently-viewed strip's "clear all", which already got an 8s inline
+      "Cleared — Undo" affordance (`clearRecentSites`/`undoClear` in
+      `web/logic.js`, wired into the recently-viewed panel). Give Compare pins
+      the same treatment: snapshot the list before clearing, show an inline
+      undo affordance for ~8s in the modal, restore the exact pins on click.
+      `undoClear(saved, clearedAt, now, windowMs)` is already generic over the
+      list shape (doesn't know it's recent-sites vs. pins), so check whether it
+      can be reused directly rather than adding a near-duplicate helper —
+      only `clearRecentSites`'s "return the empty list" half is
+      recent-sites-specific, and pins already has its own `savePins()` to
+      persist through. Add unit tests mirroring the recently-viewed ones
+      (restore-within-window, expired-window returns null, non-mutation) and
+      verify in headless Chromium end to end (real clear → undo → localStorage
+      round trip, and letting the window elapse hides the affordance).
+- [ ] **Promote `employment_center` to a real, verdict-bearing land use.**
+      Currently only an `actor_uses` stub (`data_sources/layers.yaml`) — no
+      `requires` block, no verdict, no use-selector button — referenced only
+      by `enabling_edges` for standoff reasoning. The file's own comment flags
+      it as a "promote to full land_uses entries when we model them in depth"
+      candidate. Give it a real `requires` (e.g. `power` + a transportation/
+      access read + a parcel acreage gate suited to an office/industrial
+      site) and wire a single-point PASS/SHORT verdict into
+      `web/explore.html`, following the existing wait-for-all-legs pattern
+      (`maybeRenderEVVerdict`/`maybeRenderFTCVerdict`). Add it to the
+      use-selector button order and both `analyze()` state-reset branches.
+      Confirm whether `reverseSearchSignals` should pick it up (does it have
+      a genuine far/near ranking signal, or none like data_center/
+      residential_subdivision?) and leave the search button correctly
+      enabled/disabled either way. Verify `simy validate` still passes with
+      the new land use registered, `python -m pytest -q` and
+      `node --test tests/js/*.test.mjs` pass, and headless Chromium shows
+      zero console/page errors end to end.
+- [ ] **One more parcel county.** Continue the `PARCEL_SOURCES` series
+      (currently 8: Travis, Maricopa, Harris, Bexar, LA, King, Cook,
+      Miami-Dade) with a 9th — e.g. Dallas County, TX or Fulton County, GA
+      (Atlanta) — found via web search for the county's public ArcGIS parcel
+      MapServer, its real field names, and whether it publishes a stable
+      per-parcel deep-link (else fall back to the search-page pattern already
+      used for Harris/Bexar/LA/King/Miami-Dade). Same verification shape as
+      every prior county: `inBbox` correctly routes a point in the new county
+      and still finds no source for an out-of-coverage point; a mocked-payload
+      `showParcel` render produces correct fields with zero console errors;
+      both pages still load clean in headless Chromium. Live endpoint
+      reachability is expected to need a human spot-check, same as every
+      prior county addition.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
