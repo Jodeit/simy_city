@@ -566,9 +566,32 @@ function reverseSearchSignals(requires,roofNeed){
     preferNear: !!roofNeed,
   };
 }
+// Builds the same one-line "why" a candidate ranked where it did (e.g. "≈12
+// rooftops within 1.2 km · nearest food vendor 1.6 km away") from a
+// rankCandidates() result plus the reverseSearchSignals()/USE_DEMAND config
+// that produced it — shared by the map-popup/list-row rendering (which HTML-
+// escapes it) and the CSV export (which doesn't need to). A result with
+// neither signal on falls back to plain coordinates.
+function candidateWhyText(r,sig,cfg){
+  const parts=[];
+  if(sig&&sig.preferNear)parts.push(`≈${r.demandCount} rooftop${r.demandCount===1?"":"s"} within ${(cfg.radius/1000)} km`);
+  if(sig&&sig.preferFar)parts.push(r.nearestCompetitorKm==null
+    ? `no ${cfg.compLabel} in range`
+    : `nearest ${cfg.compLabel.replace(/s$/,"")} ${r.nearestCompetitorKm.toFixed(1)} km away`);
+  return parts.length?parts.join(" · "):`${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`;
+}
+// Shapes a rankCandidates() result list into toCsv()-ready rows (header +
+// one row per candidate: rank, lat/lng, score, and the same "why" text the
+// search-results panel renders) — same "reuse the existing CSV plumbing"
+// pattern the Compare-list CSV export already established.
+function candidatesToCsvRows(results,sig,cfg){
+  const rows=[["#","Lat","Lng","Score","Why"]];
+  (results||[]).forEach((r,i)=>rows.push([i+1,r.lat,r.lng,r.score,candidateWhyText(r,sig,cfg)]));
+  return rows;
+}
 
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows};
 }

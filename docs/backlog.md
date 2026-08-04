@@ -1130,17 +1130,32 @@ Ground rules for each run:
       load with zero console/page errors.
 
 ## Next (breadth) — newly added (6)
-- [ ] **CSV export for reverse-search candidate results.** The Compare-pins
-      list already has a "⬇️ Download CSV" button (`toCsvField`/`toCsvRow`/
-      `toCsv` in `web/logic.js`), but the "🔍 Find candidate sites" reverse
-      search results (`web/explore.html`, up to 8 ranked markers/rows with
-      their "why" text) have no export — only the Compare list does. Add a
-      "⬇️ Download CSV" button to the search-results panel that reuses the
-      same `toCsv` helper on the ranked candidate list (lat/lng, score/rank,
-      the "why" text already rendered per row). No new pure-logic helpers
-      should be needed beyond maybe shaping the candidate objects into rows;
-      keep it a pure function with unit tests, same pattern as
-      `downloadCompareCsv`.
+- [x] **CSV export for reverse-search candidate results.** Added a
+      "⬇️ Download CSV" button to the "🔍 Find candidate sites" results panel
+      (`web/explore.html`), reusing the same `toCsv`/`Blob`+anchor pattern as
+      `downloadCompareCsv`, only rendered once a search actually returns a
+      non-empty ranked candidate list (no button on the "no candidates
+      matched" state). Extracted the per-candidate "why" text (e.g. "≈12
+      rooftops within 1.2 km · nearest food vendor 1.6 km away") out of
+      `explore.html`'s local `candWhyText` into a new pure `candidateWhyText(r,
+      sig, cfg)` in `web/logic.js` — shared by the map-popup/list-row HTML
+      rendering (still `esc()`-wrapped there) and the new `candidatesToCsvRows(
+      results, sig, cfg)`, which shapes a `rankCandidates()` result list into
+      `toCsv()`-ready rows (rank, lat, lng, score, why). `lastCandidates`/
+      `lastCandSig`/`lastCandCfg` track the most recently rendered search so
+      the CSV button doesn't need to re-derive them from the DOM, and are
+      cleared on `closeSearchPanel()`. Added 10 new unit tests for
+      `candidateWhyText` (each signal alone, both on, neither on, singular
+      "rooftop" vs plural) and `candidatesToCsvRows` (row shape, empty list,
+      missing/null results, a real `toCsv()` round trip). Verified: `python
+      tools/build_model_json.py` (unchanged output — no YAML/model change),
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 6 land uses),
+      `node --test tests/js/*.test.mjs` (159 passed, 10 new), and headless
+      Chromium confirms both pages load with zero genuine console/page errors
+      and, driven end to end with a real ranked candidate list, the CSV
+      button renders, `downloadCandidatesCsv()` produces the exact expected
+      rows via a real anchor-click, and `lastCandidates` correctly clears on
+      panel close.
 - [ ] **7th land use: senior living / assisted-care facility.** Every land
       use so far reads demand as "nearby rooftops" (or, for food_truck_court/
       ev_charging_hub, the same proxy at a tighter radius). The multi-tract

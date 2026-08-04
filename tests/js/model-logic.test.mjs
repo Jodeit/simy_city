@@ -18,7 +18,7 @@ const {
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
-  parseOverpassPoints, reverseSearchSignals,
+  parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -1076,4 +1076,69 @@ test("reverseSearchSignals: a max_same_brand_in_trade_area competition read also
 test("reverseSearchSignals: handles a missing requires/competition block gracefully", () => {
   assert.deepEqual(reverseSearchSignals(null, 0), { preferFar: false, preferNear: false });
   assert.deepEqual(reverseSearchSignals(undefined, 5000), { preferFar: false, preferNear: true });
+});
+
+// ---- candidateWhyText / candidatesToCsvRows (reverse-search CSV export) ----
+
+test("candidateWhyText: preferNear-only renders a rooftop count", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6 };
+  const text = candidateWhyText(r, { preferNear: true, preferFar: false }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(text, "≈12 rooftops within 1.2 km");
+});
+
+test("candidateWhyText: singular rooftop count doesn't pluralize", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 1, nearestCompetitorKm: null };
+  const text = candidateWhyText(r, { preferNear: true, preferFar: false }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(text, "≈1 rooftop within 1.2 km");
+});
+
+test("candidateWhyText: preferFar-only with a competitor in range", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 0, nearestCompetitorKm: 1.6 };
+  const text = candidateWhyText(r, { preferNear: false, preferFar: true }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(text, "nearest food vendor 1.6 km away");
+});
+
+test("candidateWhyText: preferFar-only with no competitor in range at all", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 0, nearestCompetitorKm: null };
+  const text = candidateWhyText(r, { preferNear: false, preferFar: true }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(text, "no food vendors in range");
+});
+
+test("candidateWhyText: both signals on joins with a middle dot (food_truck_court's case)", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6 };
+  const text = candidateWhyText(r, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(text, "≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away");
+});
+
+test("candidateWhyText: neither signal on falls back to plain coordinates", () => {
+  const r = { lat: 30.2672, lng: -97.7431, demandCount: 0, nearestCompetitorKm: null };
+  const text = candidateWhyText(r, { preferNear: false, preferFar: false }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(text, "30.2672, -97.7431");
+});
+
+test("candidatesToCsvRows: header row plus one row per candidate, rank/lat/lng/score/why", () => {
+  const results = [
+    { lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 },
+    { lat: 30.28, lng: -97.75, demandCount: 4, nearestCompetitorKm: null, score: 1004 },
+  ];
+  const rows = candidatesToCsvRows(results, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" });
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows[0], ["#", "Lat", "Lng", "Score", "Why"]);
+  assert.deepEqual(rows[1], [1, 30.27, -97.74, 13.6, "≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away"]);
+  assert.deepEqual(rows[2], [2, 30.28, -97.75, 1004, "≈4 rooftops within 1.2 km · no food vendors in range"]);
+});
+
+test("candidatesToCsvRows: an empty candidate list still returns just the header row", () => {
+  assert.deepEqual(candidatesToCsvRows([], { preferNear: true }, { radius: 1200 }), [["#", "Lat", "Lng", "Score", "Why"]]);
+});
+
+test("candidatesToCsvRows: handles a missing/null results list gracefully", () => {
+  assert.deepEqual(candidatesToCsvRows(null, {}, {}), [["#", "Lat", "Lng", "Score", "Why"]]);
+  assert.deepEqual(candidatesToCsvRows(undefined, {}, {}), [["#", "Lat", "Lng", "Score", "Why"]]);
+});
+
+test("candidatesToCsvRows: rows round-trip through toCsv (RFC-4180 output for a plain numeric/text shape)", () => {
+  const results = [{ lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 }];
+  const csv = toCsv(candidatesToCsvRows(results, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" }));
+  assert.equal(csv, "#,Lat,Lng,Score,Why\r\n1,30.27,-97.74,13.6,≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away");
 });

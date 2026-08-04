@@ -165,6 +165,7 @@
   .searchRow select{font:inherit;font-size:.82rem;padding:.35em .5em;border-radius:8px;
     border:1px solid var(--line);background:var(--surface);color:var(--ink)}
   .candList{display:flex;flex-direction:column;gap:6px;margin-top:9px}
+  .candCsvRow{margin-top:9px;display:flex;align-items:center;gap:8px}
   .candRow{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid var(--line);
     border-radius:9px;background:var(--surface);cursor:pointer;font-size:.84rem}
   .candRow:hover,.candRow:focus{border-color:var(--garden);outline:none}
@@ -1315,6 +1316,7 @@ function closeSearchPanel(){
   const results=document.getElementById("searchResults"); if(results)results.innerHTML="";
   const status=document.getElementById("searchStatus"); if(status)status.style.display="none";
   if(candLayer){candLayer.remove();candLayer=null;}
+  lastCandidates=null; lastCandSig=null; lastCandCfg=null;
 }
 // Offers 0.5x/1x/2x the use's own trade-area radius (USE_DEMAND[current].radius)
 // as search-radius choices — scaled to whatever's sensible for the current use
@@ -1364,16 +1366,13 @@ function runCandidateSearch(){
     .then(d=>{ if(seq!==searchReqSeq)return; compPts=parseOverpassPoints(d); compDone=true; finish(); })
     .catch(()=>{ if(seq!==searchReqSeq)return; compErr=true; compDone=true; finish(); });
 }
-function candWhyText(r,sig,cfg){
-  const parts=[];
-  if(sig.preferNear)parts.push(`≈${r.demandCount} rooftop${r.demandCount===1?"":"s"} within ${(cfg.radius/1000)} km`);
-  if(sig.preferFar)parts.push(r.nearestCompetitorKm==null
-    ? `no ${esc(cfg.compLabel)} in range`
-    : `nearest ${esc(cfg.compLabel.replace(/s$/,""))} ${r.nearestCompetitorKm.toFixed(1)} km away`);
-  return parts.length?parts.join(" · "):`${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`;
-}
+// results/sig/cfg from the most recently rendered search — the CSV export
+// button (rendered below, only once there's a non-empty result list) reads
+// these instead of re-deriving them from DOM state.
+let lastCandidates=null, lastCandSig=null, lastCandCfg=null;
 function renderCandidates(results,sig,cfg){
   const resEl=document.getElementById("searchResults");
+  lastCandidates=results; lastCandSig=sig; lastCandCfg=cfg;
   if(!results.length){
     resEl.innerHTML=`<p class="src">No candidates matched — try a larger radius.</p>`;
     return;
@@ -1382,17 +1381,35 @@ function renderCandidates(results,sig,cfg){
   candLayer=L.layerGroup(results.map((r,i)=>{
     const ll=L.latLng(r.lat,r.lng);
     return L.marker(ll,{icon:icon(i+1)})
-      .bindPopup(`<b>#${i+1}</b> — ${esc(candWhyText(r,sig,cfg))}`)
+      .bindPopup(`<b>#${i+1}</b> — ${esc(candidateWhyText(r,sig,cfg))}`)
       .on("click",()=>analyze(ll));
   })).addTo(map);
   resEl.innerHTML=`<div class="candList">`+results.map((r,i)=>
     `<div class="candRow" data-i="${i}" role="button" tabindex="0">
-       <span class="candNum">${i+1}</span><span>${esc(candWhyText(r,sig,cfg))}</span>
-     </div>`).join("")+`</div>`;
+       <span class="candNum">${i+1}</span><span>${esc(candidateWhyText(r,sig,cfg))}</span>
+     </div>`).join("")+
+    `</div><div class="candCsvRow"><button class="toolbtn" id="searchCsv" type="button">⬇️ Download CSV</button> <span class="ok" id="searchCsvMsg"></span></div>`;
   resEl.querySelectorAll(".candRow").forEach(row=>{
     const r=results[parseInt(row.dataset.i,10)];
     wireActivate(row,()=>analyze(L.latLng(r.lat,r.lng)));
   });
+  document.getElementById("searchCsv").onclick=()=>{
+    downloadCandidatesCsv();
+    const m=document.getElementById("searchCsvMsg");
+    if(m){m.textContent="✓ CSV downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+}
+// Exports the ranked candidate list as a downloaded .csv via
+// candidatesToCsvRows (web/logic.js) — same client-side-only Blob+anchor
+// pattern as downloadCompareCsv, no network call.
+function downloadCandidatesCsv(){
+  if(!lastCandidates||!lastCandidates.length)return;
+  const rows=candidatesToCsvRows(lastCandidates,lastCandSig,lastCandCfg);
+  const blob=new Blob([toCsv(rows)],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-candidates.csv";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
 
 /* ---- parcel identification (real property boundary + county record) ---- */
