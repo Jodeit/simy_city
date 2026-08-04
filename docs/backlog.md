@@ -1129,6 +1129,46 @@ Ground rules for each run:
       Chromium confirms both `web/explore.html` and `web/index.html` still
       load with zero console/page errors.
 
+## Next (breadth) — newly added (6)
+- [ ] **CSV export for reverse-search candidate results.** The Compare-pins
+      list already has a "⬇️ Download CSV" button (`toCsvField`/`toCsvRow`/
+      `toCsv` in `web/logic.js`), but the "🔍 Find candidate sites" reverse
+      search results (`web/explore.html`, up to 8 ranked markers/rows with
+      their "why" text) have no export — only the Compare list does. Add a
+      "⬇️ Download CSV" button to the search-results panel that reuses the
+      same `toCsv` helper on the ranked candidate list (lat/lng, score/rank,
+      the "why" text already rendered per row). No new pure-logic helpers
+      should be needed beyond maybe shaping the candidate objects into rows;
+      keep it a pure function with unit tests, same pattern as
+      `downloadCompareCsv`.
+- [ ] **7th land use: senior living / assisted-care facility.** Every land
+      use so far reads demand as "nearby rooftops" (or, for food_truck_court/
+      ev_charging_hub, the same proxy at a tighter radius). The multi-tract
+      Census ACS trade-area read (`aggregateAcsTracts` in `web/logic.js`)
+      already resolves **median age** per trade area but nothing consumes it
+      yet. Add `senior_living` to `data_sources/layers.yaml`: demand should
+      key off an older-skewing nearby population (median age or an ACS
+      age-bracket proxy) rather than raw rooftop count, plus a modest
+      acreage gate (~2-3 ac) and a competition gate (existing assisted-living/
+      nursing facilities within some radius — OSM `amenity=social_facility`
+      with `social_facility=assisted_living|nursing_home` is the closest real
+      tag). This is a genuinely new verdict shape (age-weighted demand, not
+      just another rooftop clone), so it'll likely need a small new pure
+      helper in `web/logic.js` with its own unit tests, plus the usual
+      `maybeRenderXVerdict` wiring and use-selector entry.
+- [ ] **One more parcel county.** Extend `PARCEL_SOURCES` (`web/explore.html`)
+      with a 9th county's public ArcGIS parcel MapServer — candidates not yet
+      covered include Fulton County, GA (Atlanta), Wayne County, MI
+      (Detroit), San Diego County, CA, or King County, WA's neighbor Pierce
+      County. Same discovery pattern as every prior county: web search for
+      the county's public GIS ArcGIS REST endpoint and field names (this
+      sandbox can't reach ArcGIS hosts directly to introspect schemas), add
+      any new field names to the shared `pick()` candidate lists, and use the
+      county's real per-parcel deep-link if one is documented or fall back to
+      the assessor's search page otherwise — a live spot-check of the new
+      source is always a good human follow-up, same as every prior county
+      addition.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
