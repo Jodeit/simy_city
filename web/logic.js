@@ -67,6 +67,19 @@ function blendedDemand(roofs,daytime,weight,need){
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+// senior_living's demand read: every other use above reads demand as a
+// headcount (rooftops, or blendedDemand's rooftop-equivalent units) compared
+// against a threshold. Senior living instead reads demand as whether the
+// surrounding population *skews older* — the trade-area median age
+// (aggregateAcsTracts' weighted average) compared against a threshold, same
+// "ratio ≥ 0.85 of need" pass bar blendedDemand uses. Returns null (no
+// verdict yet) until medianAge is known, same "still waiting on a leg"
+// contract as blendedDemand.
+function seniorDemandRead(medianAge,ageThreshold){
+  if(medianAge==null)return null;
+  const ratio=medianAge/ageThreshold;
+  return {medianAge,ageThreshold,ratio,pass:ratio>=0.85};
+}
 
 /* ---- Census tract demographics (FCC block lookup → ACS 5-yr point read) ---- */
 // FCC's keyless block API turns lat/lng into a 15-digit block FIPS
@@ -593,5 +606,5 @@ function candidatesToCsvRows(results,sig,cfg){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows};
 }

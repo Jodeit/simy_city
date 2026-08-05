@@ -760,6 +760,29 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "Unlike data_center (which needs a dedicated substation upgrade), a charging hub just needs *meaningful nearby grid capacity* \u2014 the same prefer_substation_within_km field data_center uses, at a much smaller radius (3 km vs. data_center's 5 km, since this is a load, not a megawatt-scale draw). Nearby rooftops are a documented imperfect proxy for \"people who can't charge at home\" \u2014 Overpass doesn't reliably tag building=apartments/building:levels everywhere, so the same total-rooftop count food_truck_court already uses stands in for it here.\n"
+    },
+    "senior_living": {
+      "label": "Senior Living / Assisted-Care Facility",
+      "requires": {
+        "demand": {
+          "min_median_age_years": 40,
+          "drive_time_min": 20
+        },
+        "parcel": {
+          "min_buildable_acres": 2.5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 3.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "medium",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "Every use above reads demand as \"nearby rooftops\" (or the same proxy at a tighter radius) \u2014 a headcount. Senior living is the first to read demand as whether the surrounding population *skews older* instead: the multi-tract Census ACS trade-area read (`aggregateAcsTracts` in web/logic.js) already resolves median age per trade area for warehouse_club/fast_casual's due-diligence panel, but nothing had consumed it as an actual verdict input until this use. min_median_age_years is a documented first-draft heuristic (current US median age is ~38-39) \u2014 refine freely, same as every other threshold here.\n"
     }
   },
   "actor_uses": {

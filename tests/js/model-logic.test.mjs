@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const logic = require(path.join(__dirname, "..", "..", "web", "logic.js"));
 const {
   evaluate, isContested, findStandoffs, cheapest,
-  countOf, haversine, inBbox, pick, blendedDemand,
+  countOf, haversine, inBbox, pick, blendedDemand, seniorDemandRead,
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
@@ -172,6 +172,33 @@ test("blendedDemand: pass threshold is 85% of need, same as the rooftop-only ver
   const justOver = blendedDemand(7650, 0, 20, 9000);  // 85.0%
   assert.equal(justUnder.pass, false);
   assert.equal(justOver.pass, true);
+});
+
+// ---- senior demand read (senior_living: trade-area median age vs a threshold) ----
+
+test("seniorDemandRead: null medianAge means no verdict yet", () => {
+  assert.equal(seniorDemandRead(null, 40), null);
+});
+
+test("seniorDemandRead: median age at/above threshold passes", () => {
+  const atThreshold = seniorDemandRead(40, 40);
+  assert.equal(atThreshold.ratio, 1);
+  assert.equal(atThreshold.pass, true);
+  const above = seniorDemandRead(45, 40);
+  assert.equal(above.pass, true);
+});
+
+test("seniorDemandRead: pass threshold is 85% of the age threshold, same bar blendedDemand uses", () => {
+  const justUnder = seniorDemandRead(33.99, 40); // 84.975%
+  const justOver = seniorDemandRead(34, 40);     // 85.0%
+  assert.equal(justUnder.pass, false);
+  assert.equal(justOver.pass, true);
+});
+
+test("seniorDemandRead: a much younger trade area clearly fails", () => {
+  const young = seniorDemandRead(28, 40);
+  assert.equal(young.pass, false);
+  assert.ok(young.ratio < 0.85);
 });
 
 // ---- parcel helpers (inBbox / pick) ----

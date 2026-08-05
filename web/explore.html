@@ -399,6 +399,8 @@ const USE_DEMAND={
   ev_charging_hub:{ radius:3000, roofNeed:800, needLabel:"the nearby rooftop base (a documented proxy for people who can't charge at home) an EV charging hub needs",
     compQ:'nwr["amenity"="charging_station"]', compLabel:"EV charging stations",
     powerQ:'nwr["power"="substation"]', powerLabel:"power substations" },
+  senior_living:{ radius:8000, roofNeed:0, needLabel:"",
+    compQ:'nwr["amenity"="social_facility"]["social_facility"~"assisted_living|nursing_home"];nwr["amenity"="nursing_home"]', compLabel:"assisted-living/nursing facilities" },
 };
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
@@ -442,6 +444,16 @@ let ftcState=null;
 // same wait-for-all-legs pattern as food_truck_court.
 const EV_SUB_KM=3, EV_MIN_COMPETITOR_KM=0.8;
 let evState=null;
+// senior_living's real verdict: unlike every other use (a rooftop headcount),
+// demand here is `seniorDemandRead` (web/logic.js) — the trade-area median
+// age (the same multi-tract Census ACS read runCensusTradeArea already does
+// for warehouse_club/fast_casual's due-diligence panel, reused here as an
+// actual verdict input) compared against a threshold — blended with the site-
+// size gate (`parcel.min_buildable_acres: 2.5`) and the same farther-is-better
+// competition read food_truck_court/ev_charging_hub established, against
+// existing assisted-living/nursing facilities — waits for all three legs.
+const SL_MIN_ACRES=2.5, SL_AGE_THRESHOLD=40, SL_MIN_COMPETITOR_KM=3;
+let slState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -638,7 +650,7 @@ function setLegend(){
     : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
 }
 function initUses(){
-  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub"];
+  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living"];
   const el=document.getElementById("uses");
   order.forEach(id=>{
     const b=document.createElement("button");
@@ -769,6 +781,7 @@ function analyze(latlng){
     wcState = current==="warehouse_club" ? {seq} : null;
     ftcState = current==="food_truck_court" ? {seq} : null;
     evState = current==="ev_charging_hub" ? {seq} : null;
+    slState = current==="senior_living" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
@@ -777,6 +790,7 @@ function analyze(latlng){
     resState=null;
     ftcState=null;
     evState=null;
+    slState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -911,8 +925,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -923,6 +937,7 @@ function renderBuild(use,latlng){
               :isWC?"rooftops in the trade area + parcel acreage (needs a big flat pad) decide the verdict"
               :isFTC?"nearby rooftops + parcel size + distance from the nearest existing food vendor (farther is better) decide the verdict"
               :isEV?"nearby rooftops + nearest substation distance + distance from the nearest existing charger (farther is better) decide the verdict"
+              :isSL?"trade-area median age (not rooftops) + parcel acreage + distance from the nearest existing facility (farther is better) decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -1069,6 +1084,11 @@ function runDemand(latlng,seq){
       // Same farther-is-better read as food_truck_court, against existing chargers.
       evState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderEVVerdict(seq);
+    } else if(current==="senior_living"&&slState&&slState.seq===seq){
+      // Same farther-is-better read as food_truck_court/ev_charging_hub, against
+      // existing assisted-living/nursing facilities.
+      slState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
+      maybeRenderSLVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
@@ -1076,6 +1096,7 @@ function runDemand(latlng,seq){
     else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; resState.nearestSchool=null; maybeRenderResVerdict(seq); }
     else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.compErr=true; maybeRenderFTCVerdict(seq); }
     else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.compErr=true; maybeRenderEVVerdict(seq); }
+    else if(current==="senior_living"&&slState&&slState.seq===seq){ slState.compErr=true; maybeRenderSLVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -1259,6 +1280,41 @@ function maybeRenderEVVerdict(seq){
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — enough nearby demand, grid capacity, and clear of existing chargers"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// senior_living's real verdict — waits for the acreage leg (showParcel), the
+// medianAge leg (runCensusTradeArea — the same multi-tract ACS trade-area
+// read used as due-diligence context for warehouse_club/fast_casual, reused
+// here as an actual verdict input instead of a rooftop count), and the
+// competitor-distance leg (runDemand) before rendering once. Same farther-is-
+// better competitor read as food_truck_court/ev_charging_hub: no existing
+// assisted-living/nursing facility within the trade-area radius at all is the
+// best possible outcome, not a data gap.
+function maybeRenderSLVerdict(seq){
+  if(current!=="senior_living"||mode!=="build"||!slState||slState.seq!==seq)return;
+  const s=slState;
+  const haveComp = s.nearestComp!==undefined || s.compErr;
+  if(s.acres===undefined||s.medianAge===undefined||!haveComp)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  const demand=seniorDemandRead(s.medianAge,SL_AGE_THRESHOLD);
+  if(!demand){ el.style.display="none"; return; } // no trade-area ACS read at all — nothing to show
+  const siteOk=s.acres!=null&&s.acres>=SL_MIN_ACRES;
+  const farOk = !s.compErr && (!s.nearestComp || s.nearestComp.km>=SL_MIN_COMPETITOR_KM);
+  const pass=demand.pass&&siteOk&&farOk;
+  const legs=[
+    demand.pass?`✓ trade-area median age ${demand.medianAge.toFixed(1)} clears the ≥${SL_AGE_THRESHOLD}-yr older-skewing bar`
+      : `✗ trade-area median age ${demand.medianAge.toFixed(1)} vs the ≥${SL_AGE_THRESHOLD}-yr older-skewing bar (${Math.round(demand.ratio*100)}%)`,
+    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${SL_MIN_ACRES} ac)`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${SL_MIN_ACRES} ac)`,
+    s.compErr?`? nearest assisted-living/nursing facility distance unavailable`
+      : !s.nearestComp?`✓ no existing assisted-living/nursing facility within ${(USE_DEMAND.senior_living.radius/1000)} km — wide open`
+      : farOk?`✓ nearest facility <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${SL_MIN_COMPETITOR_KM} km)`
+      : `✗ nearest facility <b>${esc(s.nearestComp.name)}</b> only ${s.nearestComp.km.toFixed(1)} km away (need ≥${SL_MIN_COMPETITOR_KM} km)`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — an older-skewing trade area, room for the facility, and clear of existing competitors"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
@@ -1510,7 +1566,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
     <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
-    ${(mode==="build"&&AMENITY_USES.has(current))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
+    ${(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -1522,7 +1578,7 @@ function showParcel(geo,src,seq){
 
   if(lastLatLng){
     runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);
-    if(mode==="build"&&AMENITY_USES.has(current))runCensusTradeArea(lastLatLng,seq);
+    if(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"))runCensusTradeArea(lastLatLng,seq);
   }
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
@@ -1530,6 +1586,7 @@ function showParcel(geo,src,seq){
   if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
   if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.acres=acN; maybeRenderWCVerdict(seq); }
   if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.acres=acN; maybeRenderFTCVerdict(seq); }
+  if(current==="senior_living"&&slState&&slState.seq===seq){ slState.acres=acN; maybeRenderSLVerdict(seq); }
   setLastParcelSummary({seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,
@@ -1693,17 +1750,26 @@ function runCensusTradeArea(latlng,seq){
   })).then(fipsList=>{
     if(seq!==reqSeq||!document.getElementById("devCensusTA"))return;
     const tracts=dedupeTracts(fipsList);
-    if(!tracts.length){setHTML("devCensusTA",errHTML("tract lookup unavailable across this trade area"));return;}
+    if(!tracts.length){
+      setHTML("devCensusTA",errHTML("tract lookup unavailable across this trade area"));
+      if(current==="senior_living"&&slState&&slState.seq===seq){ slState.medianAge=null; maybeRenderSLVerdict(seq); }
+      return;
+    }
     Promise.all(tracts.map(f=>fetchAcsTractRow(ACS_YEARS.slice(),f))).then(rows=>{
       if(seq!==reqSeq||!document.getElementById("devCensusTA"))return;
       const agg=aggregateAcsTracts(rows);
-      if(!agg){setHTML("devCensusTA",errHTML("ACS data unavailable across this trade area"));return;}
+      if(!agg){
+        setHTML("devCensusTA",errHTML("ACS data unavailable across this trade area"));
+        if(current==="senior_living"&&slState&&slState.seq===seq){ slState.medianAge=null; maybeRenderSLVerdict(seq); }
+        return;
+      }
       const parts=[`<b>${agg.tracts}</b> tract${agg.tracts===1?"":"s"} sampled`,
         `~<b>${Math.round(agg.totalHouseholds).toLocaleString()}</b> households`];
       if(agg.medianIncome!=null)parts.push(`avg median income <b>$${Math.round(agg.medianIncome).toLocaleString()}</b>`);
       if(agg.medianAge!=null)parts.push(`avg median age <b>${agg.medianAge.toFixed(1)}</b>`);
       setHTML("devCensusTA",parts.join(" · ")+
         ` <span class="src">(ACS ${ACS_YEARS[0]} 5-yr · ${pts.length}-point sample across the ${(cfg.radius/1000)}-km trade area — approximate, not exhaustive)</span>`);
+      if(current==="senior_living"&&slState&&slState.seq===seq){ slState.medianAge=agg.medianAge; maybeRenderSLVerdict(seq); }
     });
   });
 }

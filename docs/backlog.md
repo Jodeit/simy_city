@@ -1156,21 +1156,34 @@ Ground rules for each run:
       button renders, `downloadCandidatesCsv()` produces the exact expected
       rows via a real anchor-click, and `lastCandidates` correctly clears on
       panel close.
-- [ ] **7th land use: senior living / assisted-care facility.** Every land
-      use so far reads demand as "nearby rooftops" (or, for food_truck_court/
-      ev_charging_hub, the same proxy at a tighter radius). The multi-tract
-      Census ACS trade-area read (`aggregateAcsTracts` in `web/logic.js`)
-      already resolves **median age** per trade area but nothing consumes it
-      yet. Add `senior_living` to `data_sources/layers.yaml`: demand should
-      key off an older-skewing nearby population (median age or an ACS
-      age-bracket proxy) rather than raw rooftop count, plus a modest
-      acreage gate (~2-3 ac) and a competition gate (existing assisted-living/
-      nursing facilities within some radius — OSM `amenity=social_facility`
-      with `social_facility=assisted_living|nursing_home` is the closest real
-      tag). This is a genuinely new verdict shape (age-weighted demand, not
-      just another rooftop clone), so it'll likely need a small new pure
-      helper in `web/logic.js` with its own unit tests, plus the usual
-      `maybeRenderXVerdict` wiring and use-selector entry.
+- [x] **7th land use: senior living / assisted-care facility.** Added
+      `senior_living` to `data_sources/layers.yaml`: demand keys off an
+      older-skewing nearby population instead of raw rooftop count — the
+      trade-area median age the multi-tract Census ACS read
+      (`aggregateAcsTracts`) already resolved for warehouse_club/fast_casual's
+      due-diligence panel but nothing had consumed as an actual verdict input
+      until now — plus a 2.5-acre site-size gate and a farther-is-better
+      competition gate (existing assisted-living/nursing facilities within the
+      trade area; OSM `amenity=social_facility` with
+      `social_facility=assisted_living|nursing_home`, plus the legacy
+      `amenity=nursing_home` tag). Added the new-verdict-shape pure helper
+      `seniorDemandRead(medianAge, ageThreshold)` to `web/logic.js` (same
+      "null until known" / "≥85% of threshold passes" contract `blendedDemand`
+      already established) with 4 new unit tests. Wired the usual
+      `slState`/`maybeRenderSLVerdict` pattern into `web/explore.html`
+      (mirroring food_truck_court/ev_charging_hub's wait-for-every-leg,
+      farther-is-better competitor rendering), added `senior_living` to the
+      use-selector order, and extended the trade-area-ACS due-diligence panel
+      (previously gated to `AMENITY_USES`) to also render for this use, since
+      here the ACS read isn't just due diligence — it's the demand signal
+      itself. Verified: `python tools/build_model_json.py` (7 land uses, up
+      from 6), `python -m pytest -q` (15 passed), `simy validate` (OK, 7 land
+      uses), `node --test tests/js/*.test.mjs` (163 passed, 4 new), and
+      headless Chromium confirms both pages load with zero genuine
+      console/page errors and, driven end to end with a mocked ACS/parcel/
+      Overpass fetch (median age 44.2, parcel 3.5 ac, no nearby competitors),
+      `maybeRenderSLVerdict` renders a real "✓ PASS" verdict citing all three
+      legs.
 - [ ] **One more parcel county.** Extend `PARCEL_SOURCES` (`web/explore.html`)
       with a 9th county's public ArcGIS parcel MapServer — candidates not yet
       covered include Fulton County, GA (Atlanta), Wayne County, MI
