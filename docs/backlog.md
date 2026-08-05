@@ -1184,18 +1184,36 @@ Ground rules for each run:
       Overpass fetch (median age 44.2, parcel 3.5 ac, no nearby competitors),
       `maybeRenderSLVerdict` renders a real "✓ PASS" verdict citing all three
       legs.
-- [ ] **One more parcel county.** Extend `PARCEL_SOURCES` (`web/explore.html`)
-      with a 9th county's public ArcGIS parcel MapServer — candidates not yet
-      covered include Fulton County, GA (Atlanta), Wayne County, MI
-      (Detroit), San Diego County, CA, or King County, WA's neighbor Pierce
-      County. Same discovery pattern as every prior county: web search for
-      the county's public GIS ArcGIS REST endpoint and field names (this
-      sandbox can't reach ArcGIS hosts directly to introspect schemas), add
-      any new field names to the shared `pick()` candidate lists, and use the
-      county's real per-parcel deep-link if one is documented or fall back to
-      the assessor's search page otherwise — a live spot-check of the new
-      source is always a good human follow-up, same as every prior county
-      addition.
+- [x] **One more parcel county.** Added San Diego County, CA as a 9th
+      `PARCEL_SOURCES` entry — the countywide parcel layer maintained by
+      SanGIS (the City/County of San Diego's joint-powers GIS warehouse),
+      `webmaps.sandiego.gov/arcgis/rest/services/DoIT_Public/DoIT_Public/MapServer/4`,
+      found via web search since this sandbox 403s on direct ArcGIS REST
+      introspection (same bot-blocking every prior county addition hit —
+      confirmed again this run against three other San Diego-area ArcGIS
+      hosts before falling back to search snippets). Added `APN_8`/`PARCELID`
+      to the shared `pick()` id candidate list and `ASR_LANDUSE` to the land-use
+      list; the address field (`SITUS_ADDRESS`) was already covered by an
+      existing county's candidate. The layer splits assessed value into
+      `ASR_LAND`/`ASR_IMPR` with no combined total field, so — same call as
+      Miami-Dade's `LND_SQFOOT` unit mismatch — value is left unmapped rather
+      than showing a partial number. California's AB 1785 pulled APN search
+      from the Assessor's public online record portal in Dec 2024 and no
+      stable per-APN deep-link is documented, so — same call as
+      Harris/Bexar/LA/King/Miami-Dade — `record()` sends people to the
+      Assessor's secured-roll search page instead of guessing a link shape.
+      CA counties zone unincorporated land, so this reuses LA County's
+      zoning note rather than the "doesn't zone" TX copy. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources),
+      `node --test tests/js/*.test.mjs` (163 passed, unchanged — this item
+      only touches `explore.html`'s data table, not `logic.js`), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` load
+      with zero genuine console/page errors and that the new source's
+      `inBbox` correctly routes a downtown-San-Diego point to it (and still
+      finds no source for an out-of-coverage point, Denver) with 9 sources
+      total.
+      Live spot-check on the real site (actual field values, real APN) is a
+      good human follow-up, same as every prior county addition.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

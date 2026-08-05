@@ -581,6 +581,24 @@ const PARCEL_SOURCES=[
     county_state:"Miami-Dade County, FL",
     zoning_note:"unlike TX, FL counties do zone unincorporated land — check Miami-Dade's unincorporated-area zoning, or the city's if incorporated",
   },
+  {
+    name:"SanGIS Parcels (San Diego County, CA)",
+    urls:["https://webmaps.sandiego.gov/arcgis/rest/services/DoIT_Public/DoIT_Public/MapServer/4"],
+    bbox:[-117.60,32.53,-116.08,33.51],
+    // Countywide parcel layer maintained by SanGIS (the City/County of San Diego's
+    // joint-powers GIS warehouse). Confirmed fields: APN_8/PARCELID (id),
+    // SITUS_ADDRESS (already in the shared address list), ASR_LANDUSE (land use).
+    // ASR_LAND/ASR_IMPR split assessed value into land+improvement components with
+    // no combined total field, so — same call as Miami-Dade's LND_SQFOOT unit
+    // mismatch — value is left unmapped rather than showing a partial number.
+    // California AB 1785 pulled APN search from the Assessor's public record portal
+    // in Dec 2024, and no stable per-APN deep-link is documented, so — same call as
+    // Harris/Bexar/LA/King/Miami-Dade — send people to the Assessor's roll search.
+    record:()=>"https://www.sdarcc.gov/content/arcc/home/divisions/assessor/secured-assessment-roll-search.html",
+    source_label:"SanGIS / San Diego County Assessor",
+    county_state:"San Diego County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1530,10 +1548,10 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR"]);
   let rows="";
