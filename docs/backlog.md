@@ -1215,6 +1215,32 @@ Ground rules for each run:
       Live spot-check on the real site (actual field values, real APN) is a
       good human follow-up, same as every prior county addition.
 
+## Next (breadth) — newly added (7)
+- [ ] **Dark mode for the landing page (`web/index.html`).** The dark-mode
+      backlog item above added a full `data-theme="dark"` CSS-custom-property
+      system to `web/explore.html` but explicitly left `web/index.html` (the
+      marketing landing page) light-only, calling it out as "a natural
+      follow-up if wanted." Reuse the same `--ink`/`--slate`/`--paper`/
+      `--line`/`--card`/etc. custom-property pattern and the inline
+      before-first-paint `<head>` script (reads `localStorage.simy_theme` or
+      `prefers-color-scheme`) so the toggle and preference persist across
+      both pages.
+- [ ] **Respect `prefers-reduced-motion` on `web/index.html`'s decorative
+      animations.** The reduced-motion pass above scoped the `.loading`
+      pulse animation in `web/explore.html` and explicitly noted that
+      `index.html`'s decorative `dash`/`spin` SVG-diagram animations were a
+      separate, pre-existing case left as a follow-up. Wrap those keyframe
+      rules in the same `@media (prefers-reduced-motion: no-preference)`
+      pattern so a static (still legible) diagram renders for people who've
+      asked their OS to minimize motion.
+- [ ] **PDF export option for "Make the case."** The image-export item above
+      ships a PNG via a from-scratch `<canvas>` render and explicitly notes
+      "a PDF variant is left as a follow-up if a vendored PDF lib is ever
+      wanted." Add a "📄 Download PDF" option next to the existing PNG
+      button — needs a small vendored (no-CDN, no-build-step) PDF writer, or
+      a minimal hand-rolled PDF text/page writer if a full library is too
+      heavy for a static-asset-only repo.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
