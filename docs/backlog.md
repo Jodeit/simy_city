@@ -1269,6 +1269,71 @@ Ground rules for each run:
       page's actual verdict/stakeholder/permalink content exactly. Both
       pages still load with zero console/page errors.
 
+## Next (breadth) — newly added (9)
+- [ ] **8th land use: urgent care / walk-in medical clinic.** Every land use so
+      far reads demand as either raw nearby rooftops (warehouse_club,
+      food_truck_court, ev_charging_hub), a daytime-population blend
+      (fast_casual), or trade-area median age (senior_living) — none reads
+      "how far is the nearest existing option," which is exactly the gate a
+      walk-in clinic operator actually uses (a second urgent care two blocks
+      from an existing one splits the same patient pool). Add `urgent_care`
+      to `data_sources/layers.yaml`: `requires.demand` = nearby rooftops
+      within a short (~3 km) drive-time radius (same proxy style
+      food_truck_court/ev_charging_hub already use, documented as
+      imperfect), `requires.parcel.min_buildable_acres` ~1 (a single-story
+      clinic + a small parking lot, smaller than warehouse_club, bigger than
+      a food-truck lot), and the established inverted
+      `requires.competition.min_distance_km_from_nearest` gate against
+      existing urgent-care/walk-in clinics — OSM tagging here is genuinely
+      messy (no single dominant tag the way `amenity=charging_station` is
+      unambiguous for EV chargers), so the query will need to be documented
+      as a best-effort proxy (`amenity=clinic` plus `healthcare=clinic`,
+      OR'd, both known to catch real-world false positives like dental/vet
+      offices — note this honestly in a YAML comment, same as every prior
+      use's proxy caveats). Wire `maybeRenderUCVerdict`/`ucState` in
+      `web/explore.html` following the `maybeRenderFTCVerdict`/
+      `maybeRenderEVVerdict` wait-for-every-leg pattern exactly (rooftop leg
+      + acreage leg + competitor-distance leg). Confirm
+      `reverseSearchSignals` (`web/logic.js`) needs no change (it already
+      generalizes over any `min_distance_km_from_nearest` field and any
+      `roofNeed`), same "free" reverse-search coverage ev_charging_hub got.
+- [ ] **10th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 9
+      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
+      Miami-Dade, San Diego). Add one more — e.g. Dallas County, TX or
+      Cuyahoga County, OH (Cleveland) are reasonable picks, but any large
+      county with a public ArcGIS parcel MapServer works. Same recipe every
+      prior county addition followed: since this sandbox 403s on direct
+      ArcGIS REST introspection, find the MapServer URL and field names via
+      web search (not direct fetch) against multiple independent sources
+      before trusting a field name; add any new id/owner/address/land-use
+      field names to the shared `pick()` candidate lists rather than
+      assuming they match an existing county's schema; leave a field
+      unmapped (don't guess) if its unit doesn't match what `pick()` expects
+      (e.g. square feet where an acreage row is expected — LA County and
+      Miami-Dade both hit this); write a real `zoning_note`/`county_state`
+      for the state (don't default to Travis's "TX counties don't zone"
+      copy without checking); and prefer a real per-parcel record deep link
+      only if one is *documented*, otherwise link to the assessor's search
+      page rather than guessing a URL shape that might 404 (Cook County is
+      the only county so far with a confirmed stable deep link).
+- [ ] **Printable / exportable report for the reverse-search candidate list.**
+      The single-parcel "🖨️ Print report" / "📄 Download PDF" / "🖼️ Download
+      image" tools (Test-a-use "Make the case" row) only cover one clicked
+      parcel. The "🔍 Find candidate sites" reverse-search results panel
+      already has a CSV export (`downloadCandidatesCsv`,
+      `candidatesToCsvRows` in `web/logic.js`) but no print/PDF option for
+      sharing a ranked shortlist with a non-technical stakeholder (a CSV
+      isn't something you hand to a city council member). Reuse
+      `buildSimplePdf` (the hand-rolled PDF-1.4 writer already added for the
+      single-parcel PDF export) and the existing `candidateWhyText` per-row
+      formatting to build a one-page-per-search summary (search center,
+      radius, use, then each ranked candidate's rank/score/why-text) —
+      mirrors `buildCaseText`'s role for the single-parcel case, just built
+      from `lastCandidates`/`lastCandSig`/`lastCandCfg` instead of a single
+      parcel's verdict state. A `@media print` variant (reusing the
+      `.printCase` pattern) is a smaller alternative if a full PDF pass
+      feels too big for one session — either satisfies the underlying need.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
