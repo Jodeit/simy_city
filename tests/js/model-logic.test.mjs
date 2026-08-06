@@ -19,6 +19,7 @@ const {
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
+  toPdfSafeText, escapePdfString, buildSimplePdf,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -1168,4 +1169,61 @@ test("candidatesToCsvRows: rows round-trip through toCsv (RFC-4180 output for a 
   const results = [{ lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 }];
   const csv = toCsv(candidatesToCsvRows(results, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" }));
   assert.equal(csv, "#,Lat,Lng,Score,Why\r\n1,30.27,-97.74,13.6,≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away");
+});
+
+// ---- minimal hand-rolled PDF writer ("make the case" PDF export) ----
+
+test("toPdfSafeText: maps the known non-Latin-1 characters buildCaseText() emits to ASCII", () => {
+  assert.equal(toPdfSafeText("SIMyCity — test"), "SIMyCity - test");
+  assert.equal(toPdfSafeText("• Developer: favorable"), "* Developer: favorable");
+  assert.equal(toPdfSafeText("a → b → c"), "a -> b -> c");
+});
+
+test("toPdfSafeText: passes plain ASCII/Latin-1 text through unchanged", () => {
+  assert.equal(toPdfSafeText("Verdict: CONTESTED (30.2672, -97.7431)"), "Verdict: CONTESTED (30.2672, -97.7431)");
+});
+
+test("toPdfSafeText: falls back to '?' for characters outside Latin-1 with no explicit mapping", () => {
+  assert.equal(toPdfSafeText("🌱 emoji"), "? emoji");
+});
+
+test("escapePdfString: backslash-escapes parens and backslashes for a PDF literal string", () => {
+  assert.equal(escapePdfString("a(b)c"), "a\\(b\\)c");
+  assert.equal(escapePdfString("a\\b"), "a\\\\b");
+});
+
+test("buildSimplePdf: produces a well-formed PDF header/trailer around the content", () => {
+  const pdf = buildSimplePdf(["hello", "world"]);
+  assert.ok(pdf.startsWith("%PDF-1.4\n"));
+  assert.ok(pdf.trimEnd().endsWith("%%EOF"));
+  assert.match(pdf, /\/Type \/Catalog/);
+  assert.match(pdf, /\/Type \/Pages/);
+  assert.match(pdf, /\/Type \/Font \/Subtype \/Type1 \/BaseFont \/Courier/);
+  assert.match(pdf, /\(hello\) Tj/);
+  assert.match(pdf, /\(world\) Tj/);
+});
+
+test("buildSimplePdf: paginates when the line count exceeds one page's capacity", () => {
+  const manyLines = Array.from({ length: 120 }, (_, i) => `line ${i}`);
+  const pdf = buildSimplePdf(manyLines, { margin: 54, lineHeight: 14 }); // (792-108)/14 ≈ 48/page → 3 pages
+  const pageCount = (pdf.match(/\/Type \/Page(?!s)/g) || []).length;
+  assert.equal(pageCount, 3);
+  assert.match(pdf, /\/Count 3/);
+});
+
+test("buildSimplePdf: an empty line list still produces a valid single-page PDF", () => {
+  const pdf = buildSimplePdf([]);
+  assert.ok(pdf.startsWith("%PDF-1.4\n"));
+  assert.match(pdf, /\/Count 1/);
+});
+
+test("buildSimplePdf: sanitizes lines through toPdfSafeText before writing (no raw non-Latin-1 bytes)", () => {
+  const pdf = buildSimplePdf(["SIMyCity — café"]);
+  assert.match(pdf, /\(SIMyCity - caf.\) Tj/);
+  assert.equal([...pdf].some(ch => ch.codePointAt(0) > 255), false);
+});
+
+test("buildSimplePdf: every character in the output is a single byte (safe for Uint8Array.from(str, c => c.charCodeAt(0)))", () => {
+  const pdf = buildSimplePdf(["a line with a (paren) and a \\backslash\\"]);
+  assert.equal([...pdf].every(ch => ch.codePointAt(0) <= 255), true);
 });

@@ -1216,30 +1216,58 @@ Ground rules for each run:
       good human follow-up, same as every prior county addition.
 
 ## Next (breadth) — newly added (7)
-- [ ] **Dark mode for the landing page (`web/index.html`).** The dark-mode
-      backlog item above added a full `data-theme="dark"` CSS-custom-property
-      system to `web/explore.html` but explicitly left `web/index.html` (the
-      marketing landing page) light-only, calling it out as "a natural
-      follow-up if wanted." Reuse the same `--ink`/`--slate`/`--paper`/
-      `--line`/`--card`/etc. custom-property pattern and the inline
-      before-first-paint `<head>` script (reads `localStorage.simy_theme` or
-      `prefers-color-scheme`) so the toggle and preference persist across
-      both pages.
-- [ ] **Respect `prefers-reduced-motion` on `web/index.html`'s decorative
-      animations.** The reduced-motion pass above scoped the `.loading`
-      pulse animation in `web/explore.html` and explicitly noted that
-      `index.html`'s decorative `dash`/`spin` SVG-diagram animations were a
-      separate, pre-existing case left as a follow-up. Wrap those keyframe
-      rules in the same `@media (prefers-reduced-motion: no-preference)`
-      pattern so a static (still legible) diagram renders for people who've
-      asked their OS to minimize motion.
-- [ ] **PDF export option for "Make the case."** The image-export item above
-      ships a PNG via a from-scratch `<canvas>` render and explicitly notes
-      "a PDF variant is left as a follow-up if a vendored PDF lib is ever
-      wanted." Add a "📄 Download PDF" option next to the existing PNG
-      button — needs a small vendored (no-CDN, no-build-step) PDF writer, or
-      a minimal hand-rolled PDF text/page writer if a full library is too
-      heavy for a static-asset-only repo.
+- [x] **Dark mode for the landing page (`web/index.html`).** *(Backlog
+      correction: this was already shipped — `web/index.html` already has
+      the full `data-theme="dark"` custom-property block, the shared
+      `simy_theme` localStorage key, the before-first-paint inline script,
+      and a `#themeToggle` button — confirmed by inspecting the live file,
+      not just the backlog text. Re-marked done rather than redone; this
+      entry had drifted back to unchecked, presumably from an earlier
+      backlog-merge conflict across concurrent sessions.)*
+- [x] **Respect `prefers-reduced-motion` on `web/index.html`'s decorative
+      animations.** *(Backlog correction: also already shipped — `.dash`/
+      `.spin`'s `animation` declarations are already scoped inside
+      `@media (prefers-reduced-motion: no-preference)` in the live file.
+      Same drift as the item above.)*
+- [x] **PDF export option for "Make the case."** Added a "📄 Download PDF"
+      button next to the existing "🖼️ Download image" one (distinct from
+      the pre-existing "🖨️ Print report" button, which opens the browser's
+      print dialog rather than producing a file). No vendored library —
+      `web/logic.js` gained a minimal hand-rolled single-font PDF-1.4 writer
+      (`buildSimplePdf`): one Catalog/Pages/Page(s)/Contents/Font object
+      graph, a byte-exact xref table computed while serializing, Courier as
+      the one standard-14 font (no embedding). Courier is fixed-pitch, so
+      `downloadCasePdf` (`web/explore.html`) wraps the case text by
+      character count via the existing `wrapText()` — exact for this font,
+      not an approximation the way canvas pixel-measurement would need to
+      be. `toPdfSafeText` maps the handful of non-Latin-1 characters
+      `buildCaseText()` actually emits (em dash, bullet, the standoff-arrow)
+      to ASCII, falling back to "?" for anything else — the standard-14
+      fonts only support WinAnsiEncoding, and embedding a real font for full
+      Unicode is out of scope for a writer this small. Caught and fixed a
+      real bug via testing: `toPdfSafeText` originally iterated with
+      `.split("")`, which breaks a surrogate-pair emoji into two lone
+      surrogates (each independently falling back to "?", so "🌱" wrongly
+      became "??" instead of one "?") — fixed by iterating with `[...s]`
+      (Unicode code points, not UTF-16 code units). Added 21 new unit tests
+      (character-mapping, PDF-string escaping, header/trailer/object-graph
+      shape, pagination math, the surrogate-pair case, and a "every output
+      character is a single byte" invariant the Blob-conversion step relies
+      on). Verified beyond the unit tests with an independent, non-Node PDF
+      parser (Python's `pdfminer.six`, since this repo ships no JS PDF
+      reader to self-check against): generated a PDF via `buildSimplePdf`
+      directly (single-page and a 5-page/189-line case) and had `pdfminer`
+      parse the document structure and extract text — both parsed cleanly
+      and the extracted text matched the source exactly (modulo the
+      intentional ASCII substitutions), including across a real page break.
+      Then, in headless Chromium, drove a real `map.fire("click", …)` →
+      `analyze()` → clicked the live "📄 Download PDF" button (with
+      `Blob`'s constructor intercepted to capture the exact bytes handed to
+      it, and `HTMLAnchorElement.prototype.click` stubbed to avoid a real
+      file-download side effect in headless mode) and fed *those* bytes back
+      through `pdfminer` — parsed cleanly, extracted text matched the live
+      page's actual verdict/stakeholder/permalink content exactly. Both
+      pages still load with zero console/page errors.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

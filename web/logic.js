@@ -603,8 +603,94 @@ function candidatesToCsvRows(results,sig,cfg){
   return rows;
 }
 
+/* ---- minimal hand-rolled PDF writer for "make the case" ----
+   No vendored library, no CDN, no build step — same constraint every other
+   feature in this app runs under. Supports exactly what "make the case"
+   needs: left-aligned monospace text, paginated across as many pages as it
+   takes, one standard-14 font (no embedding). Courier is fixed-pitch, so
+   line-wrapping by character count (rather than real glyph measurement) is
+   exact, not an approximation — wrapText() above just needs a char-count
+   `measure` function instead of canvas's pixel-width one.
+
+   The standard-14 fonts only support WinAnsiEncoding (Latin-1), so
+   toPdfSafeText maps the handful of non-Latin-1 characters buildCaseText()
+   (web/explore.html) actually emits — em dash, bullet, the standoff-chain
+   arrow — to plain-ASCII equivalents, and falls back to "?" for anything
+   else outside Latin-1: true Unicode text needs an embedded font, out of
+   scope for a hand-rolled writer this small. */
+function toPdfSafeText(s){
+  const map={"—":"-","–":"-","•":"*","→":"->","✓":"v","✗":"x","…":"...","‘":"'","’":"'","“":'"',"”":'"'};
+  // Iterate by Unicode code point (not UTF-16 code unit) — a surrogate-pair
+  // emoji split by .split("") would otherwise become two lone surrogates,
+  // each independently falling back to "?" (so "🌱" would wrongly become
+  // "??" instead of one "?").
+  return [...String(s)].map(ch=>{
+    if(map[ch]!==undefined)return map[ch];
+    return (ch.codePointAt(0)<=255)?ch:"?";
+  }).join("");
+}
+// PDF literal strings delimit with unescaped parens/backslashes, so those
+// three characters need a backslash escape before going inside `(...)`.
+function escapePdfString(s){
+  return String(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+}
+// Builds a complete, minimal single-font PDF file (returned as a plain JS
+// string — after toPdfSafeText every character is guaranteed <=255, so it's
+// safe to hand straight to a byte array: `Uint8Array.from(str, c =>
+// c.charCodeAt(0))`) from a flat list of already-wrapped text lines. Paginates
+// at `linesPerPage` (computed from the page/margin/line-height geometry) —
+// letter-size (612x792pt) and a 54pt margin by default. Builds a plain
+// (non-compressed, non-cross-reference-stream) PDF-1.4 file: an explicit,
+// byte-exact xref table computed while serializing, one Page+Contents object
+// pair per page, sharing one Font object.
+function buildSimplePdf(lines,opts){
+  opts=opts||{};
+  const W=opts.pageWidth||612, H=opts.pageHeight||792, margin=opts.margin||54;
+  const fontSize=opts.fontSize||10, lineHeight=opts.lineHeight||14;
+  const linesPerPage=Math.max(1,Math.floor((H-2*margin)/lineHeight));
+  const safeLines=(lines||[]).map(toPdfSafeText);
+  const pageLines=[];
+  for(let i=0;i<safeLines.length;i+=linesPerPage)pageLines.push(safeLines.slice(i,i+linesPerPage));
+  if(!pageLines.length)pageLines.push([]);
+  const n=pageLines.length;
+  // Object numbering: 1=Catalog, 2=Pages, 3..3+n-1=Page objects,
+  // 3+n..3+2n-1=Content streams (one per page), 3+2n=Font.
+  const pageObjNum=i=>3+i, contentObjNum=i=>3+n+i, fontObjNum=3+2*n;
+  const total=3+2*n+1; // object count, including the always-free object 0
+
+  const objs=new Array(total); // objs[0] unused
+  objs[1]=`<< /Type /Catalog /Pages 2 0 R >>`;
+  objs[2]=`<< /Type /Pages /Kids [ ${Array.from({length:n},(_,i)=>`${pageObjNum(i)} 0 R`).join(" ")} ] /Count ${n} >>`;
+  for(let i=0;i<n;i++){
+    objs[pageObjNum(i)]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] `+
+      `/Resources << /Font << /F1 ${fontObjNum} 0 R >> >> /Contents ${contentObjNum(i)} 0 R >>`;
+    let stream=`BT /F1 ${fontSize} Tf ${lineHeight} TL ${margin} ${H-margin} Td\n`;
+    pageLines[i].forEach((line,j)=>{
+      stream+=`(${escapePdfString(line)}) Tj`+(j<pageLines[i].length-1?" T*\n":"\n");
+    });
+    stream+=`ET`;
+    objs[contentObjNum(i)]={stream};
+  }
+  objs[fontObjNum]=`<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>`;
+
+  let out="%PDF-1.4\n";
+  const offsets=new Array(total);
+  for(let k=1;k<total;k++){
+    offsets[k]=out.length;
+    const body=objs[k];
+    out+=(body&&typeof body==="object"&&body.stream!==undefined)
+      ? `${k} 0 obj\n<< /Length ${body.stream.length} >>\nstream\n${body.stream}\nendstream\nendobj\n`
+      : `${k} 0 obj\n${body}\nendobj\n`;
+  }
+  const xrefStart=out.length;
+  out+=`xref\n0 ${total}\n0000000000 65535 f \n`;
+  for(let k=1;k<total;k++)out+=String(offsets[k]).padStart(10,"0")+" 00000 n \n";
+  out+=`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  return out;
+}
+
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,toPdfSafeText,escapePdfString,buildSimplePdf};
 }

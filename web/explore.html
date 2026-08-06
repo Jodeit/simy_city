@@ -861,6 +861,7 @@ function fillTools(latlng){
        `<div class="row"><button class="toolbtn" id="caseCopy">Copy text</button>`+
        `<a class="toolbtn" id="caseMail" href="#">Email it</a>`+
        `<button class="toolbtn" id="caseImg">🖼️ Download image</button>`+
+       `<button class="toolbtn" id="casePdf">📄 Download PDF</button>`+
        `<button class="toolbtn" id="casePrint">🖨️ Print report</button>`+
        `<span class="ok" id="toolMsg"></span></div></details>`;
   }
@@ -880,6 +881,11 @@ function fillTools(latlng){
       downloadCaseImage(txt,MODEL.land_uses[current].label);
       const m=document.getElementById("toolMsg");
       if(m){m.textContent="✓ image downloaded";setTimeout(()=>m.textContent="",2500);}
+    };
+    document.getElementById("casePdf").onclick=()=>{
+      downloadCasePdf(txt,MODEL.land_uses[current].label);
+      const m=document.getElementById("toolMsg");
+      if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
     };
     const pc=document.getElementById("printCase");
     if(pc)pc.textContent=txt;
@@ -913,6 +919,24 @@ function downloadCaseImage(text,label){
     document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),4000);
   });
+}
+// Renders "make the case" text as a real PDF download (distinct from the
+// "🖨️ Print report" button, which opens the browser's print dialog rather
+// than producing a file) — buildSimplePdf/wrapText (web/logic.js) do the
+// actual writing and pagination. No vendored PDF library: Courier is
+// fixed-pitch, so wrapping by character count (rather than real glyph
+// measurement, which needs a font/canvas) is exact for this one font.
+function downloadCasePdf(text,label){
+  const margin=54, fontSize=10, charWidth=fontSize*0.6; // Courier: 0.6em per glyph
+  const maxChars=Math.floor((612-2*margin)/charWidth);
+  const lines=wrapText(text,maxChars,s=>s.length);
+  const pdfText=buildSimplePdf(["SIMyCity — "+label,"",...lines],{margin,fontSize});
+  const bytes=Uint8Array.from(pdfText,c=>c.charCodeAt(0));
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-"+current+"-case.pdf";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
 function copy(text,msg,targetId){
   const done=()=>{const m=document.getElementById(targetId||"toolMsg");if(m){m.textContent="✓ "+msg;setTimeout(()=>m.textContent="",2500);}};
