@@ -781,6 +781,29 @@
         "traffic": "low"
       },
       "notes": "Every use above reads demand as \"nearby rooftops\" (or the same proxy at a tighter radius) \u2014 a headcount. Senior living is the first to read demand as whether the surrounding population *skews older* instead: the multi-tract Census ACS trade-area read (`aggregateAcsTracts` in web/logic.js) already resolves median age per trade area for warehouse_club/fast_casual's due-diligence panel, but nothing had consumed it as an actual verdict input until this use. min_median_age_years is a documented first-draft heuristic (current US median age is ~38-39) \u2014 refine freely, same as every other threshold here.\n"
+    },
+    "urgent_care": {
+      "label": "Urgent Care / Walk-In Medical Clinic",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 4000,
+          "drive_time_min": 8
+        },
+        "parcel": {
+          "min_buildable_acres": 1.0
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 2.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "OSM tagging for urgent care is genuinely messy \u2014 no single dominant tag the way `amenity=charging_station` is unambiguous for EV chargers. The live query ORs `amenity=clinic` and `healthcare=clinic`, both known to catch real-world false positives (dental offices, vet clinics) \u2014 a documented best-effort proxy, same honesty as every prior use's imperfect demand/competition read. min_households_drive_time is a first-draft heuristic (a walk-in clinic serves a wider radius than a food truck court but tighter than a warehouse club) \u2014 refine freely.\n"
     }
   },
   "actor_uses": {

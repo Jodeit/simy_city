@@ -304,6 +304,32 @@ land_uses:
       min_median_age_years is a documented first-draft heuristic (current US
       median age is ~38-39) — refine freely, same as every other threshold here.
 
+  urgent_care:            # walk-in clinic / urgent-care storefront
+    label: Urgent Care / Walk-In Medical Clinic
+    requires:
+      demand:      { min_households_drive_time: 4000, drive_time_min: 8 }
+      parcel:      { min_buildable_acres: 1.0 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living established: a second urgent care two
+      # blocks from an existing one splits the same patient pool rather than
+      # opening up a new one.
+      competition: { min_distance_km_from_nearest: 2.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a single-story clinic + small lot, not a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      OSM tagging for urgent care is genuinely messy — no single dominant tag
+      the way `amenity=charging_station` is unambiguous for EV chargers. The
+      live query ORs `amenity=clinic` and `healthcare=clinic`, both known to
+      catch real-world false positives (dental offices, vet clinics) — a
+      documented best-effort proxy, same honesty as every prior use's
+      imperfect demand/competition read. min_households_drive_time is a
+      first-draft heuristic (a walk-in clinic serves a wider radius than a
+      food truck court but tighter than a warehouse club) — refine freely.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

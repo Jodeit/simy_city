@@ -1270,7 +1270,7 @@ Ground rules for each run:
       pages still load with zero console/page errors.
 
 ## Next (breadth) — newly added (9)
-- [ ] **8th land use: urgent care / walk-in medical clinic.** Every land use so
+- [x] **8th land use: urgent care / walk-in medical clinic.** Every land use so
       far reads demand as either raw nearby rooftops (warehouse_club,
       food_truck_court, ev_charging_hub), a daytime-population blend
       (fast_casual), or trade-area median age (senior_living) — none reads
@@ -1297,6 +1297,34 @@ Ground rules for each run:
       `reverseSearchSignals` (`web/logic.js`) needs no change (it already
       generalizes over any `min_distance_km_from_nearest` field and any
       `roofNeed`), same "free" reverse-search coverage ev_charging_hub got.
+      Shipped as specced: `urgent_care` added to `data_sources/layers.yaml`
+      (3 km/8 min rooftop-demand radius, `min_buildable_acres: 1.0`,
+      `competition.min_distance_km_from_nearest: 2.0`, an honest YAML comment
+      on the `amenity=clinic`/`healthcare=clinic` OR'd query's known
+      false-positive risk). Wired `ucState`/`maybeRenderUCVerdict` in
+      `web/explore.html`, byte-for-byte the same wait-for-all-three-legs
+      pattern as `maybeRenderFTCVerdict` (rooftop leg from `runDemand`'s
+      rooftop count, acreage leg from `showParcel`, competitor-distance leg
+      from `runDemand`'s compQ scan) — added to the `USE_DEMAND` config, the
+      use-selector `order` array, the `analyze()` state-reset blocks (both
+      the build-mode init and the explore-mode teardown), and the
+      isDC/isFC/…/isUC live-area-read header text. Confirmed
+      `reverseSearchSignals` needed zero changes — it already generalizes
+      over any `min_distance_km_from_nearest` field and any `roofNeed`, so
+      urgent_care got reverse-search "🔍 Find candidate sites" coverage for
+      free, same as ev_charging_hub. Verified: `python -m pytest -q` (15
+      passed), `simy validate` (OK, 8 land uses), `node --test tests/js/*.test.mjs`
+      (172 passed, no JS-side test changes needed since no new pure helper
+      was added), and headless Chromium confirms both pages load with zero
+      genuine console/page errors; a real simulated map click with
+      `urgent_care` selected renders the full result panel end-to-end
+      without throwing; and driving `maybeRenderUCVerdict` directly through
+      PASS / SHORT-on-demand / SHORT-on-site-size / SHORT-on-competitor-too-close
+      / no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws. Outbound network to Overpass/ArcGIS is
+      blocked from this sandbox, so a live end-to-end rooftop/acreage/clinic
+      fetch on the real site is a good human spot-check.
 - [ ] **10th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 9
       counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
       Miami-Dade, San Diego). Add one more — e.g. Dallas County, TX or

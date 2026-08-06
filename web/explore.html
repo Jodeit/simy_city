@@ -401,6 +401,11 @@ const USE_DEMAND={
     powerQ:'nwr["power"="substation"]', powerLabel:"power substations" },
   senior_living:{ radius:8000, roofNeed:0, needLabel:"",
     compQ:'nwr["amenity"="social_facility"]["social_facility"~"assisted_living|nursing_home"];nwr["amenity"="nursing_home"]', compLabel:"assisted-living/nursing facilities" },
+  urgent_care:{ radius:3000, roofNeed:4000, needLabel:"the walk-in/drive base an urgent care needs",
+    // Best-effort proxy — OSM tagging for urgent care is genuinely messy (no
+    // single dominant tag), documented in layers.yaml. Catches real-world
+    // false positives (dental/vet offices) same as every prior use's caveats.
+    compQ:'nwr["amenity"="clinic"];nwr["healthcare"="clinic"]', compLabel:"urgent-care/walk-in clinics" },
 };
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
@@ -454,6 +459,14 @@ let evState=null;
 // existing assisted-living/nursing facilities — waits for all three legs.
 const SL_MIN_ACRES=2.5, SL_AGE_THRESHOLD=40, SL_MIN_COMPETITOR_KM=3;
 let slState=null;
+// urgent_care's real verdict: rooftop demand within a short drive-time radius,
+// blended with the site-size gate (`parcel.min_buildable_acres: 1.0` — a
+// single-story clinic + small lot, bigger than a food-truck lot, smaller than
+// a warehouse club) and a *farther-is-better* competition read (the
+// `competition.min_distance_km_from_nearest: 2.0` layers.yaml gate) — waits
+// for all three legs, same wait-for-all-legs pattern as food_truck_court.
+const UC_MIN_ACRES=1.0, UC_MIN_COMPETITOR_KM=2.0;
+let ucState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -668,7 +681,7 @@ function setLegend(){
     : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
 }
 function initUses(){
-  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living"];
+  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living","urgent_care"];
   const el=document.getElementById("uses");
   order.forEach(id=>{
     const b=document.createElement("button");
@@ -800,6 +813,7 @@ function analyze(latlng){
     ftcState = current==="food_truck_court" ? {seq} : null;
     evState = current==="ev_charging_hub" ? {seq} : null;
     slState = current==="senior_living" ? {seq} : null;
+    ucState = current==="urgent_care" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
@@ -809,6 +823,7 @@ function analyze(latlng){
     ftcState=null;
     evState=null;
     slState=null;
+    ucState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -967,8 +982,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -980,6 +995,7 @@ function renderBuild(use,latlng){
               :isFTC?"nearby rooftops + parcel size + distance from the nearest existing food vendor (farther is better) decide the verdict"
               :isEV?"nearby rooftops + nearest substation distance + distance from the nearest existing charger (farther is better) decide the verdict"
               :isSL?"trade-area median age (not rooftops) + parcel acreage + distance from the nearest existing facility (farther is better) decide the verdict"
+              :isUC?"nearby rooftops + parcel size + distance from the nearest existing clinic (farther is better) decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -1070,6 +1086,7 @@ function runDemand(latlng,seq){
       else if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=c; maybeRenderWCVerdict(seq); }
       else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.roofs=c; maybeRenderFTCVerdict(seq); }
       else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.roofs=c; maybeRenderEVVerdict(seq); }
+      else if(current==="urgent_care"&&ucState&&ucState.seq===seq){ ucState.roofs=c; maybeRenderUCVerdict(seq); }
       else if(cfg.roofNeed) renderDemandVerdict(c,cfg);
     }, ()=>{
       setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works."));
@@ -1077,6 +1094,7 @@ function runDemand(latlng,seq){
       if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.roofs=null; maybeRenderWCVerdict(seq); }
       if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.roofs=null; maybeRenderFTCVerdict(seq); }
       if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.roofs=null; maybeRenderEVVerdict(seq); }
+      if(current==="urgent_care"&&ucState&&ucState.seq===seq){ ucState.roofs=null; maybeRenderUCVerdict(seq); }
     });
   // 1b) fast_casual only: daytime population proxy (offices/shops/workplaces) —
   // lunch traffic comes from workers and shoppers too, not just nearby homes.
@@ -1131,6 +1149,11 @@ function runDemand(latlng,seq){
       // existing assisted-living/nursing facilities.
       slState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderSLVerdict(seq);
+    } else if(current==="urgent_care"&&ucState&&ucState.seq===seq){
+      // Same farther-is-better read as food_truck_court/ev_charging_hub/
+      // senior_living, against existing urgent-care/walk-in clinics.
+      ucState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
+      maybeRenderUCVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
@@ -1139,6 +1162,7 @@ function runDemand(latlng,seq){
     else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.compErr=true; maybeRenderFTCVerdict(seq); }
     else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.compErr=true; maybeRenderEVVerdict(seq); }
     else if(current==="senior_living"&&slState&&slState.seq===seq){ slState.compErr=true; maybeRenderSLVerdict(seq); }
+    else if(current==="urgent_care"&&ucState&&ucState.seq===seq){ ucState.compErr=true; maybeRenderUCVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -1357,6 +1381,37 @@ function maybeRenderSLVerdict(seq){
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — an older-skewing trade area, room for the facility, and clear of existing competitors"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// urgent_care's real verdict — waits for the rooftop leg, the acreage leg, and
+// the competitor-distance leg (all from runDemand/showParcel) before
+// rendering once. Same farther-is-better competitor read as food_truck_court/
+// ev_charging_hub/senior_living: no existing urgent-care/walk-in clinic within
+// the trade-area radius at all is the best possible outcome, not a data gap.
+function maybeRenderUCVerdict(seq){
+  if(current!=="urgent_care"||mode!=="build"||!ucState||ucState.seq!==seq)return;
+  const s=ucState, cfg=USE_DEMAND.urgent_care;
+  const haveComp = s.nearestComp!==undefined || s.compErr;
+  if(s.roofs===undefined||s.acres===undefined||!haveComp)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.roofs==null){ el.style.display="none"; return; } // no rooftop read at all — nothing to show
+  const demandOk=s.roofs>=cfg.roofNeed*0.85, siteOk=s.acres!=null&&s.acres>=UC_MIN_ACRES;
+  const farOk = !s.compErr && (!s.nearestComp || s.nearestComp.km>=UC_MIN_COMPETITOR_KM);
+  const pass=demandOk&&siteOk&&farOk;
+  const legs=[
+    demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
+      : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
+    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${UC_MIN_ACRES} ac for a clinic + small lot)`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${UC_MIN_ACRES} ac for a clinic + small lot)`,
+    s.compErr?`? nearest urgent-care/walk-in clinic distance unavailable`
+      : !s.nearestComp?`✓ no existing urgent-care/walk-in clinic within ${(cfg.radius/1000)} km — wide open`
+      : farOk?`✓ nearest clinic <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${UC_MIN_COMPETITOR_KM} km)`
+      : `✗ nearest clinic <b>${esc(s.nearestComp.name)}</b> only ${s.nearestComp.km.toFixed(1)} km away (need ≥${UC_MIN_COMPETITOR_KM} km)`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(pass?"aligned":"contested");
+  el.innerHTML=(pass?"✓ PASS — enough nearby demand, room for the clinic, and clear of existing competitors"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
@@ -1629,6 +1684,7 @@ function showParcel(geo,src,seq){
   if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.acres=acN; maybeRenderWCVerdict(seq); }
   if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.acres=acN; maybeRenderFTCVerdict(seq); }
   if(current==="senior_living"&&slState&&slState.seq===seq){ slState.acres=acN; maybeRenderSLVerdict(seq); }
+  if(current==="urgent_care"&&ucState&&ucState.seq===seq){ ucState.acres=acN; maybeRenderUCVerdict(seq); }
   setLastParcelSummary({seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,
