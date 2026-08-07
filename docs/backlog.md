@@ -1325,25 +1325,46 @@ Ground rules for each run:
       classes with zero throws. Outbound network to Overpass/ArcGIS is
       blocked from this sandbox, so a live end-to-end rooftop/acreage/clinic
       fetch on the real site is a good human spot-check.
-- [ ] **10th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 9
-      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
-      Miami-Dade, San Diego). Add one more — e.g. Dallas County, TX or
-      Cuyahoga County, OH (Cleveland) are reasonable picks, but any large
-      county with a public ArcGIS parcel MapServer works. Same recipe every
-      prior county addition followed: since this sandbox 403s on direct
-      ArcGIS REST introspection, find the MapServer URL and field names via
-      web search (not direct fetch) against multiple independent sources
-      before trusting a field name; add any new id/owner/address/land-use
-      field names to the shared `pick()` candidate lists rather than
-      assuming they match an existing county's schema; leave a field
-      unmapped (don't guess) if its unit doesn't match what `pick()` expects
-      (e.g. square feet where an acreage row is expected — LA County and
-      Miami-Dade both hit this); write a real `zoning_note`/`county_state`
-      for the state (don't default to Travis's "TX counties don't zone"
-      copy without checking); and prefer a real per-parcel record deep link
-      only if one is *documented*, otherwise link to the assessor's search
-      page rather than guessing a URL shape that might 404 (Cook County is
-      the only county so far with a confirmed stable deep link).
+- [x] **10th parcel county.** Added Dallas County, TX as a 10th
+      `PARCEL_SOURCES` entry — `maps.dcad.org`'s
+      `Property/ParcelQuery/MapServer/4` (the "ParcelPublishing" layer),
+      found via web search since this sandbox 403s on direct ArcGIS REST
+      introspection (same bot-blocking every prior county addition hit).
+      Confirmed via multiple independent search-indexed snippets of the
+      layer's own field schema: `PARCELID` (already in the shared `pick()`
+      id list from San Diego — no change needed there), `OWNERNME1`
+      (owner), and `SITEADDRESS` (address) — added the latter two to the
+      shared owner/address candidate lists. Land-use and land/improvement
+      value field names weren't independently confirmed with the same
+      cross-source confidence (only partial/truncated schema snippets
+      turned up), so — same call as every thin-schema county here (King,
+      Cook, Miami-Dade's `LND_SQFOOT`, San Diego's split
+      `ASR_LAND`/`ASR_IMPR`) — left unmapped rather than guessing a field
+      that isn't actually there or rendering a bogus partial number. DCAD
+      does publish a per-account record page
+      (`dallascad.org/acctDetailRes.aspx?ID=…`), but whether `PARCELID`'s
+      field values exactly match that URL's expected ID format wasn't
+      confirmed with enough confidence, so — matching this item's own
+      "prefer a real deep link only if documented" instruction — `record()`
+      sends people to DCAD's account search page instead of guessing a URL
+      shape that might 404. Dallas is a TX county, so it reuses the "TX
+      counties don't zone" `zoning_note`. Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK, unchanged — this item only touches
+      `explore.html`'s JS `PARCEL_SOURCES` array, not `data_sources/*.yaml`),
+      `node --test tests/js/*.test.mjs` (178 passed, unchanged — this item
+      only touches `explore.html`'s data table, not `logic.js`), and
+      headless Chromium confirms both `web/explore.html` and
+      `web/index.html` load with zero
+      genuine console/page errors; `inBbox` correctly routes a
+      downtown-Dallas point to the new source (and still finds no source
+      for an out-of-coverage point, Denver) with 10 counties total; and a
+      real `analyze()` call built the panel, then `showParcel` was driven
+      directly with a mocked Dallas-shaped ArcGIS attribute payload
+      (`PARCELID`/`OWNERNME1`/`SITEADDRESS`) and rendered the parcel ID,
+      owner, address, the TX zoning note, and the record link correctly
+      with zero throws. Live endpoint reachability and the exact field
+      formats couldn't be confirmed from this sandbox — a live spot-check
+      is a good human follow-up, same as every prior county.
 - [x] **Printable / exportable report for the reverse-search candidate list.**
       Added a "📄 Download PDF" button next to the existing "⬇️ Download CSV"
       button in the "🔍 Find candidate sites" results panel. Added a pure

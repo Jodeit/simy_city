@@ -612,6 +612,25 @@ const PARCEL_SOURCES=[
     county_state:"San Diego County, CA",
     zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
   },
+  {
+    name:"Dallas Central Appraisal District (Dallas County, TX)",
+    urls:["https://maps.dcad.org/prdwa/rest/services/Property/ParcelQuery/MapServer/4"],
+    bbox:[-97.04,32.55,-96.46,33.02],
+    // Confirmed fields on the ParcelPublishing layer: PARCELID (already in the
+    // shared id list from San Diego), OWNERNME1 (owner), SITEADDRESS (address).
+    // Land use and land/improvement value field names weren't independently
+    // confirmed (search-indexed schema snippets only, no direct REST access
+    // from this sandbox) — left unmapped rather than guessing, same
+    // graceful partial-field-coverage every thin-schema county here uses.
+    // DCAD does publish a per-account record page (dallascad.org/acctDetailRes.aspx?ID=…),
+    // but the exact ID format wasn't confirmed to match PARCELID's field
+    // values with enough confidence, so — same cautious call as Harris/Bexar/
+    // LA/King/Miami-Dade/San Diego — send people to the account search page.
+    record:()=>"https://www.dallascad.org/SearchAcct.aspx",
+    source_label:"Dallas Central Appraisal District",
+    county_state:"Dallas County, TX",
+    zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1656,8 +1675,8 @@ function showParcel(geo,src,seq){
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR"]);
