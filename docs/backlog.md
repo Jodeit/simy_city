@@ -1405,6 +1405,59 @@ Ground rules for each run:
       so a live end-to-end search-then-export on the real site is a good
       human spot-check.
 
+## Next (breadth) — newly added (10)
+- [ ] **11th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 10
+      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
+      Miami-Dade, San Diego, Dallas). Add one more — Cuyahoga County, OH
+      (Cleveland) is a reasonable pick for geographic diversity (currently
+      zero Midwest/Northeast/Southeast counties outside Cook/Miami-Dade), but
+      any large county with a public ArcGIS parcel MapServer works. Same
+      recipe every prior county addition followed: since this sandbox 403s on
+      direct ArcGIS REST introspection, find the MapServer URL and field
+      names via web search (not direct fetch) against multiple independent
+      sources before trusting a field name; add any new id/owner/address/
+      land-use field names to the shared `pick()` candidate lists rather than
+      assuming they match an existing county's schema; leave a field unmapped
+      (don't guess) if its unit doesn't match what `pick()` expects; write a
+      real `zoning_note`/`county_state` for the state (check whether it
+      actually has zoning — don't default to Travis's "TX counties don't
+      zone" copy); and prefer a real per-parcel record deep link only if one
+      is *documented*, otherwise link to the assessor's search page.
+- [ ] **PDF export for "Compare parcels".** The compare modal
+      (`web/explore.html`, `renderCompare()`) already has a "⬇️ Download CSV"
+      button (`#compareCsv`) exporting the pinned side-by-side table, but no
+      PDF export — unlike the single-parcel "Make the case" panel and the
+      reverse-search candidate list, which both got a "📄 Download PDF"
+      button alongside their existing CSV export in earlier runs. Add the
+      same pairing here: a pure `buildCompareReportText(pins)`-style helper
+      in `web/logic.js` (mirrors `buildCaseText`/
+      `buildCandidatesReportText`'s role) turning the pinned-parcel rows into
+      report text, reusing the existing hand-rolled `buildSimplePdf` PDF-1.4
+      writer (no vendored library, no network call) and the same
+      Blob+anchor download pattern every other export in this app uses.
+      Handle the empty-pins case (0 parcels pinned) without throwing. Add
+      unit tests for the new text-builder (row formatting, empty list,
+      missing/malformed fields) following the existing
+      `buildCandidatesReportText` test style.
+- [ ] **Wire a real highway/arterial traffic-count check.**
+      `data_sources/layers.yaml` already declares
+      `requires.transportation.near_highway_aadt: 40000` for `warehouse_club`
+      and `requires.transportation.near_arterial_aadt: 20000` for
+      `fast_casual`, but neither is backed by a live data source — they're
+      descriptive-only today; `maybeRenderWCVerdict`/the fast-casual verdict
+      in `web/explore.html` only ever wait on the rooftop/acreage (and, for
+      fast-casual, daytime-population) legs, never a traffic leg. Investigate
+      whether a free, keyless traffic-count (AADT) source exists with broad
+      enough coverage to be worth wiring in as a real gate — state DOT ArcGIS
+      traffic-count layers (same per-state-source pattern `PARCEL_SOURCES`
+      already uses) are the most likely candidate, since there's no single
+      national keyless real-time AADT point-query API. If a workable source
+      is found, wire it as a third/fourth verdict leg following the existing
+      wait-for-all-legs pattern; if not, document the investigation and dead
+      ends in this item so the next run doesn't repeat the search from
+      scratch, and consider whether the YAML thresholds should carry an
+      explicit "not yet gated live" note instead of reading as implemented.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
