@@ -19,6 +19,7 @@ const {
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
+  buildCandidatesReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
 } = logic;
 
@@ -1169,6 +1170,52 @@ test("candidatesToCsvRows: rows round-trip through toCsv (RFC-4180 output for a 
   const results = [{ lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 }];
   const csv = toCsv(candidatesToCsvRows(results, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" }));
   assert.equal(csv, "#,Lat,Lng,Score,Why\r\n1,30.27,-97.74,13.6,≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away");
+});
+
+// ---- buildCandidatesReportText (reverse-search PDF/print report) ----
+
+test("buildCandidatesReportText: header, center, radius, count, then one numbered line per candidate", () => {
+  const results = [
+    { lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 },
+    { lat: 30.28, lng: -97.75, demandCount: 4, nearestCompetitorKm: null, score: 1004 },
+  ];
+  const t = buildCandidatesReportText(
+    "Food Truck Court / Mobile Vending Site", { lat: 30.2672, lng: -97.7431 }, 1200,
+    results, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" },
+  );
+  assert.match(t, /^SIMyCity — candidate sites for "Food Truck Court \/ Mobile Vending Site"\n/);
+  assert.match(t, /Search center: 30\.2672, -97\.7431 \(radius 1\.2 km\)/);
+  assert.match(t, /2 candidates found/);
+  assert.match(t, /1\. ≈12 rooftops within 1\.2 km · nearest food vendor 1\.6 km away \(score 13\.6\)/);
+  assert.match(t, /2\. ≈4 rooftops within 1\.2 km · no food vendors in range \(score 1004\)/);
+  assert.match(t, /github\.com\/jodeit\/simy_city/);
+});
+
+test("buildCandidatesReportText: singular 'candidate' for exactly one result", () => {
+  const results = [{ lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 }];
+  const t = buildCandidatesReportText("Warehouse Club", { lat: 30, lng: -97 }, 15000, results, { preferNear: true }, { radius: 15000 });
+  assert.match(t, /1 candidate found/);
+  assert.doesNotMatch(t, /1 candidates found/);
+});
+
+test("buildCandidatesReportText: a large radius (>=2km) renders whole kilometers, not one decimal", () => {
+  const t = buildCandidatesReportText("Warehouse Club", { lat: 30, lng: -97 }, 15000, [], {}, { radius: 15000 });
+  assert.match(t, /radius 15 km/);
+});
+
+test("buildCandidatesReportText: empty candidate list still renders a valid report, zero found", () => {
+  const t = buildCandidatesReportText("Data Center", { lat: 30, lng: -97 }, 5000, [], {}, { radius: 5000 });
+  assert.match(t, /0 candidates found/);
+});
+
+test("buildCandidatesReportText: missing/null results list doesn't throw", () => {
+  assert.doesNotThrow(() => buildCandidatesReportText("Data Center", { lat: 30, lng: -97 }, 5000, null, {}, {}));
+  assert.doesNotThrow(() => buildCandidatesReportText("Data Center", { lat: 30, lng: -97 }, 5000, undefined, {}, {}));
+});
+
+test("buildCandidatesReportText: missing/malformed center falls back to '?, ?' instead of throwing or emitting NaN", () => {
+  assert.match(buildCandidatesReportText("Data Center", null, 5000, [], {}, {}), /Search center: \?, \?/);
+  assert.match(buildCandidatesReportText("Data Center", {}, 5000, [], {}, {}), /Search center: \?, \?/);
 });
 
 // ---- minimal hand-rolled PDF writer ("make the case" PDF export) ----

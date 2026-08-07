@@ -1344,23 +1344,45 @@ Ground rules for each run:
       only if one is *documented*, otherwise link to the assessor's search
       page rather than guessing a URL shape that might 404 (Cook County is
       the only county so far with a confirmed stable deep link).
-- [ ] **Printable / exportable report for the reverse-search candidate list.**
-      The single-parcel "🖨️ Print report" / "📄 Download PDF" / "🖼️ Download
-      image" tools (Test-a-use "Make the case" row) only cover one clicked
-      parcel. The "🔍 Find candidate sites" reverse-search results panel
-      already has a CSV export (`downloadCandidatesCsv`,
-      `candidatesToCsvRows` in `web/logic.js`) but no print/PDF option for
-      sharing a ranked shortlist with a non-technical stakeholder (a CSV
-      isn't something you hand to a city council member). Reuse
-      `buildSimplePdf` (the hand-rolled PDF-1.4 writer already added for the
-      single-parcel PDF export) and the existing `candidateWhyText` per-row
-      formatting to build a one-page-per-search summary (search center,
-      radius, use, then each ranked candidate's rank/score/why-text) —
-      mirrors `buildCaseText`'s role for the single-parcel case, just built
-      from `lastCandidates`/`lastCandSig`/`lastCandCfg` instead of a single
-      parcel's verdict state. A `@media print` variant (reusing the
-      `.printCase` pattern) is a smaller alternative if a full PDF pass
-      feels too big for one session — either satisfies the underlying need.
+- [x] **Printable / exportable report for the reverse-search candidate list.**
+      Added a "📄 Download PDF" button next to the existing "⬇️ Download CSV"
+      button in the "🔍 Find candidate sites" results panel. Added a pure
+      `buildCandidatesReportText(useLabel, center, radiusM, results, sig,
+      cfg)` to `web/logic.js` — mirrors `buildCaseText`'s role for the
+      single-parcel case, built from `lastCandidates`/`lastCandSig`/
+      `lastCandCfg` instead of a single parcel's verdict state: a header line
+      with the tested use's label, the search center + radius, the candidate
+      count, then one numbered `rank. <candidateWhyText> (score N)` line per
+      result (reusing the exact same per-row "why" text the CSV export and
+      results list already render, so all three surfaces stay consistent). A
+      missing/malformed center falls back to "?, ?" rather than throwing or
+      emitting "NaN, NaN". `downloadCandidatesPdf()` (`web/explore.html`)
+      wires it up byte-for-byte the same way `downloadCasePdf` already does
+      for the single-parcel case — `wrapText` line-wraps by Courier's fixed
+      0.6em-per-glyph character width, `buildSimplePdf` (the hand-rolled
+      PDF-1.4 writer already added for the single-parcel PDF export) writes
+      the file, downloaded as `simycity-<use>-candidates.pdf` via the same
+      Blob+anchor pattern every other client-side export in this app uses —
+      no vendored PDF library, no network call. Added 7 new unit tests for
+      `buildCandidatesReportText` (header/center/radius/count/per-row
+      formatting, singular "1 candidate found", whole-kilometer vs.
+      one-decimal radius formatting matching the existing radius-select
+      convention, empty candidate list, null/undefined results list,
+      missing/malformed center). Verified: `python -m pytest -q` (15
+      passed), `simy validate` (OK, 8 land uses), `node --test
+      tests/js/*.test.mjs` (178 passed, 7 new), and headless Chromium
+      end-to-end: both pages load with zero console/page errors; switching
+      to Test-a-use mode with `food_truck_court` selected, opening the
+      search panel, and running a real `runCandidateSearch()` against a
+      mocked `fetch` populated `lastCandidates`; clicking the real "Download
+      CSV" and "Download PDF" buttons each fired a real browser download
+      event with the correct filename extension, and the downloaded PDF's
+      bytes start with the `%PDF-` magic header and contain the expected
+      "N candidates found" text — a genuine file was produced, not just a
+      function call that didn't throw. Outbound network to Overpass is
+      blocked from this sandbox (as with every prior reverse-search item),
+      so a live end-to-end search-then-export on the real site is a good
+      human spot-check.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

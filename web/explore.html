@@ -165,7 +165,7 @@
   .searchRow select{font:inherit;font-size:.82rem;padding:.35em .5em;border-radius:8px;
     border:1px solid var(--line);background:var(--surface);color:var(--ink)}
   .candList{display:flex;flex-direction:column;gap:6px;margin-top:9px}
-  .candCsvRow{margin-top:9px;display:flex;align-items:center;gap:8px}
+  .candCsvRow{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .candRow{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid var(--line);
     border-radius:9px;background:var(--surface);cursor:pointer;font-size:.84rem}
   .candRow:hover,.candRow:focus{border-color:var(--garden);outline:none}
@@ -1541,7 +1541,8 @@ function renderCandidates(results,sig,cfg){
     `<div class="candRow" data-i="${i}" role="button" tabindex="0">
        <span class="candNum">${i+1}</span><span>${esc(candidateWhyText(r,sig,cfg))}</span>
      </div>`).join("")+
-    `</div><div class="candCsvRow"><button class="toolbtn" id="searchCsv" type="button">⬇️ Download CSV</button> <span class="ok" id="searchCsvMsg"></span></div>`;
+    `</div><div class="candCsvRow"><button class="toolbtn" id="searchCsv" type="button">⬇️ Download CSV</button>`+
+    `<button class="toolbtn" id="searchPdf" type="button">📄 Download PDF</button> <span class="ok" id="searchCsvMsg"></span></div>`;
   resEl.querySelectorAll(".candRow").forEach(row=>{
     const r=results[parseInt(row.dataset.i,10)];
     wireActivate(row,()=>analyze(L.latLng(r.lat,r.lng)));
@@ -1550,6 +1551,11 @@ function renderCandidates(results,sig,cfg){
     downloadCandidatesCsv();
     const m=document.getElementById("searchCsvMsg");
     if(m){m.textContent="✓ CSV downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+  document.getElementById("searchPdf").onclick=()=>{
+    downloadCandidatesPdf();
+    const m=document.getElementById("searchCsvMsg");
+    if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
   };
 }
 // Exports the ranked candidate list as a downloaded .csv via
@@ -1561,6 +1567,28 @@ function downloadCandidatesCsv(){
   const blob=new Blob([toCsv(rows)],{type:"text/csv;charset=utf-8"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=url;a.download="simycity-candidates.csv";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+// Exports the ranked candidate list as a printable PDF report (search
+// center, radius, use, then each ranked candidate's rank/score/why-text) —
+// same buildSimplePdf/wrapText plumbing as downloadCasePdf (the
+// single-parcel "make the case" PDF), just fed buildCandidatesReportText's
+// output instead of buildCaseText's, for sharing a ranked shortlist with a
+// non-technical stakeholder rather than a single clicked parcel.
+function downloadCandidatesPdf(){
+  if(!lastCandidates||!lastCandidates.length)return;
+  const ctr=map.getCenter();
+  const radiusM=parseInt(document.getElementById("searchRadius").value,10)||lastCandCfg.radius;
+  const text=buildCandidatesReportText(MODEL.land_uses[current].label,{lat:ctr.lat,lng:ctr.lng},radiusM,lastCandidates,lastCandSig,lastCandCfg);
+  const margin=54, fontSize=10, charWidth=fontSize*0.6; // Courier: 0.6em per glyph
+  const maxChars=Math.floor((612-2*margin)/charWidth);
+  const lines=wrapText(text,maxChars,s=>s.length);
+  const pdfText=buildSimplePdf(lines,{margin,fontSize});
+  const bytes=Uint8Array.from(pdfText,ch=>ch.charCodeAt(0));
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-"+current+"-candidates.pdf";
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
