@@ -1423,22 +1423,40 @@ Ground rules for each run:
       actually has zoning — don't default to Travis's "TX counties don't
       zone" copy); and prefer a real per-parcel record deep link only if one
       is *documented*, otherwise link to the assessor's search page.
-- [ ] **PDF export for "Compare parcels".** The compare modal
-      (`web/explore.html`, `renderCompare()`) already has a "⬇️ Download CSV"
-      button (`#compareCsv`) exporting the pinned side-by-side table, but no
-      PDF export — unlike the single-parcel "Make the case" panel and the
-      reverse-search candidate list, which both got a "📄 Download PDF"
-      button alongside their existing CSV export in earlier runs. Add the
-      same pairing here: a pure `buildCompareReportText(pins)`-style helper
-      in `web/logic.js` (mirrors `buildCaseText`/
-      `buildCandidatesReportText`'s role) turning the pinned-parcel rows into
-      report text, reusing the existing hand-rolled `buildSimplePdf` PDF-1.4
-      writer (no vendored library, no network call) and the same
-      Blob+anchor download pattern every other export in this app uses.
-      Handle the empty-pins case (0 parcels pinned) without throwing. Add
-      unit tests for the new text-builder (row formatting, empty list,
-      missing/malformed fields) following the existing
-      `buildCandidatesReportText` test style.
+- [x] **PDF export for "Compare parcels".** Added a "📄 Download PDF" button
+      (`#comparePdf`) to the Compare modal alongside the existing "⬇️ Download
+      CSV" button, same pairing the single-parcel "Make the case" panel and
+      the reverse-search candidate list already got in earlier runs. Added a
+      pure `buildCompareReportText(pins)` to `web/logic.js` (mirrors
+      `buildCandidatesReportText`'s role) that renders each pinned parcel as
+      a numbered section (site/owner/acreage/appraised value/land use/county,
+      plus Testing/Verdict only when the pin carries a Test-a-use verdict —
+      Explore-mode pins omit those two lines rather than printing "Testing:
+      —"), reusing the existing hand-rolled `buildSimplePdf` PDF-1.4 writer
+      (no vendored library, no network call) exactly like `downloadCasePdf`/
+      `downloadCandidatesPdf` already do. A missing/malformed field renders
+      "—" (site falls back to "lat, lng" or "?, ?") rather than "undefined"
+      or throwing, and an empty/null/undefined pins list renders a valid "0
+      parcels pinned" report instead of a blank or broken PDF — so, unlike
+      the candidate-list PDF (which no-ops with nothing pinned), the new
+      `downloadComparePdf()` doesn't need its own empty-list guard; the
+      *button* still shows the same "⚠ pin a parcel first" inline message
+      the CSV button already gives when clicked with nothing pinned. Added 4
+      new unit tests (full multi-field render, singular "1 parcel pinned" +
+      Testing/Verdict omitted for an Explore-mode pin, empty/null/undefined
+      list, missing-fields-render-"—"-and-a-null-pin-in-the-list-doesn't-throw)
+      following the existing `buildCandidatesReportText` test style. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 8 land uses),
+      `node --test tests/js/*.test.mjs` (182 passed, 4 new), and headless
+      Chromium end-to-end: both pages load with zero console/page errors;
+      seeding two pins (one full Test-a-use pin with a comma-containing owner
+      name, one all-nulls Explore-mode pin) and driving the real Compare-open
+      → "Download PDF" click end to end produced a real download event with
+      filename `simycity-compare.pdf` and the "✓ PDF downloaded" message; the
+      empty-pins case correctly showed "⚠ pin a parcel first" without
+      throwing; and the PDF bytes start with the `%PDF-` magic header. No
+      network involved — pure client-side reordering of already-resolved
+      snapshots, same as every other Compare export.
 - [ ] **Wire a real highway/arterial traffic-count check.**
       `data_sources/layers.yaml` already declares
       `requires.transportation.near_highway_aadt: 40000` for `warehouse_club`

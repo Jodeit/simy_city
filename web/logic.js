@@ -622,6 +622,33 @@ function buildCandidatesReportText(useLabel,center,radiusM,results,sig,cfg){
   return t;
 }
 
+// Builds the text for a printable/exportable report summarizing the pinned
+// Compare list (same fields renderCompare()'s table shows, one pin per
+// section) — mirrors buildCandidatesReportText's role for the reverse-search
+// PDF, just fed the Compare list's pins instead of a ranked candidate list.
+// A pin missing a field (or the whole pins list being empty/null) renders
+// "—"/"0 parcels pinned" rather than throwing or emitting "undefined".
+function buildCompareReportText(pins){
+  pins=pins||[];
+  let t=`SIMyCity — parcel comparison\n`;
+  t+=`${pins.length} parcel${pins.length===1?"":"s"} pinned\n\n`;
+  pins.forEach((raw,i)=>{
+    const p=raw||{};
+    const site=p.label||((typeof p.lat==="number"&&typeof p.lng==="number")?`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`:"?, ?");
+    t+=`  ${i+1}. ${site}\n`;
+    t+=`     Owner: ${p.owner||"—"}\n`;
+    t+=`     Acreage: ${typeof p.acres==="number"?p.acres.toFixed(2)+" ac":"—"}\n`;
+    t+=`     Appraised value: ${typeof p.value==="number"?"$"+p.value.toLocaleString():"—"}\n`;
+    t+=`     Land use: ${p.land||"—"}\n`;
+    t+=`     County: ${p.county||"—"}\n`;
+    if(p.use)t+=`     Testing: ${p.use}\n`;
+    if(p.verdict)t+=`     Verdict: ${p.verdict}\n`;
+    t+=`\n`;
+  });
+  t+=`Built on open public data · github.com/jodeit/simy_city\n`;
+  return t;
+}
+
 /* ---- minimal hand-rolled PDF writer for "make the case" ----
    No vendored library, no CDN, no build step — same constraint every other
    feature in this app runs under. Supports exactly what "make the case"
@@ -711,5 +738,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,buildCandidatesReportText,toPdfSafeText,escapePdfString,buildSimplePdf};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf};
 }

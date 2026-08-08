@@ -326,6 +326,7 @@
       <span class="ok" id="compareShareMsg" style="margin-right:auto"></span>
       <button class="btng" id="compareShare">🔗 Share list</button>
       <button class="btng" id="compareCsv">⬇️ Download CSV</button>
+      <button class="btng" id="comparePdf">📄 Download PDF</button>
       <button class="btng" id="compareClear">Clear all</button>
       <button class="btng" id="compareCancel">Close</button>
     </div>
@@ -2169,6 +2170,24 @@ function downloadCompareCsv(){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
+// Exports the pinned Compare list as a printable PDF report — same
+// buildSimplePdf/wrapText plumbing as downloadCasePdf/downloadCandidatesPdf,
+// just fed buildCompareReportText's output instead. buildCompareReportText
+// itself renders a valid "0 parcels pinned" report for an empty list, so
+// this doesn't need to guard on pins.length either.
+function downloadComparePdf(){
+  const text=buildCompareReportText(pins);
+  const margin=54, fontSize=10, charWidth=fontSize*0.6; // Courier: 0.6em per glyph
+  const maxChars=Math.floor((612-2*margin)/charWidth);
+  const lines=wrapText(text,maxChars,s=>s.length);
+  const pdfText=buildSimplePdf(lines,{margin,fontSize});
+  const bytes=Uint8Array.from(pdfText,ch=>ch.charCodeAt(0));
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-compare.pdf";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
 function wireCompare(){
   const modal=document.getElementById("compareModal");
   document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
@@ -2186,6 +2205,12 @@ function wireCompare(){
     if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
     downloadCompareCsv();
     if(m){m.textContent="✓ CSV downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+  document.getElementById("comparePdf").onclick=()=>{
+    const m=document.getElementById("compareShareMsg");
+    if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
+    downloadComparePdf();
+    if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
   };
 }
 

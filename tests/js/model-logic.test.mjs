@@ -19,7 +19,7 @@ const {
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
-  buildCandidatesReportText,
+  buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
 } = logic;
 
@@ -1216,6 +1216,54 @@ test("buildCandidatesReportText: missing/null results list doesn't throw", () =>
 test("buildCandidatesReportText: missing/malformed center falls back to '?, ?' instead of throwing or emitting NaN", () => {
   assert.match(buildCandidatesReportText("Data Center", null, 5000, [], {}, {}), /Search center: \?, \?/);
   assert.match(buildCandidatesReportText("Data Center", {}, 5000, [], {}, {}), /Search center: \?, \?/);
+});
+
+// ---- buildCompareReportText (Compare-list PDF/print report) ----
+
+test("buildCompareReportText: header, count, then one numbered section per pin with all fields", () => {
+  const pins = [
+    { label: "123 Main St", owner: "Smith, John Trust", acres: 2.5, value: 450000, land: "Retail", county: "Travis", use: "Fast casual restaurant", verdict: "PASS — clears the demand bar" },
+    { lat: 30.28, lng: -97.75, owner: "Jane Doe", acres: 1.1, value: 200000, land: "Vacant", county: "Harris" },
+  ];
+  const t = buildCompareReportText(pins);
+  assert.match(t, /^SIMyCity — parcel comparison\n/);
+  assert.match(t, /2 parcels pinned/);
+  assert.match(t, /1\. 123 Main St/);
+  assert.match(t, /Owner: Smith, John Trust/);
+  assert.match(t, /Acreage: 2\.50 ac/);
+  assert.match(t, /Appraised value: \$450,000/);
+  assert.match(t, /Land use: Retail/);
+  assert.match(t, /County: Travis/);
+  assert.match(t, /Testing: Fast casual restaurant/);
+  assert.match(t, /Verdict: PASS — clears the demand bar/);
+  assert.match(t, /2\. 30\.2800, -97\.7500/);
+  assert.match(t, /github\.com\/jodeit\/simy_city/);
+});
+
+test("buildCompareReportText: singular 'parcel' for exactly one pin, and omits Testing/Verdict when absent (Explore-mode pin)", () => {
+  const t = buildCompareReportText([{ label: "Empty lot", owner: "—", acres: 3, value: 100000, land: "Vacant", county: "Travis" }]);
+  assert.match(t, /1 parcel pinned/);
+  assert.doesNotMatch(t, /1 parcels pinned/);
+  assert.doesNotMatch(t, /Testing:/);
+  assert.doesNotMatch(t, /Verdict:/);
+});
+
+test("buildCompareReportText: empty/null/undefined pins list still renders a valid report, zero pinned, no throw", () => {
+  assert.match(buildCompareReportText([]), /0 parcels pinned/);
+  assert.doesNotThrow(() => buildCompareReportText(null));
+  assert.doesNotThrow(() => buildCompareReportText(undefined));
+  assert.match(buildCompareReportText(null), /0 parcels pinned/);
+});
+
+test("buildCompareReportText: missing/malformed fields render '—' instead of 'undefined', and a null pin in the list doesn't throw", () => {
+  const t = buildCompareReportText([{}, null]);
+  assert.match(t, /1\. \?, \?/);
+  assert.match(t, /Owner: —/);
+  assert.match(t, /Acreage: —/);
+  assert.match(t, /Appraised value: —/);
+  assert.match(t, /Land use: —/);
+  assert.match(t, /County: —/);
+  assert.match(t, /2\. \?, \?/);
 });
 
 // ---- minimal hand-rolled PDF writer ("make the case" PDF export) ----
