@@ -21,6 +21,7 @@ const {
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
+  parseAadtFeatures, maxAadtWithinRadius,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -1321,4 +1322,75 @@ test("buildSimplePdf: sanitizes lines through toPdfSafeText before writing (no r
 test("buildSimplePdf: every character in the output is a single byte (safe for Uint8Array.from(str, c => c.charCodeAt(0)))", () => {
   const pdf = buildSimplePdf(["a line with a (paren) and a \\backslash\\"]);
   assert.equal([...pdf].every(ch => ch.codePointAt(0) <= 255), true);
+});
+
+// ---- traffic-count (AADT) leg: parseAadtFeatures / maxAadtWithinRadius ----
+
+test("parseAadtFeatures: reads a confirmed AADT field off point geometry", () => {
+  const json = { features: [{ attributes: { AADT: 42000 }, geometry: { x: -97.7, y: 30.3 } }] };
+  assert.deepEqual(parseAadtFeatures(json), [{ lat: 30.3, lng: -97.7, aadt: 42000, route: null }]);
+});
+
+test("parseAadtFeatures: falls back through the candidate field list when AADT itself is absent", () => {
+  const json = { features: [{ attributes: { CURRENT_AADT: "18000" }, geometry: { x: -97.7, y: 30.3 } }] };
+  assert.equal(parseAadtFeatures(json)[0].aadt, 18000);
+});
+
+test("parseAadtFeatures: reads a route name when present", () => {
+  const json = { features: [{ attributes: { AADT: 5000, ROUTE_NAME: "US-290" }, geometry: { x: -97.7, y: 30.3 } }] };
+  assert.equal(parseAadtFeatures(json)[0].route, "US-290");
+});
+
+test("parseAadtFeatures: falls back to a polyline's first vertex when geometry has no x/y", () => {
+  const json = { features: [{ attributes: { AADT: 9000 }, geometry: { paths: [[[-97.5, 30.1], [-97.4, 30.2]]] } }] };
+  assert.deepEqual(parseAadtFeatures(json), [{ lat: 30.1, lng: -97.5, aadt: 9000, route: null }]);
+});
+
+test("parseAadtFeatures: drops a feature with no usable AADT number", () => {
+  const json = { features: [
+    { attributes: {}, geometry: { x: -97.7, y: 30.3 } },
+    { attributes: { AADT: "not-a-number" }, geometry: { x: -97.7, y: 30.3 } },
+    { attributes: { AADT: -5 }, geometry: { x: -97.7, y: 30.3 } },
+  ] };
+  assert.deepEqual(parseAadtFeatures(json), []);
+});
+
+test("parseAadtFeatures: drops a feature with no usable coordinate (neither point nor polyline)", () => {
+  const json = { features: [{ attributes: { AADT: 1000 }, geometry: {} }] };
+  assert.deepEqual(parseAadtFeatures(json), []);
+});
+
+test("parseAadtFeatures: handles a missing/malformed response gracefully", () => {
+  assert.deepEqual(parseAadtFeatures(null), []);
+  assert.deepEqual(parseAadtFeatures({}), []);
+  assert.deepEqual(parseAadtFeatures({ features: null }), []);
+});
+
+test("maxAadtWithinRadius: picks the busiest point in range, not the literal nearest", () => {
+  const center = { lat: 30.0, lng: -97.0 };
+  const near = { lat: 30.001, lng: -97.0, aadt: 3000 }; // ~111m away, quiet
+  const busy = { lat: 30.005, lng: -97.0, aadt: 50000 }; // ~555m away, busy
+  const best = maxAadtWithinRadius([near, busy], center, 1000);
+  assert.equal(best.aadt, 50000);
+});
+
+test("maxAadtWithinRadius: excludes points outside the radius", () => {
+  const center = { lat: 30.0, lng: -97.0 };
+  const far = { lat: 30.5, lng: -97.0, aadt: 90000 }; // way outside 1km
+  assert.equal(maxAadtWithinRadius([far], center, 1000), null);
+});
+
+test("maxAadtWithinRadius: returns null for an empty point list", () => {
+  assert.equal(maxAadtWithinRadius([], { lat: 30, lng: -97 }, 1000), null);
+});
+
+test("maxAadtWithinRadius: returns null for a missing/invalid center", () => {
+  assert.equal(maxAadtWithinRadius([{ lat: 30, lng: -97, aadt: 1000 }], null, 1000), null);
+  assert.equal(maxAadtWithinRadius([{ lat: 30, lng: -97, aadt: 1000 }], {}, 1000), null);
+});
+
+test("maxAadtWithinRadius: carries the route name through on the winning point", () => {
+  const center = { lat: 30.0, lng: -97.0 };
+  const hit = { lat: 30.001, lng: -97.0, aadt: 40000, route: "I-35" };
+  assert.equal(maxAadtWithinRadius([hit], center, 1000).route, "I-35");
 });

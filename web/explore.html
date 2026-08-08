@@ -419,6 +419,9 @@ let dcState=null;
 // spirit as roofNeed itself) — waits for both the rooftop and daytime-POI
 // legs before rendering once.
 const FC_DAYTIME_WEIGHT=20;
+// Matches layers.yaml's `transportation.near_arterial_aadt: 20000` — a real
+// gate now (AADT_SOURCE below), not descriptive-only.
+const FC_AADT_MIN=20000;
 let fcState=null;
 // residential_subdivision's induced-school-load verdict: parcel acreage projects
 // to homes (density assumption) to school-age kids (0.5 students/home, matching
@@ -432,6 +435,9 @@ let resState=null;
 // for the store + parking, not just nearby households) — waits for both legs,
 // same wait-for-both-legs pattern as the other three real verdicts.
 const WC_MIN_ACRES=15;
+// Matches layers.yaml's `transportation.near_highway_aadt: 40000` — a real
+// gate now (AADT_SOURCE below), not descriptive-only.
+const WC_AADT_MIN=40000;
 let wcState=null;
 // food_truck_court's real verdict: rooftop demand within a tight local radius,
 // blended with the site-size gate (`parcel.min_buildable_acres: 0.25` — a
@@ -662,6 +668,26 @@ const PARCEL_SOURCES=[
     zoning_note:"PA has no unincorporated land — every parcel sits inside a city/borough/township, whose government (not the county) sets zoning",
   },
 ];
+
+// Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
+// `near_arterial_aadt` gates layers.yaml already declares for warehouse_club/
+// fast_casual — previously descriptive-only, no live data behind them. Unlike
+// PARCEL_SOURCES (genuinely no single free national parcel API exists), a
+// real *national* keyless source does exist here: BTS/FHWA's National
+// Transportation Atlas Database (NTAD) publishes the National Highway System
+// (NHS — the interstate/major-highway/principal-arterial network, ~220k
+// miles) as a public ArcGIS Online FeatureServer with a field named plainly
+// `AADT` per BTS's own field documentation — unlike every PARCEL_SOURCES
+// county entry, whose field names are inferred from docs this sandbox can't
+// fetch to confirm directly, this one *is* independently sourced (not a
+// guess), though the exact geometryType (point vs. line) still isn't
+// (`parseAadtFeatures` in web/logic.js handles both shapes defensively).
+// NHS is a subset of all roads, not every local street — a reasonable proxy
+// for "highway"/"arterial" alike, same documented-heuristic spirit as every
+// other proxy metric this app already uses (rooftops-for-households,
+// daytime-POIs-for-workers). National coverage means — unlike parcels — there
+// is no bbox/coverage-gap branch to handle; every click gets a real answer.
+const AADT_SOURCE="https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_Strategic_Highway_Network/FeatureServer/0";
 
 // Developer-diligence sources (also county-by-county where applicable).
 const EPQS="https://epqs.nationalmap.gov/v1/json"; // USGS point elevation → slope
@@ -1164,6 +1190,20 @@ function runDemand(latlng,seq){
       if(evState&&evState.seq===seq){ evState.subKm = els.length ? els[0] : null; maybeRenderEVVerdict(seq); }
     }, ()=>{ if(evState&&evState.seq===seq){ evState.subErr=true; maybeRenderEVVerdict(seq); } });
   }
+  // 1d) warehouse_club/fast_casual only: real traffic-count (AADT) leg for the
+  // `transportation.near_highway_aadt`/`near_arterial_aadt` gate layers.yaml
+  // already declares (see AADT_SOURCE above — national coverage, so unlike
+  // the other legs there's no per-location coverage check needed here).
+  if(current==="warehouse_club"||current==="fast_casual"){
+    arcgisNearQuery(AADT_SOURCE,{lat,lng},cfg.radius).then(d=>{
+      const hit=maxAadtWithinRadius(parseAadtFeatures(d),{lat,lng},cfg.radius);
+      if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.trafficHit=hit; maybeRenderFCVerdict(seq); }
+      else if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.trafficHit=hit; maybeRenderWCVerdict(seq); }
+    }).catch(()=>{
+      if(current==="fast_casual"&&fcState&&fcState.seq===seq){ fcState.trafficErr=true; maybeRenderFCVerdict(seq); }
+      else if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.trafficErr=true; maybeRenderWCVerdict(seq); }
+    });
+  }
   // 2) competitors / context with nearest
   const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
   overpass(`[out:json][timeout:25];(${parts});out center 60;`, seq, d=>{
@@ -1233,17 +1273,26 @@ function maybeRenderFCVerdict(seq){
   const s=fcState, cfg=USE_DEMAND.fast_casual;
   if(s.roofs===undefined)return; // still waiting on the rooftop leg
   if(s.daytime===undefined&&!s.daytimeErr)return; // still waiting on the daytime leg
+  const haveTraffic = s.trafficHit!==undefined || s.trafficErr;
+  if(!haveTraffic)return; // still waiting on the traffic-count leg
   const el=document.getElementById("demandVerdict"); if(!el)return;
   if(s.roofs==null){ el.style.display="none"; return; } // no read at all — nothing to show
   const b=blendedDemand(s.roofs,s.daytime,FC_DAYTIME_WEIGHT,cfg.roofNeed);
+  const traffic=trafficLeg(s,FC_AADT_MIN);
+  const pass=b.pass&&traffic.ok;
   el.style.display="block";
-  el.className="verdict "+(b.pass?"aligned":"contested");
+  el.className="verdict "+(pass?"aligned":"contested");
   const dtTxt = s.daytimeErr ? "daytime-POI count unavailable"
     : `~${(s.daytime||0).toLocaleString()} ${esc(cfg.daytimeLabel)}`;
-  el.innerHTML = (b.pass
+  // Demand headline reflects b.pass on its own (not the combined `pass`) — a
+  // site with plenty of demand but no busy-enough nearby highway is a real
+  // gap, but a different one than "not enough rooftops/daytime population",
+  // so it gets its own line via traffic.text rather than muddying this one.
+  const demandTxt = b.pass
     ? `✓ ~${Math.round(b.effective).toLocaleString()} effective demand units clears ${esc(cfg.needLabel)}`
-    : `✗ ~${Math.round(b.effective).toLocaleString()} effective demand units vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(b.ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`)
-    +`<br><span style="font-weight:400;font-size:.85em">${s.roofs.toLocaleString()} rooftops · ${dtTxt}</span>`;
+    : `✗ ~${Math.round(b.effective).toLocaleString()} effective demand units vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(b.ratio*100)}%)<br><b>that gap is why it hasn't come here yet</b>`;
+  el.innerHTML = demandTxt
+    +`<br><span style="font-weight:400;font-size:.85em">${s.roofs.toLocaleString()} rooftops · ${dtTxt} · ${traffic.text}</span>`;
 }
 // data_center's real siting verdict — waits for all three legs (substation
 // distance from runDemand, acreage from showParcel, water-district presence
@@ -1302,26 +1351,46 @@ function maybeRenderResVerdict(seq){
     : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
     +`<br><span style="font-weight:400;font-size:.85em">${units.toLocaleString()} est. homes @ ${RES_UNITS_PER_ACRE}/ac · ${RES_STUDENTS_PER_HOME} students/home</span>`;
 }
-// warehouse_club's real verdict — waits for the rooftop leg (runDemand) and
-// the acreage leg (showParcel) before rendering once. PASS needs *both* a
-// trade area with enough rooftops (the demand gate) and a parcel big enough
-// for the store + parking pad (the layers.yaml `min_buildable_acres: 15` gate)
-// — a big empty lot with no rooftops nearby fails just as surely as a dense
-// neighborhood with no room for the pad.
+// Shared traffic-count (AADT) leg for warehouse_club/fast_casual — see
+// AADT_SOURCE and runDemand's 1d leg above. `s.trafficErr` (a query failure)
+// reads as a fail, same as every other leg's fetch-error handling.
+// `s.trafficHit` is `{aadt,km,route}` for the busiest NHS segment within the
+// use's radius, or `null` if the query succeeded but found none in range at
+// all (a genuine "not near the highway/major-arterial network" finding).
+function trafficLeg(s,minAadt){
+  if(s.trafficErr)return{ok:false,text:"? traffic-count lookup unavailable"};
+  const hit=s.trafficHit;
+  if(!hit)return{ok:false,text:"✗ no National Highway System route within range"};
+  const ok=hit.aadt>=minAadt, routeTxt=hit.route?` (${esc(hit.route)})`:"";
+  return {ok, text: ok
+    ? `✓ nearby highway${routeTxt} carries ~${Math.round(hit.aadt).toLocaleString()} AADT (≥${minAadt.toLocaleString()})`
+    : `✗ busiest nearby NHS route${routeTxt} only ~${Math.round(hit.aadt).toLocaleString()} AADT (need ≥${minAadt.toLocaleString()})`};
+}
+// warehouse_club's real verdict — waits for the rooftop leg (runDemand), the
+// acreage leg (showParcel), and the traffic-count leg (runDemand's 1d) before
+// rendering once. PASS needs a trade area with enough rooftops (the demand
+// gate), a parcel big enough for the store + parking pad (the layers.yaml
+// `min_buildable_acres: 15` gate), and a nearby highway busy enough to
+// support one (`near_highway_aadt: 40000`) — a big empty lot with no
+// rooftops nearby fails just as surely as a dense neighborhood with no room
+// for the pad.
 function maybeRenderWCVerdict(seq){
   if(current!=="warehouse_club"||mode!=="build"||!wcState||wcState.seq!==seq)return;
   const s=wcState, cfg=USE_DEMAND.warehouse_club;
-  if(s.roofs===undefined||s.acres===undefined)return; // still waiting on a leg
+  const haveTraffic = s.trafficHit!==undefined || s.trafficErr;
+  if(s.roofs===undefined||s.acres===undefined||!haveTraffic)return; // still waiting on a leg
   const el=document.getElementById("demandVerdict"); if(!el)return;
   if(s.roofs==null){ el.style.display="none"; return; } // no rooftop read at all — nothing to show
   const demandOk=s.roofs>=cfg.roofNeed*0.85, siteOk=s.acres!=null&&s.acres>=WC_MIN_ACRES;
-  const pass=demandOk&&siteOk;
+  const traffic=trafficLeg(s,WC_AADT_MIN);
+  const pass=demandOk&&siteOk&&traffic.ok;
   const legs=[
     demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
     siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${WC_MIN_ACRES} ac for store + parking)`
       : s.acres==null?`? parcel acreage unlisted`
       : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${WC_MIN_ACRES} ac for store + parking)`,
+    traffic.text,
   ];
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
@@ -1660,6 +1729,17 @@ function arcgisPointQuery(base,latlng,returnGeom){
       geometry:(f.geometry&&f.geometry.rings)?{type:"Polygon",coordinates:f.geometry.rings}:null,
     }));
   });
+}
+
+// Distance-buffer ArcGIS point query — like arcgisPointQuery, but for a point
+// *layer* (traffic-count stations) searched within a radius rather than a
+// polygon layer queried by exact point-in-polygon (`distance`/`units` add the
+// buffer; otherwise identical query shape).
+function arcgisNearQuery(base,latlng,radiusM){
+  const url=base+"/query?f=json&where=1%3D1&geometry="+encodeURIComponent(latlng.lng+","+latlng.lat)+
+    "&geometryType=esriGeometryPoint&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
+    "&distance="+radiusM+"&units=esriSRUnit_Meter&returnGeometry=true&outFields=*";
+  return netCache(url, ()=>fetch(url).then(r=>r.ok?r.json():Promise.reject(r.status)));
 }
 
 function runParcel(latlng,seq){

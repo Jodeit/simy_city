@@ -1481,24 +1481,71 @@ Ground rules for each run:
       throwing; and the PDF bytes start with the `%PDF-` magic header. No
       network involved — pure client-side reordering of already-resolved
       snapshots, same as every other Compare export.
-- [ ] **Wire a real highway/arterial traffic-count check.**
-      `data_sources/layers.yaml` already declares
-      `requires.transportation.near_highway_aadt: 40000` for `warehouse_club`
-      and `requires.transportation.near_arterial_aadt: 20000` for
-      `fast_casual`, but neither is backed by a live data source — they're
-      descriptive-only today; `maybeRenderWCVerdict`/the fast-casual verdict
-      in `web/explore.html` only ever wait on the rooftop/acreage (and, for
-      fast-casual, daytime-population) legs, never a traffic leg. Investigate
-      whether a free, keyless traffic-count (AADT) source exists with broad
-      enough coverage to be worth wiring in as a real gate — state DOT ArcGIS
-      traffic-count layers (same per-state-source pattern `PARCEL_SOURCES`
-      already uses) are the most likely candidate, since there's no single
-      national keyless real-time AADT point-query API. If a workable source
-      is found, wire it as a third/fourth verdict leg following the existing
-      wait-for-all-legs pattern; if not, document the investigation and dead
-      ends in this item so the next run doesn't repeat the search from
-      scratch, and consider whether the YAML thresholds should carry an
-      explicit "not yet gated live" note instead of reading as implemented.
+- [x] **Wire a real highway/arterial traffic-count check.**
+      `data_sources/layers.yaml`'s `requires.transportation.near_highway_aadt:
+      40000` (warehouse_club) and `near_arterial_aadt: 20000` (fast_casual)
+      were descriptive-only. Investigated whether a free, keyless AADT
+      (Annual Average Daily Traffic) source exists — confirmed (via web
+      search; this sandbox's egress policy blocks direct ArcGIS REST
+      introspection of any candidate host, same constraint every
+      PARCEL_SOURCES entry has always had) that no single *national*
+      real-time AADT point-query API exists, but a better-than-expected
+      national source does: BTS/FHWA's National Transportation Atlas Database
+      (NTAD) publishes the National Highway System (NHS — the interstate/
+      major-highway/principal-arterial network) as a public ArcGIS Online
+      FeatureServer with a plainly-named `AADT` field per BTS's own field
+      docs — genuinely national, one query, no per-state fan-out needed
+      (unlike PARCEL_SOURCES, where no such single source exists for
+      parcels). Wired it as a real third verdict leg for both uses: added
+      `AADT_SOURCE` (a single FeatureServer URL, `web/explore.html`) and a
+      new `arcgisNearQuery(base,latlng,radiusM)` helper — like the existing
+      `arcgisPointQuery` but with an ArcGIS spatial `distance` buffer for a
+      point/line layer searched *within a radius*, rather than an exact
+      point-in-polygon lookup. Added `parseAadtFeatures(json)` and
+      `maxAadtWithinRadius(points,center,radiusM)` to `web/logic.js` — the
+      former handles both point geometry (`x`/`y`) and polyline geometry
+      (`paths`, using the segment's first vertex as a representative point),
+      since NHS's exact geometryType wasn't independently confirmable either,
+      and leans on `pick()`'s broad candidate-field-list/case-insensitive
+      matching as a fallback in case the live field name differs from `AADT`;
+      the latter finds the *busiest* qualifying road within range (a
+      high-volume highway 1 km away matters more for this gate than a
+      literal-nearest quiet street). Wired into `runDemand`'s leg fan-out (1d)
+      and a new shared `trafficLeg(s,minAadt)` used by both
+      `maybeRenderWCVerdict` and `maybeRenderFCVerdict` — a genuine query
+      failure reads as a fail (same fetch-error convention every other leg
+      already has); a successful query that finds no NHS route in range at
+      all reads as a real fail too (a genuine "not near the highway/
+      major-arterial network" finding, not a coverage gap, since coverage is
+      national). Fixed a bug caught during the browser drive-through before
+      shipping: fast_casual's demand headline was accidentally gated on the
+      *combined* pass (demand AND traffic) instead of the demand leg alone,
+      so a site with plenty of demand but a failing traffic leg showed a
+      contradictory "✗ ~25,000 effective demand units vs the ~9,000 needed"
+      message even though demand actually cleared at 278% — split the
+      headline text back to depend on the demand leg's own pass/fail, with
+      the traffic leg's separate ✓/✗ line explaining the rest. Added 15 new
+      unit tests for `parseAadtFeatures`/`maxAadtWithinRadius` (confirmed-field
+      read, candidate-list fallback, route-name capture, polyline-vertex
+      fallback, invalid/negative/missing AADT dropped, missing coordinates
+      dropped, malformed response, busiest-not-nearest selection, radius
+      exclusion, empty list, invalid center, route passthrough). Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 8 land uses —
+      no `layers.yaml` change), `node --test tests/js/*.test.mjs` (194 passed,
+      15 new), and headless Chromium: both pages load with zero console/page
+      errors; drove `maybeRenderWCVerdict`/`maybeRenderFCVerdict` directly
+      through PASS / SHORT-on-traffic-only (with demand/acreage both clearing)
+      / no-NHS-route-in-range / traffic-lookup-failed / still-pending states
+      for both uses, all producing correct verdict text, CSS class, and
+      leg-level ✓/✗/? text with zero throws; and drove the real
+      `arcgisNearQuery` → `parseAadtFeatures` → `maxAadtWithinRadius` chain
+      end-to-end against a mocked `fetch` returning an NHS-shaped response
+      (point geometry, `AADT`/`ROUTE_NAME` fields), correctly resolving the
+      busiest in-range route. Outbound network to `services.arcgis.com` is
+      blocked from this sandbox, so live reachability, the NHS layer's actual
+      geometryType, and the exact field name (`AADT` vs. a fallback candidate)
+      are a good human spot-check — same caveat every PARCEL_SOURCES entry
+      has carried since the first county was added.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

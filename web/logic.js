@@ -206,6 +206,52 @@ function pick(a,keys){
   return null;
 }
 
+/* ---- traffic-count (AADT) helpers ----
+   `requires.transportation.near_highway_aadt`/`near_arterial_aadt` in
+   layers.yaml were descriptive-only until now: wired to AADT_SOURCE in
+   web/explore.html, BTS/FHWA's National Highway System ArcGIS FeatureServer
+   (a genuine national keyless source, unlike PARCEL_SOURCES — no per-county
+   fan-out needed here). Its `AADT` field name is independently documented,
+   but the exact geometryType isn't (point stations vs. line segments are
+   both common for this kind of layer, and this sandbox can't reach the host
+   to confirm) — parseAadtFeatures below handles both shapes, and still
+   leans on pick()'s broad candidate-list/case-insensitive matching as a
+   fallback in case the live field name differs, same graceful-degradation
+   posture every PARCEL_SOURCES field already has: an unmatched field just
+   drops that feature rather than throwing. */
+// Parses an ArcGIS REST `/query` response for a road layer carrying AADT
+// counts into {lat,lng,aadt,route} entries — one representative point per
+// feature (the point itself, or a polyline's first vertex) — dropping any
+// feature missing a usable AADT number or coordinate.
+function parseAadtFeatures(json){
+  if(!json||!Array.isArray(json.features))return [];
+  return json.features.map(f=>{
+    const a=(f&&f.attributes)||{}, g=(f&&f.geometry)||{};
+    const raw=pick(a,["AADT","AADT_RPT","CURRENT_AADT","AADT_CUR","AADT_CURRNT","CUR_AADT","TX_AADT_RO","TRAF_AADT","ADT_CUR"]);
+    const aadt=raw==null?NaN:Number(raw);
+    const route=pick(a,["ROUTE_NAME","RTE_NM","HWY_NM","ROUTE","RTE","FED_RTE","RTE_ID","SIGN1"]);
+    let lat=g.y, lng=g.x;
+    if((typeof lat!=="number"||typeof lng!=="number")&&Array.isArray(g.paths)&&Array.isArray(g.paths[0])&&Array.isArray(g.paths[0][0])){
+      lng=g.paths[0][0][0]; lat=g.paths[0][0][1]; // polyline: use the segment's first vertex
+    }
+    if(!isFinite(aadt)||aadt<0||typeof lat!=="number"||typeof lng!=="number")return null;
+    return {lat,lng,aadt,route:route!=null?String(route):null};
+  }).filter(Boolean);
+}
+// Finds the *busiest* AADT station within radiusM of center (a high-volume
+// highway a km away matters more for a siting gate than a literal-nearest
+// quiet side street), or null if none fall in range / there are no points.
+function maxAadtWithinRadius(points,center,radiusM){
+  if(!Array.isArray(points)||!center||typeof center.lat!=="number"||typeof center.lng!=="number")return null;
+  let best=null;
+  for(const p of points){
+    if(!p||typeof p.lat!=="number"||typeof p.lng!=="number"||typeof p.aadt!=="number")continue;
+    const km=haversine(center.lat,center.lng,p.lat,p.lng);
+    if(km*1000<=radiusM && (!best||p.aadt>best.aadt))best={aadt:p.aadt,km,route:p.route||null};
+  }
+  return best;
+}
+
 /* ---- click debounce ----
    Wraps `fn` so a burst of rapid calls (e.g. a fast double-click on the map)
    only invokes `fn` once, `wait` ms after the *last* call in the burst —
@@ -738,5 +784,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius};
 }
