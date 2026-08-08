@@ -1406,23 +1406,47 @@ Ground rules for each run:
       human spot-check.
 
 ## Next (breadth) — newly added (10)
-- [ ] **11th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 10
-      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
-      Miami-Dade, San Diego, Dallas). Add one more — Cuyahoga County, OH
-      (Cleveland) is a reasonable pick for geographic diversity (currently
-      zero Midwest/Northeast/Southeast counties outside Cook/Miami-Dade), but
-      any large county with a public ArcGIS parcel MapServer works. Same
-      recipe every prior county addition followed: since this sandbox 403s on
-      direct ArcGIS REST introspection, find the MapServer URL and field
-      names via web search (not direct fetch) against multiple independent
-      sources before trusting a field name; add any new id/owner/address/
-      land-use field names to the shared `pick()` candidate lists rather than
-      assuming they match an existing county's schema; leave a field unmapped
-      (don't guess) if its unit doesn't match what `pick()` expects; write a
-      real `zoning_note`/`county_state` for the state (check whether it
-      actually has zoning — don't default to Travis's "TX counties don't
-      zone" copy); and prefer a real per-parcel record deep link only if one
-      is *documented*, otherwise link to the assessor's search page.
+- [x] **11th parcel county.** Added Allegheny County, PA (Pittsburgh) as an
+      11th `PARCEL_SOURCES` entry — `gisdata.alleghenycounty.us`'s
+      `EGIS/Web_Parcels/MapServer/0`, the county's own public parcel-boundary
+      service backing its Real Estate Portal map tab (confirmed via web
+      search: display field `PIN`, and it's explicitly the layer behind a
+      parcel-boundary map view, not a point layer — this sandbox 403s on
+      direct ArcGIS REST introspection, same constraint every prior county
+      hit, so geometry type had to be inferred from the service's documented
+      purpose rather than confirmed directly). `PIN` was already in the
+      shared id `pick()` list (from King County); added `OWNERDESC`,
+      `PROPERTYADDRESS`, `CLASSDESC`/`USEDESC`, and `FAIRMARKETTOTAL` as new
+      owner/address/land-use/value candidates — these are the well-documented
+      field names from Allegheny's companion WPRDC Property Assessments
+      dataset, not independently confirmed on this specific MapServer layer,
+      so same graceful thin-schema handling as every other county here if a
+      name doesn't actually match (`pick()` just skips it, no throw). Left
+      acreage unmapped: the assessment roll's `LOTAREA` is square feet, not
+      acres, same unit-mismatch call that left LA's/Miami-Dade's area fields
+      unmapped. Also skipped a per-parcel record deep link — the portal's
+      `GeneralInfo?ID=` URL takes a zero-padded PIN whose exact padding rule
+      for an arbitrary PIN wasn't confirmed from one sample — so, same call
+      as Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas, `record()` links
+      to the portal's search page. Pennsylvania has no unincorporated county
+      land at all — every parcel sits inside a city/borough/township, whose
+      government (not the county) sets zoning — a genuinely new
+      `zoning_note` shape versus the incorporated-vs-unincorporated split
+      every other state here has. Verified: `python -m pytest -q` (15
+      passed), `simy validate` (OK, 8 land uses — this item only touches
+      `web/explore.html`, no data_sources/*.yaml change), `node --test
+      tests/js/*.test.mjs` (182 passed, no new JS logic — `PARCEL_SOURCES`
+      itself isn't unit-tested, same as every prior county), and headless
+      Chromium: both pages load with zero console/page errors; `inBbox`
+      correctly routes a downtown-Pittsburgh point to the new source (and
+      still finds no source for Denver); driving the shared field-`pick()`
+      calls directly against a mocked Allegheny-shaped ArcGIS attribute
+      payload (`PIN`/`OWNERDESC`/`PROPERTYADDRESS`/`CLASSDESC`/
+      `FAIRMARKETTOTAL`) resolved every field correctly; and a real simulated
+      map click on the new county's coverage area ran without throwing. Live
+      endpoint reachability and the exact field names couldn't be confirmed
+      from this sandbox — a live spot-check is a good human follow-up, same
+      as every prior county.
 - [x] **PDF export for "Compare parcels".** Added a "📄 Download PDF" button
       (`#comparePdf`) to the Compare modal alongside the existing "⬇️ Download
       CSV" button, same pairing the single-parcel "Make the case" panel and

@@ -632,6 +632,35 @@ const PARCEL_SOURCES=[
     county_state:"Dallas County, TX",
     zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
   },
+  {
+    name:"Allegheny County Real Estate (Allegheny County, PA)",
+    urls:["https://gisdata.alleghenycounty.us/arcgis/rest/services/EGIS/Web_Parcels/MapServer/0"],
+    bbox:[-80.40,40.22,-79.70,40.75],
+    // The county's own public parcel-boundary service backing its Real Estate
+    // Portal map tab (confirmed display field PIN, geometry is parcel
+    // polygons — same as every other county here, not points). OWNERDESC/
+    // CLASSDESC/USEDESC/FAIRMARKETTOTAL are the well-documented field names
+    // from the companion WPRDC Property Assessments dataset; not
+    // independently confirmed on this specific MapServer layer (403s on
+    // direct ArcGIS REST introspection from this sandbox, same constraint
+    // every prior county hit), so — same cautious call as every thin-schema
+    // county here — pick() just won't match if a name is off, no throw.
+    // LOTAREA is left unmapped: Allegheny's assessment roll reports it in
+    // square feet, not acres, same unit mismatch that left LA's/Miami-Dade's
+    // area fields unmapped rather than rendering a bogus number.
+    // The Real Estate Portal's per-parcel URL needs a zero-padded PIN whose
+    // exact padding rule wasn't confirmed for an arbitrary PIN, so — same
+    // call as Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas — send people
+    // to the portal's own search instead of guessing a link shape that might 404.
+    record:()=>"https://realestate.alleghenycounty.us/search",
+    source_label:"Allegheny County Real Estate Portal",
+    county_state:"Allegheny County, PA",
+    // Pennsylvania has no unincorporated county land at all — every acre sits
+    // inside a city, borough, or township, and *that* government sets zoning
+    // (the county itself almost never does), unlike every other state
+    // covered so far where the split is incorporated-vs-unincorporated.
+    zoning_note:"PA has no unincorporated land — every parcel sits inside a city/borough/township, whose government (not the county) sets zoning",
+  },
 ];
 
 // Developer-diligence sources (also county-by-county where applicable).
@@ -1676,11 +1705,11 @@ function showParcel(geo,src,seq){
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL"]);
   let rows="";
   const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
