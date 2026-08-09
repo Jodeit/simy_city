@@ -1591,25 +1591,47 @@ Ground rules for each run:
       ArcGIS is blocked from this sandbox, so a live end-to-end
       rooftop/acreage/self-storage-competitor fetch on the real site is a
       good human spot-check.
-- [ ] **12th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 11
-      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
-      Miami-Dade, San Diego, Dallas, Allegheny) — still nothing in the
-      Southeast outside Miami-Dade or the classic Midwest outside Cook.
-      Fulton County, GA (Atlanta) is a reasonable pick for that gap, but any
-      large county with a public ArcGIS parcel MapServer works. Same recipe
-      every prior county addition followed: since this sandbox 403s on
-      direct ArcGIS REST introspection, find the MapServer URL and field
-      names via web search (not direct fetch) against multiple independent
-      sources before trusting a field name; add any new id/owner/address/
-      land-use/value field names to the shared `pick()` candidate lists
-      rather than assuming they match an existing county's schema; leave a
-      field unmapped (don't guess) if its unit doesn't match what `pick()`
-      expects (e.g. square feet instead of acres); write a real
-      `zoning_note`/`county_state` for the state (check whether it actually
-      has zoning, and whether the state has unincorporated county land at
-      all — Pennsylvania's Allegheny entry didn't); and prefer a real
-      per-parcel record deep link only if one is *documented*, otherwise
-      link to the assessor's search page.
+- [x] **12th parcel county.** Added Wake County, NC (Raleigh) as a 12th
+      `PARCEL_SOURCES` entry — `maps.wake.gov`'s (with a `maps.wakegov.com`
+      fallback host, same "different host, same layer" pattern Travis
+      already established) `Property/Parcels/MapServer/0`. Fills the
+      Southeast gap this item called out (previously only Miami-Dade), even
+      though the specific Fulton County, GA suggestion wasn't the one
+      picked. Found via web search since this sandbox blocks direct egress
+      to `*.wake.gov`/`*.arcgis.com` (same constraint every prior county
+      hit) — but unusually well-confirmed for this pass: multiple
+      independent search hits converged on the same full field list
+      (`PIN_NUM`, `REID`, `OWNER`, `SITE_ADDRESS`, `DEED_ACRES`,
+      `TOTAL_VALUE_ASSD`, `TYPE_USE_DECODE`, and more), and — better than
+      most prior counties — a *confirmed working per-parcel deep link*:
+      `services.wake.gov/realestate/Account.asp?id=<7-digit REID>`, verified
+      against half a dozen live example URLs a search engine had indexed
+      directly (not guessed the way Harris/Bexar/LA/King/Miami-Dade/San
+      Diego/Dallas/Allegheny all had to fall back to a search-page link
+      instead). `REID` is the record-lookup key, distinct from `PIN_NUM`
+      (the parcel/tax-map id shown as "Parcel ID"), so `record()` reads it
+      separately — `String(reid).padStart(7,"0")` guards against ArcGIS
+      returning it as a number and silently dropping a leading zero. Added
+      `PIN_NUM`, `SITE_ADDRESS`, `TYPE_USE_DECODE`, `DEED_ACRES`, and
+      `TOTAL_VALUE_ASSD` to the shared `pick()` candidate lists (`OWNER` was
+      already covered by an existing entry). NC, like AZ/CA/WA/IL/FL, zones
+      unincorporated land (unlike TX, and unlike PA which has none at all),
+      so this got its own `zoning_note`. Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK, 9 land uses), `node --test
+      tests/js/*.test.mjs` (all passing, no JS-side test changes needed
+      since no new pure helper was added — `PARCEL_SOURCES`/`pick()` are
+      plain data/config, not new logic), and headless Chromium: both pages
+      load with zero genuine console/page errors; `inBbox` correctly routes
+      a downtown-Raleigh point to the new source and still finds no source
+      for an out-of-coverage point (Denver); driving `showParcel` directly
+      with a mocked Wake-shaped ArcGIS attribute payload rendered parcel
+      ID/owner/address/land-use/acreage ("0.42 ac")/appraised value
+      ("$350,000") correctly, and `src.record(...)` built the exact expected
+      zero-padded `Account.asp?id=0418139` deep link. Live ArcGIS endpoint
+      reachability (do the two hostnames actually both resolve, does the
+      live layer still expose these exact field names) couldn't be
+      confirmed from this sandbox, so a live spot-check is a good human
+      follow-up, same as every prior county.
 - [ ] **GeoJSON export for pinned Compare parcels and reverse-search
       candidates.** Both the Compare modal and the "🔍 Find candidate sites"
       results panel already export CSV + PDF (`toCsv`/`buildSimplePdf` in

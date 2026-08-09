@@ -678,6 +678,24 @@ const PARCEL_SOURCES=[
     // covered so far where the split is incorporated-vs-unincorporated.
     zoning_note:"PA has no unincorporated land — every parcel sits inside a city/borough/township, whose government (not the county) sets zoning",
   },
+  {
+    name:"Wake County GIS (Wake County, NC)",
+    // Two documented hostnames for the same Property/Parcels layer — try both.
+    urls:[
+      "https://maps.wake.gov/arcgis/rest/services/Property/Parcels/MapServer/0",
+      "https://maps.wakegov.com/arcgis/rest/services/Property/Parcels/MapServer/0",
+    ],
+    bbox:[-78.98,35.51,-78.24,36.01],
+    // REID (Real Estate ID) is the field the county's own record search keys
+    // on — confirmed via multiple live services.wake.gov/realestate/Account.asp?id=<7-digit REID>
+    // links — distinct from PIN_NUM (the parcel/tax-map id shown as "Parcel ID" above).
+    // padStart guards against ArcGIS returning REID as a number and dropping a leading zero.
+    record:(a)=>{const reid=pick(a,["REID"]);
+      return reid?`https://services.wake.gov/realestate/Account.asp?id=${String(reid).padStart(7,"0")}`:"https://services.wake.gov/realestate/AccountSearch.asp";},
+    source_label:"Wake County GIS",
+    county_state:"Wake County, NC",
+    zoning_note:"unlike TX, NC counties do zone unincorporated land — check Wake County's unincorporated-area zoning, or the city/town if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -1838,12 +1856,12 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC"]);
-  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD"]);
   let rows="";
   const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
