@@ -806,6 +806,29 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "OSM tagging for urgent care is genuinely messy \u2014 no single dominant tag the way `amenity=charging_station` is unambiguous for EV chargers. The live query ORs `amenity=clinic` and `healthcare=clinic`, both known to catch real-world false positives (dental offices, vet clinics) \u2014 a documented best-effort proxy, same honesty as every prior use's imperfect demand/competition read. min_households_drive_time is a first-draft heuristic (a walk-in clinic serves a wider radius than a food truck court but tighter than a warehouse club) \u2014 refine freely.\n"
+    },
+    "self_storage": {
+      "label": "Self-Storage Facility",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 2500,
+          "drive_time_min": 6
+        },
+        "parcel": {
+          "min_buildable_acres": 2.0
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.5
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "medium",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "OSM tags this reasonably unambiguously as `shop=storage_rental` \u2014 used as the live competitor/site query, same single-tag confidence as `amenity=charging_station` for EV chargers, no OR-fallback needed the way urgent_care's messy tagging required. People rent storage close to home (moving a spare room's worth of stuff a few blocks, not across town), so demand reads nearby rooftops at a tighter radius than warehouse_club but wider than food_truck_court \u2014 a first-draft heuristic, refine freely. min_buildable_acres sits between urgent_care's single-clinic lot and warehouse_club's big-box pad, matching a multi-building storage campus's actual footprint.\n"
     }
   },
   "actor_uses": {

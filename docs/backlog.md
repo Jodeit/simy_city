@@ -1548,29 +1548,49 @@ Ground rules for each run:
       has carried since the first county was added.
 
 ## Next (breadth) — newly added (11)
-- [ ] **9th land use: self-storage facility.** Every established land-use
-      recipe fits this one cleanly: `requires.demand` = nearby rooftops
-      within a modest (~5 km) radius (people rent storage close to home,
-      similar proxy style to `warehouse_club`/`ev_charging_hub`),
-      `requires.parcel.min_buildable_acres` ~2 (a multi-building storage
-      campus, bigger than `urgent_care`'s single clinic lot, smaller than
-      `warehouse_club`'s big-box pad), and the established inverted
-      `requires.competition.min_distance_km_from_nearest` gate against
-      existing self-storage facilities — OSM tags this reasonably
-      unambiguously as `shop=storage_rental` (with `building=storage` as a
-      possible fallback/OR, worth checking real-world tag prevalence before
-      committing to one vs. both). Add to `data_sources/layers.yaml`, wire
-      `ssState`/`maybeRenderSSVerdict` in `web/explore.html` following the
-      `maybeRenderFTCVerdict`/`maybeRenderUCVerdict` wait-for-every-leg
-      pattern exactly (rooftop leg + acreage leg + competitor-distance leg),
-      add to the use-selector order and both `analyze()` state-reset blocks.
-      Confirm `reverseSearchSignals` (`web/logic.js`) needs no change — it
-      already generalizes over any `min_distance_km_from_nearest` field and
-      any `roofNeed`, so this use should get reverse-search "🔍 Find
+- [x] **9th land use: self-storage facility.** Added `self_storage` to
+      `data_sources/layers.yaml`: `requires.demand` reads nearby rooftops at
+      a 2.5 km radius (people rent storage close to home, tighter than
+      `warehouse_club`'s citywide pull but wider than `food_truck_court`'s
+      walk radius), `requires.parcel.min_buildable_acres: 2.0` (a
+      multi-building storage campus — bigger than `urgent_care`'s
+      single-clinic lot, smaller than `warehouse_club`'s big-box pad), and
+      the established inverted `requires.competition.min_distance_km_from_nearest:
+      1.5` gate against existing self-storage facilities. OSM tags this
+      unambiguously as `shop=storage_rental` — no OR-fallback needed the way
+      `urgent_care`'s messy clinic tagging required, so the live query is a
+      single tag, same confidence as `amenity=charging_station` for EV
+      chargers. Wired `ssState`/`maybeRenderSSVerdict` in `web/explore.html`
+      following the `maybeRenderUCVerdict` wait-for-every-leg pattern exactly
+      (rooftop leg from `runDemand` + acreage leg from `showParcel` +
+      competitor-distance leg from `runDemand`'s competitor scan, all
+      resolving before one verdict renders); added to the use-selector order
+      and both `analyze()` state-reset blocks (build-mode init and
+      explore-mode reset); also updated the "Live area read" section-title
+      and caption ternaries (`isSS`) so self_storage gets its own real
+      "demand + site-size + distance-from-competitors" description instead
+      of falling through to the generic "real demand"/"rooftops proxy
+      household demand" text meant for uses with no real verdict.
+      Confirmed `reverseSearchSignals` (`web/logic.js`) needed no change —
+      it already generalizes over any `min_distance_km_from_nearest` field
+      and any `roofNeed`, so self_storage gets both `preferFar` and
+      `preferNear` (verified via a direct headless-browser call) and "🔍 Find
       candidate sites" coverage for free, same as `ev_charging_hub`/
-      `urgent_care`. Verify with `python -m pytest -q`, `simy validate`,
-      `node --test tests/js/*.test.mjs`, and headless Chromium driving the
-      new verdict function through PASS/SHORT/unavailable states.
+      `urgent_care`. Verified: `python -m pytest -q` (15 passed), `simy
+      validate` (OK, 9 land uses), `python tools/build_model_json.py`
+      (9 land uses, 32 sources), `node --test tests/js/*.test.mjs` (194
+      passed, unchanged — this item only touches `explore.html`'s use
+      wiring and `layers.yaml`, no `logic.js` change), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` load
+      with zero genuine console/page errors; selecting `self_storage` and
+      simulating a map click builds real `ssState`; driving
+      `maybeRenderSSVerdict` directly through PASS / SHORT-on-site-size /
+      SHORT-on-competitor-too-close / SHORT-on-demand / acreage-unavailable
+      / no-rooftop-read / wrong-use-selected all produced correct verdict
+      text and CSS classes with zero throws. Outbound network to Overpass/
+      ArcGIS is blocked from this sandbox, so a live end-to-end
+      rooftop/acreage/self-storage-competitor fetch on the real site is a
+      good human spot-check.
 - [ ] **12th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 11
       counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
       Miami-Dade, San Diego, Dallas, Allegheny) — still nothing in the
