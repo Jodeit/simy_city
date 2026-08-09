@@ -1547,6 +1547,75 @@ Ground rules for each run:
       are a good human spot-check — same caveat every PARCEL_SOURCES entry
       has carried since the first county was added.
 
+## Next (breadth) — newly added (11)
+- [ ] **9th land use: self-storage facility.** Every established land-use
+      recipe fits this one cleanly: `requires.demand` = nearby rooftops
+      within a modest (~5 km) radius (people rent storage close to home,
+      similar proxy style to `warehouse_club`/`ev_charging_hub`),
+      `requires.parcel.min_buildable_acres` ~2 (a multi-building storage
+      campus, bigger than `urgent_care`'s single clinic lot, smaller than
+      `warehouse_club`'s big-box pad), and the established inverted
+      `requires.competition.min_distance_km_from_nearest` gate against
+      existing self-storage facilities — OSM tags this reasonably
+      unambiguously as `shop=storage_rental` (with `building=storage` as a
+      possible fallback/OR, worth checking real-world tag prevalence before
+      committing to one vs. both). Add to `data_sources/layers.yaml`, wire
+      `ssState`/`maybeRenderSSVerdict` in `web/explore.html` following the
+      `maybeRenderFTCVerdict`/`maybeRenderUCVerdict` wait-for-every-leg
+      pattern exactly (rooftop leg + acreage leg + competitor-distance leg),
+      add to the use-selector order and both `analyze()` state-reset blocks.
+      Confirm `reverseSearchSignals` (`web/logic.js`) needs no change — it
+      already generalizes over any `min_distance_km_from_nearest` field and
+      any `roofNeed`, so this use should get reverse-search "🔍 Find
+      candidate sites" coverage for free, same as `ev_charging_hub`/
+      `urgent_care`. Verify with `python -m pytest -q`, `simy validate`,
+      `node --test tests/js/*.test.mjs`, and headless Chromium driving the
+      new verdict function through PASS/SHORT/unavailable states.
+- [ ] **12th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 11
+      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
+      Miami-Dade, San Diego, Dallas, Allegheny) — still nothing in the
+      Southeast outside Miami-Dade or the classic Midwest outside Cook.
+      Fulton County, GA (Atlanta) is a reasonable pick for that gap, but any
+      large county with a public ArcGIS parcel MapServer works. Same recipe
+      every prior county addition followed: since this sandbox 403s on
+      direct ArcGIS REST introspection, find the MapServer URL and field
+      names via web search (not direct fetch) against multiple independent
+      sources before trusting a field name; add any new id/owner/address/
+      land-use/value field names to the shared `pick()` candidate lists
+      rather than assuming they match an existing county's schema; leave a
+      field unmapped (don't guess) if its unit doesn't match what `pick()`
+      expects (e.g. square feet instead of acres); write a real
+      `zoning_note`/`county_state` for the state (check whether it actually
+      has zoning, and whether the state has unincorporated county land at
+      all — Pennsylvania's Allegheny entry didn't); and prefer a real
+      per-parcel record deep link only if one is *documented*, otherwise
+      link to the assessor's search page.
+- [ ] **GeoJSON export for pinned Compare parcels and reverse-search
+      candidates.** Both the Compare modal and the "🔍 Find candidate sites"
+      results panel already export CSV + PDF (`toCsv`/`buildSimplePdf` in
+      `web/logic.js`), but nothing machine-readable-and-mappable — a GIS
+      user (a planner dropping candidates into QGIS, say) has to
+      hand-convert the CSV's lat/lng columns today. Add pure
+      `pinsToGeoJson(pins)` / `candidatesToGeoJson(results, sig, cfg)`
+      helpers to `web/logic.js` (each pinned parcel / ranked candidate
+      becomes a `Feature` with a `Point` geometry from its lat/lng and the
+      same fields the CSV export already surfaces as `properties` — reuse
+      `candidateWhyText` for the candidate list's "why" property so all
+      three export formats stay consistent), and a "🗺️ Download GeoJSON"
+      button next to the existing CSV/PDF buttons in both the Compare modal
+      and the search-results panel, same Blob+anchor download pattern (MIME
+      type `application/geo+json`) every other client-side export in this
+      app already uses — no network call, no vendored library. Handle the
+      empty-list case the same way the existing CSV buttons do (inline "⚠
+      pin/search first" message rather than downloading an empty
+      `FeatureCollection`). Add unit tests mirroring `candidatesToCsvRows`'s
+      style (feature shape, missing/null lat-lng dropped rather than
+      emitting a broken geometry, empty list, a real GeoJSON-schema-shape
+      round trip). Verify with `python -m pytest -q`, `simy validate`,
+      `node --test tests/js/*.test.mjs`, and headless Chromium driving both
+      download buttons end to end and confirming the produced bytes parse
+      as valid JSON with the expected `FeatureCollection` shape.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
