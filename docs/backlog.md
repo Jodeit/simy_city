@@ -1632,31 +1632,45 @@ Ground rules for each run:
       live layer still expose these exact field names) couldn't be
       confirmed from this sandbox, so a live spot-check is a good human
       follow-up, same as every prior county.
-- [ ] **GeoJSON export for pinned Compare parcels and reverse-search
-      candidates.** Both the Compare modal and the "🔍 Find candidate sites"
-      results panel already export CSV + PDF (`toCsv`/`buildSimplePdf` in
-      `web/logic.js`), but nothing machine-readable-and-mappable — a GIS
-      user (a planner dropping candidates into QGIS, say) has to
-      hand-convert the CSV's lat/lng columns today. Add pure
-      `pinsToGeoJson(pins)` / `candidatesToGeoJson(results, sig, cfg)`
-      helpers to `web/logic.js` (each pinned parcel / ranked candidate
-      becomes a `Feature` with a `Point` geometry from its lat/lng and the
-      same fields the CSV export already surfaces as `properties` — reuse
-      `candidateWhyText` for the candidate list's "why" property so all
-      three export formats stay consistent), and a "🗺️ Download GeoJSON"
+- [x] **GeoJSON export for pinned Compare parcels and reverse-search
+      candidates.** Added pure `pinsToGeoJson(pins)` /
+      `candidatesToGeoJson(results, sig, cfg)` helpers to `web/logic.js` —
+      each pinned parcel / ranked candidate becomes a `Feature` with a
+      `Point` geometry (`[lng, lat]`) and the same field set the CSV export
+      already surfaces as `properties` (reusing `candidateWhyText` for the
+      candidate list's "why" property, so all three export formats stay
+      consistent); a pin/candidate missing valid numeric lat/lng is dropped
+      rather than emitting a broken geometry — `candidatesToGeoJson` keeps
+      each surviving candidate's *original* list rank (not a post-filter
+      renumbering), so a dropped mid-list entry doesn't shift every later
+      candidate's rank in the exported file. Added a "🗺️ Download GeoJSON"
       button next to the existing CSV/PDF buttons in both the Compare modal
       and the search-results panel, same Blob+anchor download pattern (MIME
-      type `application/geo+json`) every other client-side export in this
-      app already uses — no network call, no vendored library. Handle the
-      empty-list case the same way the existing CSV buttons do (inline "⚠
-      pin/search first" message rather than downloading an empty
-      `FeatureCollection`). Add unit tests mirroring `candidatesToCsvRows`'s
-      style (feature shape, missing/null lat-lng dropped rather than
-      emitting a broken geometry, empty list, a real GeoJSON-schema-shape
-      round trip). Verify with `python -m pytest -q`, `simy validate`,
-      `node --test tests/js/*.test.mjs`, and headless Chromium driving both
-      download buttons end to end and confirming the produced bytes parse
-      as valid JSON with the expected `FeatureCollection` shape.
+      type `application/geo+json`, pretty-printed) every other client-side
+      export in this app already uses — no network call, no vendored
+      library; the Compare button reuses the existing "⚠ pin a parcel
+      first" empty-state guard the CSV/PDF buttons already have, and the
+      search-results button reuses `downloadCandidatesCsv`/`Pdf`'s existing
+      "no candidates yet" no-op guard. Added 7 new unit tests mirroring
+      `candidatesToCsvRows`'s style (feature/geometry shape, label
+      fallback + null-field handling, missing-lat/lng dropped without
+      shifting rank, empty/null list still returns a valid empty
+      `FeatureCollection`). Verified: `python -m pytest -q` (15 passed),
+      `simy validate` (OK, 9 land uses), `python tools/build_model_json.py`
+      (unchanged output — this item touches no YAML), `node --test
+      tests/js/*.test.mjs` (201 passed, 7 new), and headless Chromium: both
+      pages load with zero console/page errors; seeded two Compare pins
+      (one with a comma-containing owner name, one all-nulls) and drove the
+      real `#compareGeojson` button click end to end (Blob → anchor →
+      captured download) — the downloaded file parsed as a valid two-
+      feature `FeatureCollection` with the exact expected geometry/
+      properties; seeded a real search result set via `renderCandidates()`
+      and drove the real `#searchGeojson` button click end to end — the
+      downloaded file parsed as a valid `FeatureCollection` with correct
+      rank/score/why properties; and a direct in-browser call to
+      `candidatesToGeoJson` with a null-lat/lng entry in the middle of the
+      list confirmed the drop-without-renumbering behavior live (not just
+      in the Node unit tests).
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

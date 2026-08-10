@@ -648,6 +648,48 @@ function candidatesToCsvRows(results,sig,cfg){
   (results||[]).forEach((r,i)=>rows.push([i+1,r.lat,r.lng,r.score,candidateWhyText(r,sig,cfg)]));
   return rows;
 }
+/* ---- GeoJSON export for the Compare list and reverse-search candidates ----
+   Both already export CSV + PDF (candidatesToCsvRows/buildCompareReportText
+   above), but neither is machine-readable-and-mappable — a GIS user (a
+   planner dropping candidates into QGIS, say) has to hand-convert the CSV's
+   lat/lng columns today. Same field set the CSV export already surfaces,
+   reshaped as a standard FeatureCollection of Point features. A pin/
+   candidate missing valid numeric lat/lng is dropped rather than emitting a
+   broken geometry — same defensive stance the CSV export takes with
+   missing fields (empty string, never "null"/"undefined"/NaN). */
+function pinsToGeoJson(pins){
+  const features=(pins||[]).filter(p=>p&&typeof p.lat==="number"&&typeof p.lng==="number").map(p=>({
+    type:"Feature",
+    geometry:{type:"Point",coordinates:[p.lng,p.lat]},
+    properties:{
+      site:p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`,
+      owner:p.owner!=null?p.owner:null,
+      acres:p.acres!=null?p.acres:null,
+      value:p.value!=null?p.value:null,
+      land_use:p.land!=null?p.land:null,
+      county:p.county!=null?p.county:null,
+      use:p.use!=null?p.use:null,
+      verdict:p.verdict!=null?p.verdict:null,
+    },
+  }));
+  return {type:"FeatureCollection",features};
+}
+// Rank is computed from each candidate's position in the *original* results
+// array (matching the numbering candidatesToCsvRows/the map markers/list
+// rows use), not the post-filter index — so a dropped mid-list entry
+// doesn't shift every later candidate's rank in the exported file.
+function candidatesToGeoJson(results,sig,cfg){
+  const features=(results||[])
+    .map((r,i)=>({r,rank:i+1}))
+    .filter(x=>x.r&&typeof x.r.lat==="number"&&typeof x.r.lng==="number")
+    .map(x=>({
+      type:"Feature",
+      geometry:{type:"Point",coordinates:[x.r.lng,x.r.lat]},
+      properties:{rank:x.rank,score:x.r.score,why:candidateWhyText(x.r,sig,cfg)},
+    }));
+  return {type:"FeatureCollection",features};
+}
+
 // Builds the text for a printable/exportable report summarizing a reverse-
 // search candidate list (search center, radius, use, then each ranked
 // candidate's rank/score/why-text) — mirrors buildCaseText's role
@@ -784,5 +826,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius};
 }

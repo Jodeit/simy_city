@@ -327,6 +327,7 @@
       <button class="btng" id="compareShare">🔗 Share list</button>
       <button class="btng" id="compareCsv">⬇️ Download CSV</button>
       <button class="btng" id="comparePdf">📄 Download PDF</button>
+      <button class="btng" id="compareGeojson">🗺️ Download GeoJSON</button>
       <button class="btng" id="compareClear">Clear all</button>
       <button class="btng" id="compareCancel">Close</button>
     </div>
@@ -1732,7 +1733,8 @@ function renderCandidates(results,sig,cfg){
        <span class="candNum">${i+1}</span><span>${esc(candidateWhyText(r,sig,cfg))}</span>
      </div>`).join("")+
     `</div><div class="candCsvRow"><button class="toolbtn" id="searchCsv" type="button">⬇️ Download CSV</button>`+
-    `<button class="toolbtn" id="searchPdf" type="button">📄 Download PDF</button> <span class="ok" id="searchCsvMsg"></span></div>`;
+    `<button class="toolbtn" id="searchPdf" type="button">📄 Download PDF</button>`+
+    `<button class="toolbtn" id="searchGeojson" type="button">🗺️ Download GeoJSON</button> <span class="ok" id="searchCsvMsg"></span></div>`;
   resEl.querySelectorAll(".candRow").forEach(row=>{
     const r=results[parseInt(row.dataset.i,10)];
     wireActivate(row,()=>analyze(L.latLng(r.lat,r.lng)));
@@ -1746,6 +1748,11 @@ function renderCandidates(results,sig,cfg){
     downloadCandidatesPdf();
     const m=document.getElementById("searchCsvMsg");
     if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+  document.getElementById("searchGeojson").onclick=()=>{
+    downloadCandidatesGeoJson();
+    const m=document.getElementById("searchCsvMsg");
+    if(m){m.textContent="✓ GeoJSON downloaded";setTimeout(()=>m.textContent="",2500);}
   };
 }
 // Exports the ranked candidate list as a downloaded .csv via
@@ -1779,6 +1786,19 @@ function downloadCandidatesPdf(){
   const blob=new Blob([bytes],{type:"application/pdf"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");
   a.href=url;a.download="simycity-"+current+"-candidates.pdf";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+// Exports the ranked candidate list as a GeoJSON FeatureCollection via
+// candidatesToGeoJson (web/logic.js) — same client-side-only Blob+anchor
+// pattern as downloadCandidatesCsv/Pdf, for dropping a shortlist straight
+// into a GIS tool instead of hand-converting the CSV's lat/lng columns.
+function downloadCandidatesGeoJson(){
+  if(!lastCandidates||!lastCandidates.length)return;
+  const geojson=candidatesToGeoJson(lastCandidates,lastCandSig,lastCandCfg);
+  const blob=new Blob([JSON.stringify(geojson,null,2)],{type:"application/geo+json"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-"+current+"-candidates.geojson";
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
@@ -2370,6 +2390,18 @@ function downloadComparePdf(){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
+// Exports the pinned Compare list as a GeoJSON FeatureCollection via
+// pinsToGeoJson (web/logic.js) — same client-side-only Blob+anchor pattern
+// as downloadCompareCsv/Pdf, for a GIS user dropping pinned parcels straight
+// into a map tool instead of hand-converting the CSV's lat/lng columns.
+function downloadCompareGeoJson(){
+  const geojson=pinsToGeoJson(pins);
+  const blob=new Blob([JSON.stringify(geojson,null,2)],{type:"application/geo+json"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-compare.geojson";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
 function wireCompare(){
   const modal=document.getElementById("compareModal");
   document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
@@ -2393,6 +2425,12 @@ function wireCompare(){
     if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
     downloadComparePdf();
     if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+  document.getElementById("compareGeojson").onclick=()=>{
+    const m=document.getElementById("compareShareMsg");
+    if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
+    downloadCompareGeoJson();
+    if(m){m.textContent="✓ GeoJSON downloaded";setTimeout(()=>m.textContent="",2500);}
   };
 }
 

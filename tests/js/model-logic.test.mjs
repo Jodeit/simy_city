@@ -19,6 +19,7 @@ const {
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
+  pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
@@ -1171,6 +1172,73 @@ test("candidatesToCsvRows: rows round-trip through toCsv (RFC-4180 output for a 
   const results = [{ lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 }];
   const csv = toCsv(candidatesToCsvRows(results, { preferNear: true, preferFar: true }, { radius: 1200, compLabel: "food vendors" }));
   assert.equal(csv, "#,Lat,Lng,Score,Why\r\n1,30.27,-97.74,13.6,≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away");
+});
+
+// ---- pinsToGeoJson / candidatesToGeoJson (GeoJSON export) ----
+
+test("pinsToGeoJson: one Feature per pin with a Point geometry and the CSV export's field set", () => {
+  const pins = [
+    { lat: 30.27, lng: -97.74, label: "123 Main St", owner: "Smith, John Trust", acres: 1.5, value: 250000, land: "Retail", county: "Travis", use: "fast_casual", verdict: "PASS" },
+  ];
+  const gj = pinsToGeoJson(pins);
+  assert.equal(gj.type, "FeatureCollection");
+  assert.equal(gj.features.length, 1);
+  const f = gj.features[0];
+  assert.equal(f.type, "Feature");
+  assert.deepEqual(f.geometry, { type: "Point", coordinates: [-97.74, 30.27] });
+  assert.deepEqual(f.properties, {
+    site: "123 Main St", owner: "Smith, John Trust", acres: 1.5, value: 250000,
+    land_use: "Retail", county: "Travis", use: "fast_casual", verdict: "PASS",
+  });
+});
+
+test("pinsToGeoJson: falls back to a lat/lng label when a pin has no label, and nulls missing fields", () => {
+  const gj = pinsToGeoJson([{ lat: 30.2672, lng: -97.7431 }]);
+  assert.equal(gj.features[0].properties.site, "30.2672, -97.7431");
+  assert.equal(gj.features[0].properties.owner, null);
+  assert.equal(gj.features[0].properties.acres, null);
+});
+
+test("pinsToGeoJson: drops a pin with missing/non-numeric lat or lng instead of emitting broken geometry", () => {
+  const gj = pinsToGeoJson([{ lat: 30.27, lng: -97.74 }, { lat: null, lng: -97.74 }, { lat: 30.27 }, {}]);
+  assert.equal(gj.features.length, 1);
+});
+
+test("pinsToGeoJson: an empty/missing pins list still returns a valid empty FeatureCollection", () => {
+  assert.deepEqual(pinsToGeoJson([]), { type: "FeatureCollection", features: [] });
+  assert.deepEqual(pinsToGeoJson(null), { type: "FeatureCollection", features: [] });
+  assert.deepEqual(pinsToGeoJson(undefined), { type: "FeatureCollection", features: [] });
+});
+
+test("candidatesToGeoJson: one Feature per candidate with rank/score/why properties", () => {
+  const results = [
+    { lat: 30.27, lng: -97.74, demandCount: 12, nearestCompetitorKm: 1.6, score: 13.6 },
+    { lat: 30.28, lng: -97.75, demandCount: 4, nearestCompetitorKm: null, score: 1004 },
+  ];
+  const sig = { preferNear: true, preferFar: true }, cfg = { radius: 1200, compLabel: "food vendors" };
+  const gj = candidatesToGeoJson(results, sig, cfg);
+  assert.equal(gj.type, "FeatureCollection");
+  assert.equal(gj.features.length, 2);
+  assert.deepEqual(gj.features[0].geometry, { type: "Point", coordinates: [-97.74, 30.27] });
+  assert.deepEqual(gj.features[0].properties, { rank: 1, score: 13.6, why: "≈12 rooftops within 1.2 km · nearest food vendor 1.6 km away" });
+  assert.deepEqual(gj.features[1].properties, { rank: 2, score: 1004, why: "≈4 rooftops within 1.2 km · no food vendors in range" });
+});
+
+test("candidatesToGeoJson: a candidate missing valid lat/lng is dropped without shifting later ranks", () => {
+  const results = [
+    { lat: 30.27, lng: -97.74, demandCount: 1, nearestCompetitorKm: 1, score: 1 },
+    { lat: null, lng: -97.75, demandCount: 1, nearestCompetitorKm: 1, score: 2 },
+    { lat: 30.29, lng: -97.76, demandCount: 1, nearestCompetitorKm: 1, score: 3 },
+  ];
+  const gj = candidatesToGeoJson(results, { preferNear: true }, { radius: 1200 });
+  assert.equal(gj.features.length, 2);
+  assert.equal(gj.features[0].properties.rank, 1);
+  assert.equal(gj.features[1].properties.rank, 3);
+});
+
+test("candidatesToGeoJson: an empty/missing results list still returns a valid empty FeatureCollection", () => {
+  assert.deepEqual(candidatesToGeoJson([], {}, {}), { type: "FeatureCollection", features: [] });
+  assert.deepEqual(candidatesToGeoJson(null, {}, {}), { type: "FeatureCollection", features: [] });
 });
 
 // ---- buildCandidatesReportText (reverse-search PDF/print report) ----
