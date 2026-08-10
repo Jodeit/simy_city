@@ -1672,6 +1672,71 @@ Ground rules for each run:
       list confirmed the drop-without-renumbering behavior live (not just
       in the Node unit tests).
 
+## Next (breadth) — newly added (12)
+- [ ] **Reverse search coverage for data_center and residential_subdivision.**
+      All 9 land uses now have real PASS/SHORT verdicts, but two still fall
+      outside `reverseSearchSignals` (`web/logic.js`): it only lights up
+      `preferNear` for a use with a rooftop-demand read
+      (`USE_DEMAND[use].roofNeed`) and `preferFar` for one with a
+      `min_distance_km_from_nearest`/`max_same_brand_in_trade_area`
+      competition gate — `data_center` is sited on power/water/fiber/slope,
+      not rooftops or a "farther is better" competitor read, and
+      `residential_subdivision` is gated on buildable acreage +
+      absorption/jobs signals the app doesn't fetch live at all. Both
+      already disable the "🔍 Find candidate sites" button today (correctly
+      — there's no real signal to rank on), so this needs a *new* proxy
+      signal, not just a `reverseSearchSignals` tweak: for `data_center`,
+      something like "prefer near a substation, away from residential
+      rooftops" (reusing the existing power-substation Overpass leg
+      `maybeRenderDCVerdict` already fetches); for `residential_subdivision`,
+      maybe "prefer near schools/jobs, away from flood-prone parcels" using
+      data already fetched for its own verdict. Extend `rankCandidates`
+      with a third scoring dimension only if the two-signal (`preferFar`/
+      `preferNear`) shape can't express it, and keep it a pure, tested
+      function like the other reverse-search primitives. Verify with
+      `python -m pytest -q`, `simy validate`, `node --test
+      tests/js/*.test.mjs`, and headless Chromium driving a real search for
+      both uses end to end.
+- [ ] **13th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 12
+      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
+      Miami-Dade, San Diego, Dallas, Allegheny, Wake) — still nothing in
+      Georgia or the Mountain West. Fulton County, GA (Atlanta) remains a
+      reasonable pick (suggested but not picked in a prior round), but any
+      large county with a public ArcGIS parcel MapServer works — e.g. Salt
+      Lake County, UT or Fairfax County, VA would extend coverage into new
+      regions too. Same recipe every prior county addition followed: since
+      this sandbox 403s on direct ArcGIS REST introspection, find the
+      MapServer URL and field names via web search (not direct fetch)
+      against multiple independent sources before trusting a field name;
+      add any new id/owner/address/land-use/value field names to the shared
+      `pick()` candidate lists rather than assuming they match an existing
+      county's schema; leave a field unmapped (don't guess) if its unit
+      doesn't match what `pick()` expects; write a real `zoning_note`/
+      `county_state` for the state (check whether it actually has zoning
+      and unincorporated county land — Pennsylvania's Allegheny entry
+      didn't); and prefer a real per-parcel record deep link only if one is
+      *documented* (like Wake County's `Account.asp?id=`), otherwise link to
+      the assessor's search page.
+- [ ] **Sortable reverse-search candidate results.** The "⚖️ Compare" modal's
+      table got clickable sort-by-column headers (acreage, appraised value)
+      in an earlier run via the pure `sortPins(pins, key, dir)` helper in
+      `web/logic.js`, but the "🔍 Find candidate sites" results panel
+      (`renderCandidates()` in `web/explore.html`) still only ever renders
+      in rank order — no way to re-sort by, say, nearest-competitor distance
+      or rooftop count once results are in. Add a small `sortCandidates`-
+      style pure helper (or generalize `sortPins`) keyed on the fields
+      `rankCandidates()` already returns (`score`, `nearestCompetitorKm`,
+      `demandCount`), wire clickable sort labels into the results panel/list
+      rows mirroring the Compare table's `cmpSortBtn` pattern (▲/▼ indicator,
+      `aria-pressed`, second click flips direction), and make sure marker
+      numbering/popup click-through still maps to the correct underlying
+      candidate after a re-sort (same care the Compare ✕-button fix took
+      for `pins.indexOf(p)` on a sorted view). Add unit tests mirroring
+      `sortPins`'s coverage (ascending/descending, missing-field-sorts-last,
+      non-mutation). Verify with `python -m pytest -q`, `simy validate`,
+      `node --test tests/js/*.test.mjs`, and headless Chromium driving a
+      real search + sort-click end to end.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
