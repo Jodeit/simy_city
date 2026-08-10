@@ -1717,25 +1717,44 @@ Ground rules for each run:
       didn't); and prefer a real per-parcel record deep link only if one is
       *documented* (like Wake County's `Account.asp?id=`), otherwise link to
       the assessor's search page.
-- [ ] **Sortable reverse-search candidate results.** The "⚖️ Compare" modal's
-      table got clickable sort-by-column headers (acreage, appraised value)
-      in an earlier run via the pure `sortPins(pins, key, dir)` helper in
-      `web/logic.js`, but the "🔍 Find candidate sites" results panel
-      (`renderCandidates()` in `web/explore.html`) still only ever renders
-      in rank order — no way to re-sort by, say, nearest-competitor distance
-      or rooftop count once results are in. Add a small `sortCandidates`-
-      style pure helper (or generalize `sortPins`) keyed on the fields
-      `rankCandidates()` already returns (`score`, `nearestCompetitorKm`,
-      `demandCount`), wire clickable sort labels into the results panel/list
-      rows mirroring the Compare table's `cmpSortBtn` pattern (▲/▼ indicator,
-      `aria-pressed`, second click flips direction), and make sure marker
-      numbering/popup click-through still maps to the correct underlying
-      candidate after a re-sort (same care the Compare ✕-button fix took
-      for `pins.indexOf(p)` on a sorted view). Add unit tests mirroring
-      `sortPins`'s coverage (ascending/descending, missing-field-sorts-last,
-      non-mutation). Verify with `python -m pytest -q`, `simy validate`,
-      `node --test tests/js/*.test.mjs`, and headless Chromium driving a
-      real search + sort-click end to end.
+- [x] **Sortable reverse-search candidate results.** The "🔍 Find candidate
+      sites" results panel (`renderCandidates()` in `web/explore.html`)
+      previously only ever rendered in rank order. `sortPins(pins, key, dir)`
+      (`web/logic.js`) turned out to already be a fully generic array-sort-
+      by-key helper (not pin-specific — it just reads `a[key]`/`b[key]`), so
+      no new pure helper was needed: reused it directly on `rankCandidates()`
+      result objects, keyed on `score`, `nearestCompetitorKm`, or
+      `demandCount`. Split `renderCandidates()` into a one-time part (builds
+      the map markers, always in original rank order — markers never move or
+      renumber) and a new `renderCandidateRows()` that renders the sort
+      controls + row list + export buttons and re-runs on every sort-button
+      click, reusing the Compare table's exact `cmpSortBtn` CSS/JS pattern
+      (▲/▼ indicator, `aria-pressed`, second click flips direction, global
+      class so no new CSS rule was needed beyond a small `.candSortRow`
+      wrapper). Only offers a sort field when its signal is actually on for
+      the current use (`sig.preferFar`/`sig.preferNear`), matching what
+      `candidateWhyText` already shows in each row. A sorted row keeps
+      displaying its *original* rank number (matching the marker it
+      corresponds to on the map) rather than a renumbered position, and
+      `data-i` is resolved via `results.indexOf(r)` rather than display
+      index — same care the Compare ✕-button fix took for `pins.indexOf(p)`
+      on a sorted view. CSV/PDF/GeoJSON exports intentionally stay in
+      original rank order, matching the pre-existing Compare-list exports
+      (which likewise ignore `cmpSort`). Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK), `node --test tests/js/*.test.mjs`
+      (201 passed, unchanged — no new pure logic to unit-test since
+      `sortPins` was reused as-is), and headless Chromium driving a real,
+      mocked end-to-end search for `food_truck_court` (the one use with both
+      signals on): confirmed all three sort buttons render with correct
+      labels, clicking "Nearest competitor" sorts ascending then descending
+      correctly (verified against the actual underlying values, not just
+      DOM order), each row's displayed rank number stays tied to its
+      original marker index through a re-sort, the marker count and map
+      layer are untouched by sorting, clicking a row after sorting resolves
+      to the correct candidate's lat/lng, closing the panel clears results
+      and resets sort state, and switching to `data_center` (no ranking
+      signal) still correctly disables the search button — zero console/page
+      errors throughout; `web/index.html` re-confirmed unaffected and clean.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
