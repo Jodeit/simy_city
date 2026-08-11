@@ -1719,26 +1719,50 @@ Ground rules for each run:
       all-empty mocked Overpass response still rendered 8 (correctly-tied)
       candidates without throwing, and food_truck_court's pre-existing search
       behavior is unchanged (regression check).
-- [ ] **13th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 12
-      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
-      Miami-Dade, San Diego, Dallas, Allegheny, Wake) — still nothing in
-      Georgia or the Mountain West. Fulton County, GA (Atlanta) remains a
-      reasonable pick (suggested but not picked in a prior round), but any
-      large county with a public ArcGIS parcel MapServer works — e.g. Salt
-      Lake County, UT or Fairfax County, VA would extend coverage into new
-      regions too. Same recipe every prior county addition followed: since
-      this sandbox 403s on direct ArcGIS REST introspection, find the
-      MapServer URL and field names via web search (not direct fetch)
-      against multiple independent sources before trusting a field name;
-      add any new id/owner/address/land-use/value field names to the shared
-      `pick()` candidate lists rather than assuming they match an existing
-      county's schema; leave a field unmapped (don't guess) if its unit
-      doesn't match what `pick()` expects; write a real `zoning_note`/
-      `county_state` for the state (check whether it actually has zoning
-      and unincorporated county land — Pennsylvania's Allegheny entry
-      didn't); and prefer a real per-parcel record deep link only if one is
-      *documented* (like Wake County's `Account.asp?id=`), otherwise link to
-      the assessor's search page.
+- [x] **13th parcel county.** Added Fulton County, GA (Atlanta) — the county
+      suggested but not picked in a prior round — as a 13th `PARCEL_SOURCES`
+      entry, the first in Georgia. MapServer URL confirmed via web search
+      against multiple independent sources (the county's own Property Map
+      Viewer app, its ArcGIS Hub-indexed open-data pages, and a third-party
+      parcel-API documentation site), same recipe every prior county
+      followed since this sandbox still 403s on direct ArcGIS REST
+      introspection: `gismaps.fultoncountyga.gov`'s `PropertyMapViewer`
+      MapServer, layer 11 (tax parcels). `ParcelID`/`OwnerName` are the field
+      names those sources consistently show; added `OWNERNAME` to the shared
+      `pick()` owner-candidate list (matches `OwnerName` case-insensitively —
+      `pick()` already lowercases as a fallback), while `SiteAddress` was
+      already covered by the existing `SITEADDRESS` candidate from Dallas, so
+      no addition was needed there. Land use, acreage, and appraised value
+      field names weren't independently confirmable from this sandbox, so —
+      same cautious call as Dallas/Bexar/Allegheny — left unmapped rather
+      than guessing a name that isn't actually there. Fulton is a famously
+      oddly-shaped "dumbbell" county (narrow through Atlanta, wide at both
+      the far-north Milton and far-south Chattahoochee Hills ends), so the
+      `bbox` is generous top-to-bottom — `inBbox` is only a rough pre-filter
+      before the real point query anyway, same slack every other county
+      entry already takes. Georgia counties zone unincorporated land (unlike
+      the TX counties already covered), so this got its own `zoning_note`,
+      also noting most of Fulton's land actually sits inside a city. No
+      documented stable per-parcel deep-link was found for Fulton's qPublic
+      portal, so — same call as Harris/Bexar/LA/King/Miami-Dade/San
+      Diego/Dallas — `record()` links to the qPublic search page rather than
+      guessing a URL shape that might 404. Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK, 9 land uses, unaffected — this item
+      touches no YAML), `node --test tests/js/*.test.mjs` (214 passed,
+      unchanged — no new pure logic, same as the pattern every prior
+      county-only addition followed), and headless Chromium: both pages
+      still load with zero genuine console/page errors; `inBbox` correctly
+      routes downtown Atlanta, far-north Milton, and far-south Chattahoochee
+      Hills all to the new Fulton source (confirming the generous bbox
+      actually covers the odd shape) while still finding no source for
+      Denver; and a real end-to-end `analyze()` click over downtown Atlanta
+      with `fetch` mocked to a Fulton-shaped ArcGIS attribute+geometry
+      payload rendered Parcel ID/Owner/Address, the GA zoning note, and the
+      qPublic record link correctly through the real `showParcel` path — an
+      empty-attributes edge case at a second in-bbox point rendered without
+      throwing. Live endpoint reachability and the exact raw field
+      names/casing couldn't be confirmed from this sandbox — a live
+      spot-check is a good human follow-up, same as every prior county.
 - [ ] **Sortable reverse-search candidate results.** The "⚖️ Compare" modal's
       table got clickable sort-by-column headers (acreage, appraised value)
       in an earlier run via the pure `sortPins(pins, key, dir)` helper in

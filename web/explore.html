@@ -697,6 +697,28 @@ const PARCEL_SOURCES=[
     county_state:"Wake County, NC",
     zoning_note:"unlike TX, NC counties do zone unincorporated land — check Wake County's unincorporated-area zoning, or the city/town if incorporated",
   },
+  {
+    name:"Fulton County GIS / Board of Assessors (Fulton County, GA)",
+    urls:["https://gismaps.fultoncountyga.gov/arcgispub2/rest/services/PropertyMapViewer/PropertyMapViewer/MapServer/11"],
+    // Fulton is a famously oddly-shaped (dumbbell) county — narrow through
+    // Atlanta, wide at both the far-north (Milton) and far-south
+    // (Chattahoochee Hills) ends — so the bbox is generous top-to-bottom;
+    // inBbox is only a rough pre-filter before the point query anyway, same
+    // slack every other county entry here takes.
+    bbox:[-84.68,33.33,-84.28,34.18],
+    // ParcelID/OwnerName (added to the shared pick() lists below) and
+    // SiteAddress (already covered by the existing SITEADDRESS candidate)
+    // are the field names the county's own Property Map Viewer and search-
+    // indexed open-data pages consistently show — this sandbox 403s on
+    // direct ArcGIS REST introspection like every prior county, so, same
+    // cautious call as Dallas/Bexar/Allegheny, land use/acreage/appraised
+    // value are left unmapped rather than guessing a name that isn't
+    // actually there.
+    record:()=>"https://qpublic.schneidercorp.com/Application.aspx?App=FultonCountyGA&Layer=Parcels&PageType=Search",
+    source_label:"Fulton County Board of Assessors",
+    county_state:"Fulton County, GA",
+    zoning_note:"unlike TX, GA counties do zone unincorporated land — check Fulton County's unincorporated-area zoning, or the city's if incorporated (most of Fulton's land is inside a city)",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -1881,7 +1903,7 @@ function showParcel(geo,src,seq){
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNERNAME"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES"]);
