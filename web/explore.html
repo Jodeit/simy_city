@@ -164,6 +164,7 @@
   .searchRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .searchRow select{font:inherit;font-size:.82rem;padding:.35em .5em;border-radius:8px;
     border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .candSortRow{margin-top:9px;font-size:.8rem;color:var(--slate)}
   .candList{display:flex;flex-direction:column;gap:6px;margin-top:9px}
   .candCsvRow{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .candRow{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid var(--line);
@@ -1663,7 +1664,7 @@ function closeSearchPanel(){
   const results=document.getElementById("searchResults"); if(results)results.innerHTML="";
   const status=document.getElementById("searchStatus"); if(status)status.style.display="none";
   if(candLayer){candLayer.remove();candLayer=null;}
-  lastCandidates=null; lastCandSig=null; lastCandCfg=null;
+  lastCandidates=null; lastCandSig=null; lastCandCfg=null; candSort={key:null,dir:"asc"};
 }
 // Offers 0.5x/1x/2x the use's own trade-area radius (USE_DEMAND[current].radius)
 // as search-radius choices — scaled to whatever's sensible for the current use
@@ -1718,9 +1719,18 @@ function runCandidateSearch(){
 // button (rendered below, only once there's a non-empty result list) reads
 // these instead of re-deriving them from DOM state.
 let lastCandidates=null, lastCandSig=null, lastCandCfg=null;
+// Sort state for the results *panel only* — the map markers always keep
+// their original rank-order numbering (1..N by score, matching the popup's
+// "#N"), so a sorted row still displays its original rank number rather than
+// a renumbered position, and clicking it still maps to the correct
+// underlying candidate via lastCandidates.indexOf(r) rather than display
+// index. CSV/PDF/GeoJSON exports intentionally stay in original rank order
+// too — same as the Compare-list exports, which ignore cmpSort.
+let candSort={key:null,dir:"asc"};
 function renderCandidates(results,sig,cfg){
   const resEl=document.getElementById("searchResults");
   lastCandidates=results; lastCandSig=sig; lastCandCfg=cfg;
+  candSort={key:null,dir:"asc"};
   if(!results.length){
     resEl.innerHTML=`<p class="src">No candidates matched — try a larger radius.</p>`;
     return;
@@ -1732,16 +1742,44 @@ function renderCandidates(results,sig,cfg){
       .bindPopup(`<b>#${i+1}</b> — ${esc(candidateWhyText(r,sig,cfg))}`)
       .on("click",()=>analyze(ll));
   })).addTo(map);
-  resEl.innerHTML=`<div class="candList">`+results.map((r,i)=>
-    `<div class="candRow" data-i="${i}" role="button" tabindex="0">
+  renderCandidateRows();
+}
+// Re-renders just the sort controls + row list + export buttons (never the
+// map markers built above) — called once from renderCandidates for a fresh
+// search, and again from a sort-button click. Only offers a sort field when
+// its signal is actually on for this use (matching what candidateWhyText
+// shows in each row), same as the "🔍 Find candidate sites" button itself
+// only being enabled for a use with a real ranking signal.
+function renderCandidateRows(){
+  const resEl=document.getElementById("searchResults");
+  const results=lastCandidates, sig=lastCandSig, cfg=lastCandCfg;
+  const sorted=candSort.key?sortPins(results,candSort.key,candSort.dir):results;
+  const sortBtn=(label,key)=>{
+    const active=candSort.key===key;
+    const arrow=active?(candSort.dir==="desc"?" ▼":" ▲"):"";
+    return `<button type="button" class="cmpSortBtn" data-key="${key}" aria-pressed="${active}">${label}${arrow}</button>`;
+  };
+  const sortLabels=[sortBtn("Score","score")];
+  if(sig.preferFar)sortLabels.push(sortBtn("Nearest competitor","nearestCompetitorKm"));
+  if(sig.preferNear)sortLabels.push(sortBtn("Rooftops nearby","demandCount"));
+  resEl.innerHTML=`<div class="candSortRow">Sort by: ${sortLabels.join(" · ")}</div>`+
+    `<div class="candList">`+sorted.map(r=>{
+      const i=results.indexOf(r);
+      return `<div class="candRow" data-i="${i}" role="button" tabindex="0">
        <span class="candNum">${i+1}</span><span>${esc(candidateWhyText(r,sig,cfg))}</span>
-     </div>`).join("")+
+     </div>`;
+    }).join("")+
     `</div><div class="candCsvRow"><button class="toolbtn" id="searchCsv" type="button">⬇️ Download CSV</button>`+
     `<button class="toolbtn" id="searchPdf" type="button">📄 Download PDF</button>`+
     `<button class="toolbtn" id="searchGeojson" type="button">🗺️ Download GeoJSON</button> <span class="ok" id="searchCsvMsg"></span></div>`;
   resEl.querySelectorAll(".candRow").forEach(row=>{
     const r=results[parseInt(row.dataset.i,10)];
     wireActivate(row,()=>analyze(L.latLng(r.lat,r.lng)));
+  });
+  resEl.querySelectorAll(".cmpSortBtn").forEach(b=>b.onclick=()=>{
+    const key=b.dataset.key;
+    candSort=(candSort.key===key)?{key,dir:candSort.dir==="asc"?"desc":"asc"}:{key,dir:"asc"};
+    renderCandidateRows();
   });
   document.getElementById("searchCsv").onclick=()=>{
     downloadCandidatesCsv();
