@@ -555,21 +555,27 @@ function sampleGrid(center,radiusM,spacingM){
   return raw.filter((_,idx)=>idx%stride===0);
 }
 // Scores each candidate point by distance to the nearest `competitors` entry
-// and a count of `demandPoints` within `opts.demandRadiusM` — the two
-// signals a "find me a site" search actually cares about (the food-truck-
-// court example wants both: far from existing vendors, near residential).
-// `opts.preferFar`/`opts.preferNear` opt each signal into the combined
-// score independently (both can be on at once); a point with no competitors
-// at all is scored as maximally far rather than excluded. Non-mutating,
-// returns the top `opts.limit` (default 6) points best-score-first — same
-// "pure transform, new array out" style as `sortPins`/`cheapest`.
+// and a count of `demandPoints` within `opts.demandRadiusM` — two facts, four
+// possible readings of them. `opts.preferFar`/`opts.preferNear` are the
+// original food-truck-court pair (far from existing vendors, near
+// residential); `opts.preferNearComp`/`opts.preferFarDemand` are their
+// mirror images for uses where the `competitors` list is actually something
+// to seek (a data center wants to be *near* a substation, not far from one)
+// and `demandPoints` is something to avoid (a data center wants *fewer*
+// rooftops nearby, not more). All four can combine independently on the same
+// point — a point with no competitors at all still scores as maximally far
+// under preferFar or maximally penalized under preferNearComp, never
+// excluded. Non-mutating, returns the top `opts.limit` (default 6) points
+// best-score-first — same "pure transform, new array out" style as
+// `sortPins`/`cheapest`.
 function rankCandidates(points,competitors,demandPoints,opts){
   opts=opts||{};
   const demandRadiusM=opts.demandRadiusM||0;
   const preferFar=!!opts.preferFar, preferNear=!!opts.preferNear;
+  const preferNearComp=!!opts.preferNearComp, preferFarDemand=!!opts.preferFarDemand;
   const limit=opts.limit||6;
   const comp=competitors||[], demand=demandPoints||[];
-  const NO_COMPETITOR_KM=1000; // sentinel: "no competitors nearby" reads as maximally far, not excluded
+  const NO_COMPETITOR_KM=1000; // sentinel: "no competitors nearby" reads as maximally far/worst-case, not excluded
   const scored=(points||[]).map(p=>{
     let nearestCompetitorKm=null;
     comp.forEach(c=>{
@@ -579,7 +585,9 @@ function rankCandidates(points,competitors,demandPoints,opts){
     const demandCount=demand.reduce((n,d)=>haversine(p.lat,p.lng,d.lat,d.lng)*1000<=demandRadiusM?n+1:n,0);
     let score=0;
     if(preferFar)score+=nearestCompetitorKm===null?NO_COMPETITOR_KM:nearestCompetitorKm;
+    if(preferNearComp)score-=nearestCompetitorKm===null?NO_COMPETITOR_KM:nearestCompetitorKm;
     if(preferNear)score+=demandCount;
+    if(preferFarDemand)score-=demandCount;
     return {lat:p.lat,lng:p.lng,nearestCompetitorKm,demandCount,score};
   });
   scored.sort((a,b)=>b.score-a.score);
@@ -599,42 +607,68 @@ function parseOverpassPoints(json){
     return (lat!=null&&lng!=null)?{lat,lng}:null;
   }).filter(Boolean);
 }
-// Decides which of rankCandidates' two scoring signals apply to a given land
-// use, from its model.json `requires` block plus the use's own rooftop-need
-// threshold (USE_DEMAND[id].roofNeed in explore.html — requires.demand's
-// shape varies use-to-use, so roofNeed is passed in rather than re-parsed
-// here). `preferFar` turns on for either shape layers.yaml uses for a
-// "farther is better" competition read: an explicit
+// Decides which of rankCandidates' four scoring signals apply to a given land
+// use, from its model.json `requires`/`demand_signals` blocks plus the use's
+// own rooftop-need threshold (USE_DEMAND[id].roofNeed in explore.html —
+// requires.demand's shape varies use-to-use, so roofNeed is passed in rather
+// than re-parsed here). `preferFar` turns on for either shape layers.yaml
+// uses for a "farther is better" competition read: an explicit
 // `min_distance_km_from_nearest` (food_truck_court, ev_charging_hub) or a
 // zero-tolerance `max_same_brand_in_trade_area` (warehouse_club — "don't
 // build a second Costco inside another Costco's trade area" is exactly the
 // same avoid-the-competitor shape, just phrased as a cap instead of a
 // distance). `preferNear` turns on for any use with a rooftop-demand
 // threshold (warehouse_club, fast_casual, food_truck_court, ev_charging_hub).
-// A use with neither (data_center, residential_subdivision) has no signal a
-// grid-scan ranking can use yet — the caller should treat that as "reverse
-// search not supported for this use" rather than ranking on an all-zero score.
 // fast_casual is `preferNear`-only on purpose, not an oversight — see the
 // `competition`-block comment on `fast_casual` in data_sources/layers.yaml
 // for why clustering near existing competitors doesn't get penalized there
 // the way it does for the other three.
-function reverseSearchSignals(requires,roofNeed){
+//
+// data_center and residential_subdivision have neither of those (nobody
+// judges a data center on rooftops, and residential's own `competition`
+// block doesn't exist) — but the `competitors` list a reverse search already
+// fetches for them (USE_DEMAND.compQ: power substations / schools) isn't
+// meaningless, it's just something to seek instead of avoid. `preferNearComp`
+// turns on for a use with `requires.power.prefer_substation_within_km`
+// (data_center, and — were it not for ev_charging_hub already having its own
+// `preferFar` competition read on that exact same substation-adjacent-siting
+// shape — would read the same for it too, hence the `!preferFar` guard) or
+// with `demand_signals.amenities.prefer_school_within_km`
+// (residential_subdivision — an already-served neighborhood is a real signal
+// of housing demand, the same "schools" list the school-capacity verdict
+// already fetches). `preferFarDemand` mirrors `preferNear`: only the
+// substation-siting proxy wants to avoid rooftop density (a data center
+// wants edge/industrial land, not a residential encroachment fight) — the
+// schools proxy doesn't, since nearby rooftops are the whole point of a
+// subdivision, so it stays `preferNear`/`preferFarDemand`-neutral.
+function reverseSearchSignals(requires,roofNeed,demandSignals){
   const comp=(requires&&requires.competition)||{};
+  const preferFar=comp.min_distance_km_from_nearest!=null || comp.max_same_brand_in_trade_area!=null;
+  const power=(requires&&requires.power)||{};
+  const amenities=(demandSignals&&demandSignals.amenities)||{};
+  const nearSubstation=!preferFar && power.prefer_substation_within_km!=null;
+  const nearSchool=!preferFar && !nearSubstation && amenities.prefer_school_within_km!=null;
   return {
-    preferFar: comp.min_distance_km_from_nearest!=null || comp.max_same_brand_in_trade_area!=null,
+    preferFar,
     preferNear: !!roofNeed,
+    preferNearComp: nearSubstation || nearSchool,
+    preferFarDemand: nearSubstation,
   };
 }
 // Builds the same one-line "why" a candidate ranked where it did (e.g. "≈12
 // rooftops within 1.2 km · nearest food vendor 1.6 km away") from a
 // rankCandidates() result plus the reverseSearchSignals()/USE_DEMAND config
 // that produced it — shared by the map-popup/list-row rendering (which HTML-
-// escapes it) and the CSV export (which doesn't need to). A result with
-// neither signal on falls back to plain coordinates.
+// escapes it) and the CSV export (which doesn't need to). The underlying
+// facts read the same whether a signal means "seek" or "avoid" ("nearest
+// power substation 2.1 km away" is true either way), so preferNearComp/
+// preferFarDemand share their text with preferFar/preferNear rather than
+// getting their own wording. A result with no signal on falls back to plain
+// coordinates.
 function candidateWhyText(r,sig,cfg){
   const parts=[];
-  if(sig&&sig.preferNear)parts.push(`≈${r.demandCount} rooftop${r.demandCount===1?"":"s"} within ${(cfg.radius/1000)} km`);
-  if(sig&&sig.preferFar)parts.push(r.nearestCompetitorKm==null
+  if(sig&&(sig.preferNear||sig.preferFarDemand))parts.push(`≈${r.demandCount} rooftop${r.demandCount===1?"":"s"} within ${(cfg.radius/1000)} km`);
+  if(sig&&(sig.preferFar||sig.preferNearComp))parts.push(r.nearestCompetitorKm==null
     ? `no ${cfg.compLabel} in range`
     : `nearest ${cfg.compLabel.replace(/s$/,"")} ${r.nearestCompetitorKm.toFixed(1)} km away`);
   return parts.length?parts.join(" · "):`${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`;

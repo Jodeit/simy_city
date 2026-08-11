@@ -205,7 +205,13 @@ land_uses:
     demand_signals:
       absorption: { max_years_of_supply: 2.0, note: "hot market: homes sell fast" }
       jobs:       { layer: demand, signal: nearby_job_growth }
-      amenities:  { signal: "retail / schools / services already present nearby" }
+      # prefer_school_within_km is the one demand_signals field that's a real
+      # numeric gate rather than descriptive-only: reverseSearchSignals (web/logic.js)
+      # reads it to turn on the "closer to an existing school is better" reverse-
+      # search proxy, reusing the same nearby-schools Overpass read the
+      # school-capacity verdict (maybeRenderResVerdict) already fetches — an
+      # already-served neighborhood signals real demand for more housing nearby.
+      amenities:  { signal: "retail / schools / services already present nearby", prefer_school_within_km: 3 }
       price:      { signal: "achievable price > land + infra + construction cost" }
     induces:
       education: { trigger_per_homes: 1000, note: "~0.5 students/home; flags school headroom" }

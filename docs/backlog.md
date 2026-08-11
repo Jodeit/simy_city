@@ -1673,30 +1673,52 @@ Ground rules for each run:
       in the Node unit tests).
 
 ## Next (breadth) — newly added (12)
-- [ ] **Reverse search coverage for data_center and residential_subdivision.**
-      All 9 land uses now have real PASS/SHORT verdicts, but two still fall
-      outside `reverseSearchSignals` (`web/logic.js`): it only lights up
-      `preferNear` for a use with a rooftop-demand read
-      (`USE_DEMAND[use].roofNeed`) and `preferFar` for one with a
-      `min_distance_km_from_nearest`/`max_same_brand_in_trade_area`
-      competition gate — `data_center` is sited on power/water/fiber/slope,
-      not rooftops or a "farther is better" competitor read, and
-      `residential_subdivision` is gated on buildable acreage +
-      absorption/jobs signals the app doesn't fetch live at all. Both
-      already disable the "🔍 Find candidate sites" button today (correctly
-      — there's no real signal to rank on), so this needs a *new* proxy
-      signal, not just a `reverseSearchSignals` tweak: for `data_center`,
-      something like "prefer near a substation, away from residential
-      rooftops" (reusing the existing power-substation Overpass leg
-      `maybeRenderDCVerdict` already fetches); for `residential_subdivision`,
-      maybe "prefer near schools/jobs, away from flood-prone parcels" using
-      data already fetched for its own verdict. Extend `rankCandidates`
-      with a third scoring dimension only if the two-signal (`preferFar`/
-      `preferNear`) shape can't express it, and keep it a pure, tested
-      function like the other reverse-search primitives. Verify with
-      `python -m pytest -q`, `simy validate`, `node --test
-      tests/js/*.test.mjs`, and headless Chromium driving a real search for
-      both uses end to end.
+- [x] **Reverse search coverage for data_center and residential_subdivision.**
+      Both used to disable the "🔍 Find candidate sites" button entirely —
+      `reverseSearchSignals` only lit up `preferNear` (rooftop-demand) or
+      `preferFar` ("farther from a competitor is better"), and neither use
+      fit either shape. Rather than inventing new data fetches, reused what
+      each use's own verdict *already* fetches: `data_center`'s reverse
+      search now runs on the same substation-scan (`USE_DEMAND.data_center.compQ`)
+      `maybeRenderDCVerdict` uses, and `residential_subdivision`'s runs on the
+      same nearby-schools scan (`compQ`) `maybeRenderResVerdict` uses — no new
+      Overpass query shape, just new ways to score the two the reverse-search
+      UI was already fetching for every use (one demand/rooftops query, one
+      competitors query). Extended `rankCandidates` (`web/logic.js`) with two
+      new opts mirroring the original pair: `preferNearComp` (closer to the
+      nearest `competitors` entry is *better*, not worse — mirrors `preferFar`,
+      including its "no competitor found" sentinel, now a worst-case penalty
+      instead of a best-case bonus) and `preferFarDemand` (fewer nearby
+      `demandPoints` is *better* — mirrors `preferNear`). `reverseSearchSignals`
+      now also takes a third `demandSignals` arg (`use.demand_signals` from
+      model.json) and turns `preferNearComp` on for `requires.power.
+      prefer_substation_within_km` (data_center's existing requires field —
+      ev_charging_hub has the same field but keeps its own `preferFar`
+      instead via a `!preferFar` guard, since its `competitors` list means
+      "avoid," not "seek") or a new `demand_signals.amenities.
+      prefer_school_within_km: 3` added to residential_subdivision in
+      `data_sources/layers.yaml`; `preferFarDemand` turns on only for the
+      substation case (a data center avoids rooftop-dense land; a subdivision
+      obviously doesn't want to avoid rooftops). `candidateWhyText` needed no
+      new wording — "nearest power substation 2.1 km away" reads true
+      whether closer is better or worse, so `preferNearComp`/`preferFarDemand`
+      just share the existing preferFar/preferNear text branches. Added 8 new
+      `reverseSearchSignals` tests (data_center's shape, residential's shape,
+      the ev_charging_hub non-conflict, missing demand_signals) and 7 new
+      `rankCandidates`/`candidateWhyText` tests (preferNearComp vs preferFar
+      disagreeing on the same data, preferFarDemand vs preferNear disagreeing,
+      the no-competitor worst-case sentinel, both new signals combining).
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 9 land
+      uses), `node --test tests/js/*.test.mjs` (214 passed, 15 new), and
+      headless Chromium: both pages load with zero console/page errors; live
+      end-to-end searches (mocked Overpass) for **both** previously-disabled
+      uses now render 8 ranked candidates each with correct "why" text
+      (data_center: "≈2 rooftops within 8 km · nearest power substation 0.4
+      km away"; residential_subdivision: "nearest school 0.3 km away"),
+      clicking a result row ran a real `analyze()` with zero errors, an
+      all-empty mocked Overpass response still rendered 8 (correctly-tied)
+      candidates without throwing, and food_truck_court's pre-existing search
+      behavior is unchanged (regression check).
 - [ ] **13th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 12
       counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
       Miami-Dade, San Diego, Dallas, Allegheny, Wake) — still nothing in

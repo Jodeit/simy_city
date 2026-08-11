@@ -1017,6 +1017,60 @@ test("rankCandidates: a point with no competitors at all scores as maximally far
   assert.ok(ranked[0].score > 0);
 });
 
+test("rankCandidates: preferNearComp picks the point closest to the nearest competitor (data_center's substation case)", () => {
+  const near = { lat: 30.2700, lng: -97.7400 };  // right next to the substation
+  const far = { lat: 30.3200, lng: -97.7900 };   // far from it
+  const competitors = [{ lat: 30.2701, lng: -97.7401 }];
+  const ranked = rankCandidates([near, far], competitors, [], { preferNearComp: true });
+  assert.equal(ranked[0].lat, near.lat);
+});
+
+test("rankCandidates: preferNearComp and preferFar disagree on the same data (mirror images)", () => {
+  const points = [{ lat: 30.2700, lng: -97.7400 }, { lat: 30.3200, lng: -97.7900 }];
+  const competitors = [{ lat: 30.2701, lng: -97.7401 }];
+  const byNearComp = rankCandidates(points, competitors, [], { preferNearComp: true });
+  const byFar = rankCandidates(points, competitors, [], { preferFar: true });
+  assert.notEqual(byNearComp[0].lat, byFar[0].lat);
+});
+
+test("rankCandidates: preferNearComp with no competitors at all is worst-case, not excluded", () => {
+  const ranked = rankCandidates([{ lat: 30.27, lng: -97.74 }], [], [], { preferNearComp: true });
+  assert.equal(ranked[0].nearestCompetitorKm, null);
+  assert.ok(ranked[0].score < 0);
+});
+
+test("rankCandidates: preferFarDemand picks the point with fewer nearby rooftops (data_center avoiding residential)", () => {
+  const quiet = { lat: 30.3200, lng: -97.7900 };
+  const dense = { lat: 30.2700, lng: -97.7400 };
+  const demandPoints = [
+    { lat: 30.2701, lng: -97.7401 }, { lat: 30.2702, lng: -97.7402 }, { lat: 30.2703, lng: -97.7403 },
+  ];
+  const ranked = rankCandidates([dense, quiet], [], demandPoints, { preferFarDemand: true, demandRadiusM: 500 });
+  assert.equal(ranked[0].lat, quiet.lat);
+});
+
+test("rankCandidates: preferFarDemand and preferNear disagree on the same data (mirror images)", () => {
+  const points = [{ lat: 30.2700, lng: -97.7400 }, { lat: 30.3200, lng: -97.7900 }];
+  const demandPoints = [
+    { lat: 30.2701, lng: -97.7401 }, { lat: 30.2702, lng: -97.7402 }, { lat: 30.2703, lng: -97.7403 },
+  ];
+  const byFarDemand = rankCandidates(points, [], demandPoints, { preferFarDemand: true, demandRadiusM: 500 });
+  const byNear = rankCandidates(points, [], demandPoints, { preferNear: true, demandRadiusM: 500 });
+  assert.notEqual(byFarDemand[0].lat, byNear[0].lat);
+});
+
+test("rankCandidates: preferNearComp and preferFarDemand can combine (data_center's full proxy)", () => {
+  const good = { lat: 30.2700, lng: -97.7400 };  // near the substation, no rooftops nearby
+  const bad = { lat: 30.3200, lng: -97.7900 };   // far from the substation, surrounded by rooftops
+  const competitors = [{ lat: 30.2701, lng: -97.7401 }];
+  const demandPoints = [
+    { lat: 30.3201, lng: -97.7901 }, { lat: 30.3202, lng: -97.7902 }, { lat: 30.3203, lng: -97.7903 },
+  ];
+  const ranked = rankCandidates([bad, good], competitors, demandPoints,
+    { preferNearComp: true, preferFarDemand: true, demandRadiusM: 500 });
+  assert.equal(ranked[0].lat, good.lat);
+});
+
 test("rankCandidates: counts demandPoints only within demandRadiusM", () => {
   const p = { lat: 30.2700, lng: -97.7400 };
   const demandPoints = [
@@ -1086,16 +1140,18 @@ test("reverseSearchSignals: a rooftop-need threshold turns preferNear on", () =>
   assert.equal(sig.preferNear, true);
 });
 
-test("reverseSearchSignals: both signals can be on at once (the food-truck-court case)", () => {
+test("reverseSearchSignals: both preferFar/preferNear can be on at once (the food-truck-court case)", () => {
   const sig = reverseSearchSignals({ competition: { min_distance_km_from_nearest: 1.0 } }, 1500);
   assert.equal(sig.preferFar, true);
   assert.equal(sig.preferNear, true);
 });
 
-test("reverseSearchSignals: a use with neither (e.g. data_center) gets both signals off", () => {
+test("reverseSearchSignals: a use with none of the requires/demand_signals hooks gets everything off", () => {
   const sig = reverseSearchSignals({}, 0);
   assert.equal(sig.preferFar, false);
   assert.equal(sig.preferNear, false);
+  assert.equal(sig.preferNearComp, false);
+  assert.equal(sig.preferFarDemand, false);
 });
 
 test("reverseSearchSignals: a max_same_brand_in_trade_area competition read also turns preferFar on (warehouse_club's shape)", () => {
@@ -1105,8 +1161,40 @@ test("reverseSearchSignals: a max_same_brand_in_trade_area competition read also
 });
 
 test("reverseSearchSignals: handles a missing requires/competition block gracefully", () => {
-  assert.deepEqual(reverseSearchSignals(null, 0), { preferFar: false, preferNear: false });
-  assert.deepEqual(reverseSearchSignals(undefined, 5000), { preferFar: false, preferNear: true });
+  assert.deepEqual(reverseSearchSignals(null, 0), { preferFar: false, preferNear: false, preferNearComp: false, preferFarDemand: false });
+  assert.deepEqual(reverseSearchSignals(undefined, 5000), { preferFar: false, preferNear: true, preferNearComp: false, preferFarDemand: false });
+});
+
+test("reverseSearchSignals: data_center's prefer_substation_within_km turns on preferNearComp + preferFarDemand", () => {
+  const sig = reverseSearchSignals({ power: { min_MW: 20, prefer_substation_within_km: 5 } }, 0);
+  assert.equal(sig.preferFar, false);
+  assert.equal(sig.preferNear, false);
+  assert.equal(sig.preferNearComp, true);
+  assert.equal(sig.preferFarDemand, true);
+});
+
+test("reverseSearchSignals: residential_subdivision's prefer_school_within_km turns on preferNearComp only (rooftops nearby are fine)", () => {
+  const sig = reverseSearchSignals({}, 0, { amenities: { prefer_school_within_km: 3 } });
+  assert.equal(sig.preferFar, false);
+  assert.equal(sig.preferNear, false);
+  assert.equal(sig.preferNearComp, true);
+  assert.equal(sig.preferFarDemand, false);
+});
+
+test("reverseSearchSignals: ev_charging_hub's own preferFar competition read wins — prefer_substation_within_km does NOT also turn on preferNearComp", () => {
+  const sig = reverseSearchSignals(
+    { power: { prefer_substation_within_km: 3 }, competition: { min_distance_km_from_nearest: 0.8 } },
+    800,
+  );
+  assert.equal(sig.preferFar, true);
+  assert.equal(sig.preferNear, true);
+  assert.equal(sig.preferNearComp, false);
+  assert.equal(sig.preferFarDemand, false);
+});
+
+test("reverseSearchSignals: a missing demand_signals block doesn't throw and leaves preferNearComp off", () => {
+  const sig = reverseSearchSignals({}, 0, null);
+  assert.equal(sig.preferNearComp, false);
 });
 
 // ---- candidateWhyText / candidatesToCsvRows (reverse-search CSV export) ----
@@ -1145,6 +1233,24 @@ test("candidateWhyText: neither signal on falls back to plain coordinates", () =
   const r = { lat: 30.2672, lng: -97.7431, demandCount: 0, nearestCompetitorKm: null };
   const text = candidateWhyText(r, { preferNear: false, preferFar: false }, { radius: 1200, compLabel: "food vendors" });
   assert.equal(text, "30.2672, -97.7431");
+});
+
+test("candidateWhyText: preferNearComp-only reads the same 'nearest X away' text as preferFar (data_center's substation case)", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 0, nearestCompetitorKm: 2.1 };
+  const text = candidateWhyText(r, { preferNearComp: true }, { radius: 8000, compLabel: "power substations" });
+  assert.equal(text, "nearest power substation 2.1 km away");
+});
+
+test("candidateWhyText: preferFarDemand-only reads the same rooftop-count text as preferNear", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 3, nearestCompetitorKm: null };
+  const text = candidateWhyText(r, { preferFarDemand: true }, { radius: 8000, compLabel: "power substations" });
+  assert.equal(text, "≈3 rooftops within 8 km");
+});
+
+test("candidateWhyText: preferNearComp + preferFarDemand combine with a middle dot (data_center's full proxy)", () => {
+  const r = { lat: 30.27, lng: -97.74, demandCount: 3, nearestCompetitorKm: 2.1 };
+  const text = candidateWhyText(r, { preferNearComp: true, preferFarDemand: true }, { radius: 8000, compLabel: "power substations" });
+  assert.equal(text, "≈3 rooftops within 8 km · nearest power substation 2.1 km away");
 });
 
 test("candidatesToCsvRows: header row plus one row per candidate, rank/lat/lng/score/why", () => {

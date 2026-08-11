@@ -1610,13 +1610,15 @@ function maybeRenderSSVerdict(seq){
    Everything before this flips a clicked point into an answer. This flips
    the flow: pick an area (map center + a radius) and get back a handful of
    ranked candidate points to click into, using the pure sampleGrid/
-   rankCandidates engine from step 1 and the food_truck_court-style "farther
-   from competitors is better" signal from step 2 — reverseSearchSignals
-   (web/logic.js) decides which of the two signals apply to the current use.
-   Only **one** Overpass query for the whole search area's demand points and
-   **one** for competitors, no matter how many grid points get scored — a
-   per-candidate query would either hammer the free Overpass API or take
-   forever for an 8-point result set drawn from a 150-point grid. */
+   rankCandidates engine from step 1 and up to four scoring signals —
+   food_truck_court-style "farther from competitors is better"/"more rooftops
+   nearby is better", plus data_center/residential_subdivision's mirror-image
+   "closer to a substation or school is better"/"fewer rooftops nearby is
+   better" — reverseSearchSignals (web/logic.js) decides which apply to the
+   current use. Only **one** Overpass query for the whole search area's
+   demand points and **one** for competitors, no matter how many grid points
+   get scored — a per-candidate query would either hammer the free Overpass
+   API or take forever for an 8-point result set drawn from a 150-point grid. */
 function initSearch(){
   document.getElementById("searchToggle").onclick=toggleSearchPanel;
   document.getElementById("searchGo").onclick=runCandidateSearch;
@@ -1631,17 +1633,18 @@ function shareSearchLink(){
   const link=location.href.split("#")[0]+"#"+encodeSearchHash(center.lat,center.lng,radiusM,current);
   copy(link,"search link copied","searchShareMsg");
 }
-// Disables the toggle entirely for a use with neither reverse-search signal
-// (data_center, residential_subdivision as of this writing) rather than
-// letting someone run a search that can only ever tie every candidate at
-// score 0 — a disabled button with a title explaining why beats a search
-// that silently returns meaningless "top 6" noise.
+// Disables the toggle entirely for a use with no reverse-search signal at
+// all (none as of this writing — data_center and residential_subdivision
+// used to be the two holdouts, now covered by preferNearComp/preferFarDemand)
+// rather than letting someone run a search that can only ever tie every
+// candidate at score 0 — a disabled button with a title explaining why beats
+// a search that silently returns meaningless "top 6" noise.
 function updateSearchAvailability(){
   if(!MODEL)return;
   const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
-  const sig=reverseSearchSignals(use.requires,cfg.roofNeed);
+  const sig=reverseSearchSignals(use.requires,cfg.roofNeed,use.demand_signals);
   const btn=document.getElementById("searchToggle"); if(!btn)return;
-  const supported=sig.preferFar||sig.preferNear;
+  const supported=sig.preferFar||sig.preferNear||sig.preferNearComp||sig.preferFarDemand;
   btn.disabled=!supported;
   btn.title=supported?"":"Reverse search isn't tuned for this use yet";
 }
@@ -1675,8 +1678,8 @@ function fillSearchRadiusOptions(){
 }
 function runCandidateSearch(){
   const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
-  const sig=reverseSearchSignals(use.requires,cfg.roofNeed);
-  if(!sig.preferFar&&!sig.preferNear)return;
+  const sig=reverseSearchSignals(use.requires,cfg.roofNeed,use.demand_signals);
+  if(!sig.preferFar&&!sig.preferNear&&!sig.preferNearComp&&!sig.preferFarDemand)return;
   const center=map.getCenter();
   const radiusM=parseInt(document.getElementById("searchRadius").value,10)||cfg.radius;
   const seq=++searchReqSeq;
@@ -1697,7 +1700,8 @@ function runCandidateSearch(){
     const spacing=Math.max(75,Math.round(radiusM/12));
     const grid=sampleGrid({lat:center.lat,lng:center.lng},radiusM,spacing);
     const results=rankCandidates(grid,compPts||[],demandPts||[],
-      {demandRadiusM:cfg.radius,preferFar:sig.preferFar,preferNear:sig.preferNear,limit:8});
+      {demandRadiusM:cfg.radius,preferFar:sig.preferFar,preferNear:sig.preferNear,
+       preferNearComp:sig.preferNearComp,preferFarDemand:sig.preferFarDemand,limit:8});
     renderCandidates(results,sig,cfg);
   }
   const dParts=`way["building"](around:${radiusM},${center.lat},${center.lng});`+

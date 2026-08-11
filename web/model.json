@@ -681,7 +681,8 @@
           "signal": "nearby_job_growth"
         },
         "amenities": {
-          "signal": "retail / schools / services already present nearby"
+          "signal": "retail / schools / services already present nearby",
+          "prefer_school_within_km": 3
         },
         "price": {
           "signal": "achievable price > land + infra + construction cost"
