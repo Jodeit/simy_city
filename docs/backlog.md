@@ -1719,26 +1719,41 @@ Ground rules for each run:
       all-empty mocked Overpass response still rendered 8 (correctly-tied)
       candidates without throwing, and food_truck_court's pre-existing search
       behavior is unchanged (regression check).
-- [ ] **13th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 12
-      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
-      Miami-Dade, San Diego, Dallas, Allegheny, Wake) — still nothing in
-      Georgia or the Mountain West. Fulton County, GA (Atlanta) remains a
-      reasonable pick (suggested but not picked in a prior round), but any
-      large county with a public ArcGIS parcel MapServer works — e.g. Salt
-      Lake County, UT or Fairfax County, VA would extend coverage into new
-      regions too. Same recipe every prior county addition followed: since
-      this sandbox 403s on direct ArcGIS REST introspection, find the
-      MapServer URL and field names via web search (not direct fetch)
-      against multiple independent sources before trusting a field name;
-      add any new id/owner/address/land-use/value field names to the shared
-      `pick()` candidate lists rather than assuming they match an existing
-      county's schema; leave a field unmapped (don't guess) if its unit
-      doesn't match what `pick()` expects; write a real `zoning_note`/
-      `county_state` for the state (check whether it actually has zoning
-      and unincorporated county land — Pennsylvania's Allegheny entry
-      didn't); and prefer a real per-parcel record deep link only if one is
-      *documented* (like Wake County's `Account.asp?id=`), otherwise link to
-      the assessor's search page.
+- [x] **13th parcel county.** Added Fulton County, GA (Atlanta) to
+      `PARCEL_SOURCES` (`web/explore.html`) — the first Georgia county, via
+      the county's own `PropertyMapViewer` MapServer (layer 11, the tax-parcel
+      layer). Same recipe as every prior addition: this sandbox 403s on
+      direct ArcGIS REST introspection, so field names were confirmed via
+      multiple independent search-indexed sources rather than a direct fetch
+      — only `ParcelID`/`Owner`/`Address` came back confirmed for this
+      specific layer, so land use/acreage/value were left unmapped rather
+      than guessed (same cautious call Dallas/Allegheny made); all three
+      confirmed fields already fall through the shared `pick()` lists'
+      existing case-insensitive fallback (`PARCELID`/`OWNER`/`ADDRESS`
+      already match `ParcelID`/`Owner`/`Address` without needing new list
+      entries — verified directly). qPublic (the county's record-search
+      system) keys individual parcel pages on an opaque numeric `Q` param
+      that isn't derivable from `ParcelID` alone, so — same cautious call as
+      Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/Allegheny — `record()`
+      links to qPublic's search page rather than guessing a per-parcel URL.
+      `zoning_note` reflects a real, county-specific fact confirmed via web
+      search: a two-decade wave of cityhood incorporations (Sandy Springs
+      2005 through City of South Fulton 2017) plus the 2021 Fulton Industrial
+      Blvd annexation left almost no unincorporated land in the county at
+      all — just a small pocket near Fulton County Executive Airport — so
+      the note points to checking whichever city's zoning applies rather
+      than the county's (the same "no/near-zero unincorporated land" shape
+      Allegheny's PA entry hit, for a different reason). Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources),
+      `node --test tests/js/*.test.mjs` (214 passed, no regressions — this
+      item added a data entry, not new logic, so no new JS tests), a
+      standalone script confirming the new entry parses, bumps
+      `PARCEL_SOURCES` to 13 entries, and its `record()`/`pick()` fallback
+      behave as intended, and headless Chromium confirming both
+      `web/explore.html` and `web/index.html` still load with zero
+      console/page errors. Outbound network to ArcGIS/qPublic is blocked
+      from this sandbox, so a live end-to-end parcel fetch inside the new
+      Fulton County bbox is a good human spot-check.
 - [ ] **Sortable reverse-search candidate results.** The "⚖️ Compare" modal's
       table got clickable sort-by-column headers (acreage, appraised value)
       in an earlier run via the pure `sortPins(pins, key, dir)` helper in
