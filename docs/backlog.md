@@ -1797,6 +1797,73 @@ Ground rules for each run:
       clicking "Score" re-sorted all 8 rows/markers correctly, and clicking a
       result row post-sort ran a real `analyze()` with zero errors.
 
+## Next (breadth) — newly added (13)
+- [ ] **Saved reverse searches.** `encodeSearchHash`/`decodeSearchHash`
+      (`web/logic.js`) already pack a reverse search's center/radius/land-use
+      into a shareable `#search=` hash, and `addRecentSite`/`removeRecentSite`/
+      `clearRecentSites`/`undoClear` already give the "recently viewed sites"
+      panel a full localStorage-backed CRUD + undo pattern to copy. Neither
+      is wired to let a user *save* a search config for later, though —
+      run a search, come back tomorrow, and it's gone. Add a small
+      "⭐ Save this search" control next to the existing "🔍 Find candidate
+      sites" button that stores `{label, lat, lng, radiusM, use, savedAt}`
+      into a new localStorage list (reuse `addRecentSite`'s cap/shape if it
+      fits, or a sibling helper with the same signature), and a "Saved
+      searches" panel listing them with a one-click "run it again" (decode
+      straight into the existing search form + `runReverseSearch`-style
+      call) and a delete button. Keep it pure/testable: a
+      `addSavedSearch`/`removeSavedSearch` pair in `web/logic.js` mirroring
+      the existing recent-sites helpers, with unit tests for the cap,
+      dedupe-by-config, and delete behavior, plus wiring tests in
+      `web/explore.html`. Verify with `python -m pytest -q`, `simy
+      validate`, `node --test tests/js/*.test.mjs`, and headless Chromium
+      confirming a saved search survives a simulated page reload
+      (localStorage persists) and "run it again" produces the same
+      candidate list as the original search.
+- [ ] **14th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 13
+      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
+      Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton) — still
+      nothing in the Mountain West or mid-Atlantic outside Allegheny. Salt
+      Lake County, UT and Fairfax County, VA have both been suggested in
+      prior rounds but not yet picked; either extends coverage into a new
+      region. Same recipe every prior county addition followed: this
+      sandbox 403s on direct ArcGIS REST introspection, so confirm the
+      MapServer URL and field names via web search against multiple
+      independent sources rather than a direct fetch; add any genuinely new
+      id/owner/address/land-use/value field names to the shared `pick()`
+      candidate lists rather than assuming they match an existing county's
+      schema; leave a field unmapped (don't guess) if its unit doesn't match
+      what `pick()` expects; write a real `zoning_note`/`county_state` for
+      the state (check whether it actually has zoning and unincorporated
+      county land, the way Allegheny's entry had to); and prefer a real
+      per-parcel record deep link only if one is documented, otherwise link
+      to the assessor's search page. Verify with `python -m pytest -q`,
+      `simy validate`, `node --test tests/js/*.test.mjs`, and headless
+      Chromium confirming both pages still load with zero console errors.
+- [ ] **10th land use: child care center / daycare.** Every land use added
+      since `senior_living` has followed the same cheap-to-add shape: a
+      `requires.demand.min_households_drive_time`/`drive_time_min` rooftop
+      read at a use-appropriate radius, a `requires.parcel.
+      min_buildable_acres`, and a `requires.competition.
+      min_distance_km_from_nearest` gate reusing the existing "farther is
+      better" competition read `preferFar`/`rankCandidates` already handle.
+      A child care center / daycare fits the same mold: tight demand radius
+      (people drop kids off close to home or on a commute route — closer to
+      `food_truck_court`'s 1.5 km than `warehouse_club`'s), a small parcel
+      (well under an acre), and a competition gate against existing
+      daycares. OSM tags this fairly unambiguously as `amenity=childcare` or
+      `amenity=kindergarten` for the competitor/site query — check both
+      independently before committing to one, the way `urgent_care`'s
+      OR-fallback documented a messier tag landscape. Add the entry to
+      `data_sources/layers.yaml`, wire a `maybeRenderVerdict`-style function
+      in `web/explore.html` following the existing per-use pattern exactly
+      (wait-for-all-legs, PASS/SHORT copy, reverse-search signal wiring via
+      `reverseSearchSignals`), and confirm `simy validate` reports 10 land
+      uses. Verify with `python -m pytest -q`, `simy validate`, `node --test
+      tests/js/*.test.mjs`, and headless Chromium confirming both pages
+      still load with zero console errors and a simulated single-point
+      verdict renders PASS/SHORT correctly.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
