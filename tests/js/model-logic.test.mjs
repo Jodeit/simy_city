@@ -944,6 +944,49 @@ test("sortPins: handles a missing/null pins list gracefully", () => {
   assert.deepEqual(sortPins(undefined, "acres", "asc"), []);
 });
 
+// ---- sortPins reused for the "Sortable reverse-search candidate results"
+// backlog item — sortPins is already a generic numeric-field sorter, so no
+// new sortCandidates helper was needed, just new call sites keyed on the
+// fields rankCandidates() returns (score/nearestCompetitorKm/demandCount).
+// These mirror the Compare-table coverage above but against real
+// rankCandidates() output, confirming the same generic sorter behaves
+// correctly on that shape too (ascending/descending, missing-field-last for
+// a point with no competitors in range, non-mutation).
+
+test("sortPins: sorts real rankCandidates() output by score, ascending and descending", () => {
+  const points = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 }, { lat: 0, lng: 0.02 }];
+  const competitors = [{ lat: 0, lng: 0.02 }]; // closest to the 3rd point, farthest from the 1st
+  const ranked = rankCandidates(points, competitors, [], { preferFar: true, limit: 3 });
+  const asc = sortPins(ranked, "score", "asc");
+  const desc = sortPins(ranked, "score", "desc");
+  assert.deepEqual(asc.map(r => r.score), [...ranked.map(r => r.score)].sort((a, b) => a - b));
+  assert.deepEqual(desc, [...asc].reverse());
+});
+
+test("sortPins: sorts rankCandidates() output by nearestCompetitorKm, with no-competitor-in-range points sorting last", () => {
+  const points = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 }, { lat: 0, lng: 0.02 }];
+  const ranked = rankCandidates(points, [], [], { preferFar: true, limit: 3 }); // no competitors -> nearestCompetitorKm is null for every point
+  const sorted = sortPins(ranked, "nearestCompetitorKm", "asc");
+  assert.equal(sorted.length, 3);
+  assert.ok(sorted.every(r => r.nearestCompetitorKm === null));
+});
+
+test("sortPins: sorts rankCandidates() output by demandCount", () => {
+  const points = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.05 }];
+  const demand = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.0001 }, { lat: 0, lng: 0.0002 }]; // all near the 1st point only
+  const ranked = rankCandidates(points, [], demand, { demandRadiusM: 500, preferNear: true, limit: 2 });
+  const asc = sortPins(ranked, "demandCount", "asc");
+  assert.deepEqual(asc.map(r => r.demandCount), [0, 3]);
+});
+
+test("sortPins: never mutates rankCandidates() output when re-sorting it", () => {
+  const points = [{ lat: 0, lng: 0 }, { lat: 0, lng: 0.01 }];
+  const ranked = rankCandidates(points, [{ lat: 0, lng: 0.05 }], [], { preferFar: true, limit: 2 });
+  const before = ranked.map(r => r.score);
+  sortPins(ranked, "score", "asc");
+  assert.deepEqual(ranked.map(r => r.score), before);
+});
+
 // ---- reverse search step 1: sampleGrid / rankCandidates ----
 
 test("sampleGrid: every point falls within radiusM of center", () => {

@@ -1754,25 +1754,48 @@ Ground rules for each run:
       console/page errors. Outbound network to ArcGIS/qPublic is blocked
       from this sandbox, so a live end-to-end parcel fetch inside the new
       Fulton County bbox is a good human spot-check.
-- [ ] **Sortable reverse-search candidate results.** The "⚖️ Compare" modal's
-      table got clickable sort-by-column headers (acreage, appraised value)
-      in an earlier run via the pure `sortPins(pins, key, dir)` helper in
-      `web/logic.js`, but the "🔍 Find candidate sites" results panel
-      (`renderCandidates()` in `web/explore.html`) still only ever renders
-      in rank order — no way to re-sort by, say, nearest-competitor distance
-      or rooftop count once results are in. Add a small `sortCandidates`-
-      style pure helper (or generalize `sortPins`) keyed on the fields
-      `rankCandidates()` already returns (`score`, `nearestCompetitorKm`,
-      `demandCount`), wire clickable sort labels into the results panel/list
-      rows mirroring the Compare table's `cmpSortBtn` pattern (▲/▼ indicator,
-      `aria-pressed`, second click flips direction), and make sure marker
-      numbering/popup click-through still maps to the correct underlying
-      candidate after a re-sort (same care the Compare ✕-button fix took
-      for `pins.indexOf(p)` on a sorted view). Add unit tests mirroring
-      `sortPins`'s coverage (ascending/descending, missing-field-sorts-last,
-      non-mutation). Verify with `python -m pytest -q`, `simy validate`,
-      `node --test tests/js/*.test.mjs`, and headless Chromium driving a
-      real search + sort-click end to end.
+- [x] **Sortable reverse-search candidate results.** The "🔍 Find candidate
+      sites" results panel (`renderCandidates()` in `web/explore.html`)
+      previously only ever rendered in rank order. `sortPins(pins, key, dir)`
+      (`web/logic.js`) turned out to already be a fully generic numeric-field
+      sorter (missing-field-sorts-last, non-mutating) — nothing about it was
+      Compare-pin-specific — so no new sort helper was needed, just new call
+      sites keyed on the fields `rankCandidates()` already returns per
+      candidate (`score`, `nearestCompetitorKm`, `demandCount`). Split
+      `renderCandidates()` into an outer function (stores the fresh
+      rank-order results, resets sort state to "rank order" for a new search)
+      and an inner `renderCandidateList()` that does the actual draw —
+      re-sorting just re-invokes the inner function against the stored
+      results. Added clickable "Sort by:" labels mirroring the Compare
+      table's `cmpSortBtn` pattern exactly (same CSS class, ▲/▼ indicator,
+      `aria-pressed`, second click on the same key flips direction, a
+      different key resets to ascending) — only offering the labels a given
+      use's signals actually surface in its "why" text (a use with no
+      competition signal doesn't get a meaningless "sort by nearest
+      competitor" option). Marker numbering, popups, and list-row
+      click-through are rebuilt from the currently-sorted array each render
+      (not re-derived from the original index), so `#1`..`#8` and
+      click-to-analyze always match what's on screen post-sort. CSV/PDF/
+      GeoJSON exports intentionally keep reading `lastCandidates` in its
+      original rank order regardless of on-screen sort — same "export stays
+      canonical" precedent the Compare list's own CSV export already set.
+      Added 4 new unit tests exercising `sortPins` against real
+      `rankCandidates()` output (ascending/descending by score, a
+      no-competitor-in-range point's `null` sorting last regardless of
+      direction, sorting by `demandCount`, non-mutation) — covering the same
+      cases the Compare-table `sortPins` tests do, on the new call shape.
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 9
+      land uses), `node --test tests/js/*.test.mjs` (218 passed, 4 new), and
+      headless Chromium: both pages load with zero console/page errors;
+      driving `renderCandidates()` directly with a synthetic 3-candidate set
+      (including a no-competitor-in-range point) confirmed the sort labels
+      render, ascending/descending clicks reorder rows with the missing-value
+      point always last, marker/list numbering stays in sync with the sorted
+      order, and `lastCandidates` (the export source) stays untouched in
+      original rank order; and a full simulated search flow (mocked Overpass,
+      food_truck_court, real map center) produced 8 ranked candidates,
+      clicking "Score" re-sorted all 8 rows/markers correctly, and clicking a
+      result row post-sort ran a real `analyze()` with zero errors.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
