@@ -494,14 +494,20 @@ function undoClear(saved,clearedAt,now,windowMs){
   return saved;
 }
 
-/* ---- sorting the Compare-parcels list ----
+/* ---- generic numeric-key list sorter (Compare-parcels table + reverse-
+   search candidate results) ----
    Compare's table is transposed (fields as rows, pins as columns), so
    "sortable columns" means reordering the underlying `pins` array — the
-   render just re-draws with the new order. Numeric-aware: a pin missing the
-   sort field (null/undefined, e.g. a county whose GIS layer doesn't expose
-   appraised value) always sorts to the end, regardless of direction, rather
-   than landing at the front on a "desc" sort (treating "unknown" as bigger
-   than every real value would be misleading). */
+   render just re-draws with the new order. Numeric-aware: an item missing
+   the sort field (null/undefined — e.g. a pin whose county GIS layer
+   doesn't expose appraised value, or a rankCandidates() result whose
+   nearestCompetitorKm is null because no competitor was in range) always
+   sorts to the end, regardless of direction, rather than landing at the
+   front on a "desc" sort (treating "unknown" as bigger than every real
+   value would be misleading). Not pin-specific despite the name — the
+   reverse-search results panel (`web/explore.html`) reuses this same
+   function to sort candidates by score/nearestCompetitorKm/demandCount
+   rather than duplicating the same missing-sorts-last logic. */
 function sortPins(pins,key,dir){
   const list=(pins||[]).slice();
   const sign=dir==="desc"?-1:1;

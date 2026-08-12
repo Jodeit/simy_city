@@ -164,6 +164,7 @@
   .searchRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .searchRow select{font:inherit;font-size:.82rem;padding:.35em .5em;border-radius:8px;
     border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+  .candSortRow{font-size:12px;color:var(--slate);margin-top:9px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .candList{display:flex;flex-direction:column;gap:6px;margin-top:9px}
   .candCsvRow{margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .candRow{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid var(--line);
@@ -1684,6 +1685,7 @@ function closeSearchPanel(){
   const status=document.getElementById("searchStatus"); if(status)status.style.display="none";
   if(candLayer){candLayer.remove();candLayer=null;}
   lastCandidates=null; lastCandSig=null; lastCandCfg=null;
+  candSort={key:null,dir:"asc"};
 }
 // Offers 0.5x/1x/2x the use's own trade-area radius (USE_DEMAND[current].radius)
 // as search-radius choices — scaled to whatever's sensible for the current use
@@ -1704,6 +1706,7 @@ function runCandidateSearch(){
   const radiusM=parseInt(document.getElementById("searchRadius").value,10)||cfg.radius;
   const seq=++searchReqSeq;
   if(candLayer){candLayer.remove();candLayer=null;}
+  candSort={key:null,dir:"asc"};
   const resEl=document.getElementById("searchResults"); resEl.innerHTML="";
   const statusEl=document.getElementById("searchStatus");
   statusEl.style.display="block"; statusEl.className="live loading"; statusEl.textContent="scanning the area…";
@@ -1736,8 +1739,24 @@ function runCandidateSearch(){
 }
 // results/sig/cfg from the most recently rendered search — the CSV export
 // button (rendered below, only once there's a non-empty result list) reads
-// these instead of re-deriving them from DOM state.
+// these instead of re-deriving them from DOM state. `lastCandidates` always
+// stays in rank order (score, best first); `candSort` is display-only, same
+// split renderCompare()/downloadCompareCsv() already draw between `pins`
+// (unsorted, what exports read) and `cmpSort` (what the table shows).
 let lastCandidates=null, lastCandSig=null, lastCandCfg=null;
+let candSort={key:null,dir:"asc"};
+// Which of rankCandidates()'s three numeric fields make sense to offer as a
+// sort for a given search: score always does (it's the underlying rank),
+// nearestCompetitorKm only when this use's search actually reads it
+// (preferFar/preferNearComp), demandCount only when this use's search reads
+// that (preferNear/preferFarDemand) — offering a sort on a field the search
+// never scored on would just be confusing (every candidate would trivially
+// tie or the field wouldn't exist).
+const CAND_SORT_KEYS=[
+  {key:"score",label:"Score",show:()=>true},
+  {key:"nearestCompetitorKm",label:"Nearest competitor",show:sig=>sig.preferFar||sig.preferNearComp},
+  {key:"demandCount",label:"Rooftops",show:sig=>sig.preferNear||sig.preferFarDemand},
+];
 function renderCandidates(results,sig,cfg){
   const resEl=document.getElementById("searchResults");
   lastCandidates=results; lastCandSig=sig; lastCandCfg=cfg;
@@ -1745,14 +1764,25 @@ function renderCandidates(results,sig,cfg){
     resEl.innerHTML=`<p class="src">No candidates matched — try a larger radius.</p>`;
     return;
   }
+  // sortPins (web/logic.js) is a generic numeric-key sorter, not pin-specific
+  // despite the name — reused here instead of duplicating its missing-
+  // field-sorts-last handling (a candidate with no competitor in range has
+  // nearestCompetitorKm===null and must always sort last, not first).
+  const sorted=candSort.key?sortPins(results,candSort.key,candSort.dir):results;
   const icon=n=>L.divIcon({className:"",html:`<div class="candMarker">${n}</div>`,iconSize:[22,22],iconAnchor:[11,11]});
-  candLayer=L.layerGroup(results.map((r,i)=>{
+  candLayer=L.layerGroup(sorted.map((r,i)=>{
     const ll=L.latLng(r.lat,r.lng);
     return L.marker(ll,{icon:icon(i+1)})
       .bindPopup(`<b>#${i+1}</b> — ${esc(candidateWhyText(r,sig,cfg))}`)
       .on("click",()=>analyze(ll));
   })).addTo(map);
-  resEl.innerHTML=`<div class="candList">`+results.map((r,i)=>
+  const sortKeys=CAND_SORT_KEYS.filter(k=>k.show(sig));
+  const sortRow=sortKeys.length<2?"":`<div class="candSortRow">Sort: `+sortKeys.map(k=>{
+    const active=candSort.key===k.key;
+    const arrow=active?(candSort.dir==="desc"?" ▼":" ▲"):"";
+    return `<button type="button" class="cmpSortBtn" data-key="${k.key}" aria-pressed="${active}">${k.label}${arrow}</button>`;
+  }).join(" · ")+`</div>`;
+  resEl.innerHTML=sortRow+`<div class="candList">`+sorted.map((r,i)=>
     `<div class="candRow" data-i="${i}" role="button" tabindex="0">
        <span class="candNum">${i+1}</span><span>${esc(candidateWhyText(r,sig,cfg))}</span>
      </div>`).join("")+
@@ -1760,8 +1790,13 @@ function renderCandidates(results,sig,cfg){
     `<button class="toolbtn" id="searchPdf" type="button">📄 Download PDF</button>`+
     `<button class="toolbtn" id="searchGeojson" type="button">🗺️ Download GeoJSON</button> <span class="ok" id="searchCsvMsg"></span></div>`;
   resEl.querySelectorAll(".candRow").forEach(row=>{
-    const r=results[parseInt(row.dataset.i,10)];
+    const r=sorted[parseInt(row.dataset.i,10)];
     wireActivate(row,()=>analyze(L.latLng(r.lat,r.lng)));
+  });
+  resEl.querySelectorAll(".cmpSortBtn").forEach(b=>b.onclick=()=>{
+    const key=b.dataset.key;
+    candSort=(candSort.key===key)?{key,dir:candSort.dir==="asc"?"desc":"asc"}:{key,dir:"asc"};
+    renderCandidates(lastCandidates,lastCandSig,lastCandCfg);
   });
   document.getElementById("searchCsv").onclick=()=>{
     downloadCandidatesCsv();
