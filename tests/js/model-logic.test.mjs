@@ -944,6 +944,38 @@ test("sortPins: handles a missing/null pins list gracefully", () => {
   assert.deepEqual(sortPins(undefined, "acres", "asc"), []);
 });
 
+// ---- sortPins reused for reverse-search candidate results (backlog:
+// "sortable reverse-search candidate results") — same generic function,
+// exercised against rankCandidates()'s actual result shape
+// ({lat,lng,nearestCompetitorKm,demandCount,score}) instead of a pin shape. ----
+
+test("sortPins: sorts candidate-shaped results by score ascending/descending", () => {
+  const cands = [{ score: 5 }, { score: 1 }, { score: 3 }];
+  assert.deepEqual(sortPins(cands, "score", "asc").map(c => c.score), [1, 3, 5]);
+  assert.deepEqual(sortPins(cands, "score", "desc").map(c => c.score), [5, 3, 1]);
+});
+
+test("sortPins: sorts candidates by demandCount", () => {
+  const cands = [{ demandCount: 2 }, { demandCount: 9 }, { demandCount: 0 }];
+  assert.deepEqual(sortPins(cands, "demandCount", "desc").map(c => c.demandCount), [9, 2, 0]);
+});
+
+test("sortPins: a candidate with no competitor in range (nearestCompetitorKm===null) always sorts last", () => {
+  const cands = [
+    { label: "far", nearestCompetitorKm: 3.2 },
+    { label: "none", nearestCompetitorKm: null },
+    { label: "near", nearestCompetitorKm: 0.5 },
+  ];
+  assert.deepEqual(sortPins(cands, "nearestCompetitorKm", "asc").map(c => c.label), ["near", "far", "none"]);
+  assert.deepEqual(sortPins(cands, "nearestCompetitorKm", "desc").map(c => c.label), ["far", "near", "none"]);
+});
+
+test("sortPins: sorting candidate results does not mutate the original array", () => {
+  const cands = [{ score: 3 }, { score: 1 }];
+  sortPins(cands, "score", "asc");
+  assert.equal(cands[0].score, 3);
+});
+
 // ---- reverse search step 1: sampleGrid / rankCandidates ----
 
 test("sampleGrid: every point falls within radiusM of center", () => {

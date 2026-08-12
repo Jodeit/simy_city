@@ -1754,25 +1754,46 @@ Ground rules for each run:
       console/page errors. Outbound network to ArcGIS/qPublic is blocked
       from this sandbox, so a live end-to-end parcel fetch inside the new
       Fulton County bbox is a good human spot-check.
-- [ ] **Sortable reverse-search candidate results.** The "⚖️ Compare" modal's
-      table got clickable sort-by-column headers (acreage, appraised value)
-      in an earlier run via the pure `sortPins(pins, key, dir)` helper in
-      `web/logic.js`, but the "🔍 Find candidate sites" results panel
-      (`renderCandidates()` in `web/explore.html`) still only ever renders
-      in rank order — no way to re-sort by, say, nearest-competitor distance
-      or rooftop count once results are in. Add a small `sortCandidates`-
-      style pure helper (or generalize `sortPins`) keyed on the fields
-      `rankCandidates()` already returns (`score`, `nearestCompetitorKm`,
-      `demandCount`), wire clickable sort labels into the results panel/list
-      rows mirroring the Compare table's `cmpSortBtn` pattern (▲/▼ indicator,
-      `aria-pressed`, second click flips direction), and make sure marker
-      numbering/popup click-through still maps to the correct underlying
-      candidate after a re-sort (same care the Compare ✕-button fix took
-      for `pins.indexOf(p)` on a sorted view). Add unit tests mirroring
-      `sortPins`'s coverage (ascending/descending, missing-field-sorts-last,
-      non-mutation). Verify with `python -m pytest -q`, `simy validate`,
-      `node --test tests/js/*.test.mjs`, and headless Chromium driving a
-      real search + sort-click end to end.
+- [x] **Sortable reverse-search candidate results.** The "🔍 Find candidate
+      sites" results panel (`renderCandidates()` in `web/explore.html`)
+      previously only ever rendered in rank order. Rather than adding a new
+      `sortCandidates` helper, reused `sortPins(pins, key, dir)`
+      (`web/logic.js`) as-is — it was already fully generic (any object
+      list + numeric key, missing-field-sorts-last, non-mutating), so
+      candidates just needed to be handed to it; updated its doc comment to
+      reflect the reuse instead of duplicating the same null-handling logic
+      a new function would need anyway (a candidate with no competitor in
+      range has `nearestCompetitorKm===null` and must sort last, exactly the
+      case `sortPins` already handled for pins missing appraised value).
+      Added a `candSort` state var and a small sort-label row (`cmpSortBtn`
+      styling reused from Compare) above the results list, offering "Score"
+      (always), "Nearest competitor" (only when this use's search actually
+      scores on `preferFar`/`preferNearComp`), and "Rooftops" (only for
+      `preferNear`/`preferFarDemand`) — a use whose search only has one
+      applicable signal shows no sort row at all rather than a single
+      useless button. Re-sorting rebuilds both the marker layer and the list
+      from the *sorted* array (not the original), so marker numbers, popups,
+      and row click-through all stay correctly paired to the same candidate
+      post-sort — verified directly, not just assumed. `lastCandidates`
+      (what CSV/PDF/GeoJSON export read) stays in original rank order
+      regardless of on-screen sort, mirroring how `downloadCompareCsv`
+      already ignores `cmpSort` and exports `pins` unsorted. `candSort`
+      resets on a new search and on closing the panel. Added 4 new unit
+      tests exercising `sortPins` against candidate-shaped objects (score
+      asc/desc, demandCount, the null-nearestCompetitorKm-sorts-last case,
+      non-mutation). Verified: `python -m pytest -q` (15 passed), `simy
+      validate` (OK), `node --test tests/js/*.test.mjs` (218 passed, 4 new),
+      and headless Chromium driving the actual UI end-to-end (not just the
+      pure function): rendered a 3-candidate mocked result set, clicked
+      "Rooftops" to sort ascending then again to flip to descending,
+      confirmed both the row text order *and* the rebuilt markers' popup
+      content matched the new order every time, clicked a row after
+      sorting and confirmed `analyze()` received that exact candidate's
+      lat/lng (not the pre-sort index), confirmed `lastCandidates` stayed
+      in original rank order throughout (exports unaffected), and confirmed
+      closing the search panel reset the sort state. Both pages loaded with
+      zero console/page errors beyond the expected sandbox-blocked
+      `ERR_TUNNEL_CONNECTION_FAILED` network errors.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
