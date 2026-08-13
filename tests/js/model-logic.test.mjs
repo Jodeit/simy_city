@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, clearRecentSites, undoClear, sortPins, sampleGrid, rankCandidates,
+  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
@@ -900,6 +900,87 @@ test("undoClear: returns null when there is nothing saved (already used, or neve
   assert.equal(undoClear(null, 0, 100, 8000), null);
   assert.equal(undoClear(undefined, 0, 100, 8000), null);
   assert.equal(undoClear([], 0, 100, 8000), null);
+});
+
+// ---- addSavedSearch / removeSavedSearch (saved reverse searches) ----
+
+test("addSavedSearch: prepends a new search to an empty list", () => {
+  const list = addSavedSearch([], { lat: 1, lng: 1, radiusM: 1000, use: "food_truck_court", label: "A" });
+  assert.equal(list.length, 1);
+  assert.equal(list[0].label, "A");
+});
+
+test("addSavedSearch: prepends ahead of existing entries (most-recent-first)", () => {
+  const list = addSavedSearch(
+    [{ lat: 1, lng: 1, radiusM: 1000, use: "food_truck_court", label: "Old" }],
+    { lat: 2, lng: 2, radiusM: 2000, use: "warehouse_club", label: "New" }
+  );
+  assert.equal(list[0].label, "New");
+  assert.equal(list[1].label, "Old");
+});
+
+test("addSavedSearch: re-saving the same config (same rounded center + radius + use) moves it to the front instead of duplicating", () => {
+  const existing = [
+    { lat: 2, lng: 2, radiusM: 1000, use: "food_truck_court", label: "First", savedAt: 100 },
+    { lat: 1, lng: 1, radiusM: 500, use: "warehouse_club", label: "Other", savedAt: 50 },
+  ];
+  const list = addSavedSearch(existing, { lat: 2.0000001, lng: 2.0000001, radiusM: 1000, use: "food_truck_court", label: "First (re-saved)", savedAt: 200 });
+  assert.equal(list.length, 2);
+  assert.equal(list[0].label, "First (re-saved)");
+  assert.equal(list[0].savedAt, 200);
+  assert.equal(list[1].label, "Other");
+});
+
+test("addSavedSearch: same center but a different radius or use is a distinct entry, not a dedupe match", () => {
+  const existing = [{ lat: 1, lng: 1, radiusM: 1000, use: "food_truck_court", label: "A" }];
+  const diffRadius = addSavedSearch(existing, { lat: 1, lng: 1, radiusM: 2000, use: "food_truck_court", label: "B" });
+  assert.equal(diffRadius.length, 2);
+  const diffUse = addSavedSearch(existing, { lat: 1, lng: 1, radiusM: 1000, use: "warehouse_club", label: "C" });
+  assert.equal(diffUse.length, 2);
+});
+
+test("addSavedSearch: caps the list at the given size, dropping the oldest", () => {
+  // MRU order: index 0 is most recent, so the last entry (S7) is the oldest.
+  const existing = Array.from({ length: 8 }, (_, i) => ({ lat: i, lng: i, radiusM: 1000, use: "food_truck_court", label: `S${i}` }));
+  const list = addSavedSearch(existing, { lat: 99, lng: 99, radiusM: 1000, use: "food_truck_court", label: "Newest" }, 8);
+  assert.equal(list.length, 8);
+  assert.equal(list[0].label, "Newest");
+  assert.ok(!list.some(s => s.label === "S7")); // oldest fell off
+});
+
+test("addSavedSearch: defaults the cap to 8 when not given", () => {
+  const existing = Array.from({ length: 8 }, (_, i) => ({ lat: i, lng: i, radiusM: 1000, use: "food_truck_court", label: `S${i}` }));
+  const list = addSavedSearch(existing, { lat: 99, lng: 99, radiusM: 1000, use: "food_truck_court", label: "Newest" });
+  assert.equal(list.length, 8);
+});
+
+test("addSavedSearch: never mutates the existing list in place", () => {
+  const existing = [{ lat: 1, lng: 1, radiusM: 1000, use: "food_truck_court", label: "A" }];
+  addSavedSearch(existing, { lat: 2, lng: 2, radiusM: 1000, use: "warehouse_club", label: "B" });
+  assert.equal(existing.length, 1);
+});
+
+test("removeSavedSearch: removes the entry at the given index", () => {
+  const existing = [{ label: "A" }, { label: "B" }, { label: "C" }];
+  const list = removeSavedSearch(existing, 1);
+  assert.deepEqual(list.map(s => s.label), ["A", "C"]);
+});
+
+test("removeSavedSearch: no-ops on an out-of-range or negative index", () => {
+  const existing = [{ label: "A" }];
+  assert.deepEqual(removeSavedSearch(existing, 5), existing);
+  assert.deepEqual(removeSavedSearch(existing, -1), existing);
+});
+
+test("removeSavedSearch: handles a missing/null list gracefully", () => {
+  assert.deepEqual(removeSavedSearch(null, 0), []);
+  assert.deepEqual(removeSavedSearch(undefined, 0), []);
+});
+
+test("removeSavedSearch: never mutates the existing list in place", () => {
+  const existing = [{ label: "A" }, { label: "B" }];
+  removeSavedSearch(existing, 0);
+  assert.equal(existing.length, 2);
 });
 
 // ---- sortPins (Compare-parcels table sort) ----

@@ -146,6 +146,9 @@
   .recentX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:.85rem;padding:0 0 0 6px;vertical-align:middle}
   .recentX:hover{color:var(--danger-fg)}
   .recentClear{display:inline-block;margin-top:7px;font-size:.78rem;color:var(--slate)}
+  .savedList a{color:var(--garden-deep)}
+  .savedX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:.85rem;padding:0 0 0 6px;vertical-align:middle}
+  .savedX:hover{color:var(--danger-fg)}
   /* mode switch */
   .modes{display:flex;gap:0;background:#1f2c2a;border:1px solid #38514c;border-radius:10px;overflow:hidden}
   .mbtn{font:inherit;font-size:.85rem;font-weight:700;border:none;background:transparent;color:#cfe6d3;padding:.45em .9em;cursor:pointer}
@@ -279,12 +282,18 @@
         <div class="searchRow">
           <select id="searchRadius" aria-label="Search radius"></select>
           <button class="toolbtn" id="searchGo" type="button">Search here</button>
+          <button class="toolbtn" id="searchSave" type="button" title="Save this search (center + radius + use) for later">⭐ Save this search</button>
           <button class="toolbtn" id="searchShare" type="button" title="Copy a link to this search (center + radius + use)">🔗 Share</button>
         </div>
         <span class="ok" id="searchShareMsg"></span>
+        <span class="ok" id="searchSaveMsg"></span>
         <div class="live" id="searchStatus" style="display:none"></div>
         <div id="searchResults"></div>
       </div>
+      <details class="recentStrip" id="savedSearchStrip" style="display:none">
+        <summary>Saved searches <span id="savedCount"></span></summary>
+        <div class="recentList savedList" id="savedList"></div>
+      </details>
     </div>
     <details class="recentStrip" id="recentStrip" style="display:none">
       <summary>Recently viewed <span id="recentCount"></span></summary>
@@ -1643,6 +1652,7 @@ function maybeRenderSSVerdict(seq){
 function initSearch(){
   document.getElementById("searchToggle").onclick=toggleSearchPanel;
   document.getElementById("searchGo").onclick=runCandidateSearch;
+  document.getElementById("searchSave").onclick=saveCurrentSearch;
   document.getElementById("searchShare").onclick=shareSearchLink;
 }
 // Carries the search's center (current map center), radius, and use into a
@@ -1653,6 +1663,78 @@ function shareSearchLink(){
   const radiusM=parseInt(document.getElementById("searchRadius").value,10)||USE_DEMAND[current].radius;
   const link=location.href.split("#")[0]+"#"+encodeSearchHash(center.lat,center.lng,radiusM,current);
   copy(link,"search link copied","searchShareMsg");
+}
+// Re-selects a use, re-centers the map, opens the search panel with the
+// given radius pre-picked, and re-runs the search — the one place both an
+// incoming `#search=..` share link (applyHash, below) and a saved search's
+// "run it again" (renderSavedSearches' .savedGo click handler) do their
+// work, so the two flows can't drift apart.
+function runSearchConfig(lat,lng,radiusM,use){
+  applyModeUI("build");
+  selectUse(use);
+  map.setView([lat,lng],13);
+  const panel=document.getElementById("searchPanel"), btn=document.getElementById("searchToggle");
+  if(!panel||!btn||btn.disabled)return false;
+  panel.style.display="block";
+  btn.setAttribute("aria-expanded","true");
+  fillSearchRadiusOptions();
+  const sel=document.getElementById("searchRadius");
+  if(sel)sel.value=String(radiusM);
+  runCandidateSearch();
+  return true;
+}
+
+/* ---- saved reverse searches (localStorage, local only) ----
+   A saved search config outlives the tab — run a search, save it, come back
+   tomorrow and run the same area/use again in one click. Distinct from the
+   "🔗 Share" link (which hands the *config* to someone else) and from
+   recently-viewed sites (which track single points, not search areas).
+   addSavedSearch/removeSavedSearch (web/logic.js) do the pure dedupe/cap
+   logic; this just persists + renders it, same split as recently-viewed. */
+const SAVED_SEARCH_KEY="simy_saved_searches_v1";
+let savedSearches=[];
+function loadSavedSearches(){
+  try{savedSearches=JSON.parse(localStorage.getItem(SAVED_SEARCH_KEY)||"[]");}catch(e){savedSearches=[];}
+  renderSavedSearches();
+}
+function persistSavedSearches(){ localStorage.setItem(SAVED_SEARCH_KEY,JSON.stringify(savedSearches)); renderSavedSearches(); }
+// Saves the panel's *current* config (map center + chosen radius + selected
+// use) — works whether or not a search has actually been run yet, same as
+// "🔗 Share" already does. Re-saving the same center/radius/use just bumps
+// it to the top with a fresh timestamp (addSavedSearch's dedupe).
+function saveCurrentSearch(){
+  const center=map.getCenter();
+  const radiusM=parseInt(document.getElementById("searchRadius").value,10)||USE_DEMAND[current].radius;
+  const label=`${useLabel(current)} · ${(radiusM/1000).toFixed(radiusM<2000?1:0)} km`;
+  savedSearches=addSavedSearch(savedSearches,{label,lat:center.lat,lng:center.lng,radiusM,use:current,savedAt:Date.now()},8);
+  persistSavedSearches();
+  const m=document.getElementById("searchSaveMsg");
+  if(m){m.textContent="✓ saved";setTimeout(()=>{m.textContent="";},2500);}
+}
+function removeSavedSearchEntry(i){
+  savedSearches=removeSavedSearch(savedSearches,i);
+  persistSavedSearches();
+}
+function renderSavedSearches(){
+  const strip=document.getElementById("savedSearchStrip"); if(!strip)return;
+  if(!savedSearches.length){strip.style.display="none";return;}
+  strip.style.display="block";
+  const count=document.getElementById("savedCount"); if(count)count.textContent=`(${savedSearches.length})`;
+  const list=document.getElementById("savedList");
+  list.innerHTML=savedSearches.map((s,i)=>{
+    const label=s.label||`${s.use} · ${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}`;
+    return `<a href="#" class="savedGo" data-i="${i}">${esc(label)}</a>`+
+      ` <button class="savedX" title="delete" aria-label="Delete saved search ${esc(label)}" data-i="${i}">✕</button>`;
+  }).join("<br>");
+  list.querySelectorAll(".savedGo").forEach(a=>a.onclick=e=>{
+    e.preventDefault();
+    const s=savedSearches[+a.dataset.i]; if(!s)return;
+    runSearchConfig(s.lat,s.lng,s.radiusM,s.use);
+  });
+  list.querySelectorAll(".savedX").forEach(b=>b.onclick=e=>{
+    e.preventDefault(); e.stopPropagation();
+    removeSavedSearchEntry(+b.dataset.i);
+  });
 }
 // Disables the toggle entirely for a use with no reverse-search signal at
 // all (none as of this writing — data_center and residential_subdivision
@@ -2511,18 +2593,7 @@ function applyHash(){
   if(cmp&&cmp.length){pins=mergeComparePins(pins,cmp);savePins();}
   const srch=decodeSearchHash(location.hash);
   if(srch&&srch.lat!=null&&srch.lng!=null&&srch.radius!=null&&srch.use&&MODEL.land_uses[srch.use]){
-    applyModeUI("build");
-    selectUse(srch.use);
-    map.setView([srch.lat,srch.lng],13);
-    const panel=document.getElementById("searchPanel"), btn=document.getElementById("searchToggle");
-    if(panel&&btn&&!btn.disabled){
-      panel.style.display="block";
-      btn.setAttribute("aria-expanded","true");
-      fillSearchRadiusOptions();
-      const sel=document.getElementById("searchRadius");
-      if(sel)sel.value=String(srch.radius);
-      runCandidateSearch();
-    }
+    runSearchConfig(srch.lat,srch.lng,srch.radius,srch.use);
     return true;
   }
   const q=decodeHash(location.hash); if(!q)return !!(cmp&&cmp.length);
@@ -2618,7 +2689,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); wireCTA(); wireAddrSearch(); wireTheme(); wireHelp(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireTheme(); wireHelp(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses

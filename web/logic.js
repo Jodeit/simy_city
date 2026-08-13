@@ -494,6 +494,28 @@ function undoClear(saved,clearedAt,now,windowMs){
   return saved;
 }
 
+/* ---- saved reverse searches (localStorage, local only) ----
+   Mirrors addRecentSite/removeRecentSite's cap/shape, but a saved search's
+   identity is its *config* (center + radius + use), not a single point —
+   running the same search area/use again from the panel should refresh its
+   `savedAt` and move it to the front, not pile up near-duplicate entries.
+   Center is compared at the same ~0.1m rounding tolerance addRecentSite
+   already uses for "same point"; radius and use must match exactly (a
+   different radius or use is a genuinely different search). Entries are
+   `{label, lat, lng, radiusM, use, savedAt}`. */
+function addSavedSearch(list,entry,cap){
+  cap=cap||8;
+  const out=(list||[]).filter(s=>!(Math.abs(s.lat-entry.lat)<1e-6&&Math.abs(s.lng-entry.lng)<1e-6&&s.radiusM===entry.radiusM&&s.use===entry.use));
+  out.unshift(entry);
+  return out.slice(0,cap);
+}
+// Removes a single saved search by index (mirrors removeRecentSite). An
+// out-of-range index no-ops rather than throwing or mutating the list.
+function removeSavedSearch(list,i){
+  if(!list||i<0||i>=list.length) return list||[];
+  return list.slice(0,i).concat(list.slice(i+1));
+}
+
 /* ---- sorting the Compare-parcels list ----
    Compare's table is transposed (fields as rows, pins as columns), so
    "sortable columns" means reordering the underlying `pins` array — the
@@ -860,5 +882,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius};
 }

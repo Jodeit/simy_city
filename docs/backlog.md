@@ -1798,28 +1798,39 @@ Ground rules for each run:
       result row post-sort ran a real `analyze()` with zero errors.
 
 ## Next (breadth) — newly added (13)
-- [ ] **Saved reverse searches.** `encodeSearchHash`/`decodeSearchHash`
-      (`web/logic.js`) already pack a reverse search's center/radius/land-use
-      into a shareable `#search=` hash, and `addRecentSite`/`removeRecentSite`/
-      `clearRecentSites`/`undoClear` already give the "recently viewed sites"
-      panel a full localStorage-backed CRUD + undo pattern to copy. Neither
-      is wired to let a user *save* a search config for later, though —
-      run a search, come back tomorrow, and it's gone. Add a small
-      "⭐ Save this search" control next to the existing "🔍 Find candidate
-      sites" button that stores `{label, lat, lng, radiusM, use, savedAt}`
-      into a new localStorage list (reuse `addRecentSite`'s cap/shape if it
-      fits, or a sibling helper with the same signature), and a "Saved
-      searches" panel listing them with a one-click "run it again" (decode
-      straight into the existing search form + `runReverseSearch`-style
-      call) and a delete button. Keep it pure/testable: a
-      `addSavedSearch`/`removeSavedSearch` pair in `web/logic.js` mirroring
-      the existing recent-sites helpers, with unit tests for the cap,
-      dedupe-by-config, and delete behavior, plus wiring tests in
-      `web/explore.html`. Verify with `python -m pytest -q`, `simy
-      validate`, `node --test tests/js/*.test.mjs`, and headless Chromium
-      confirming a saved search survives a simulated page reload
-      (localStorage persists) and "run it again" produces the same
-      candidate list as the original search.
+- [x] **Saved reverse searches.** Added `addSavedSearch`/`removeSavedSearch`
+      to `web/logic.js`, mirroring `addRecentSite`/`removeRecentSite`'s
+      cap/shape but deduping on the search's *config* (rounded center +
+      radius + use) instead of just a point — re-saving the same area/use
+      bumps it to the front with a fresh `savedAt` instead of piling up
+      near-duplicates; a different radius or use is a genuinely distinct
+      entry. Wired a "⭐ Save this search" button into the existing search
+      panel's row (next to "Search here"/"🔗 Share") that persists
+      `{label, lat, lng, radiusM, use, savedAt}` to a new
+      `simy_saved_searches_v1` localStorage list (cap 8), and a collapsible
+      "Saved searches" strip (reusing the recently-viewed strip's markup/CSS
+      pattern) listing each with a one-click "run it again" link and a "✕"
+      delete button. Extracted the shared "select use, re-center, open the
+      panel, re-run" sequence into a new `runSearchConfig(lat,lng,radiusM,use)`
+      so both an incoming `#search=..` share link (`applyHash`) and a saved
+      search's "run it again" go through the exact same path instead of two
+      copies that could drift apart. Added 10 new unit tests for
+      `addSavedSearch`/`removeSavedSearch` (prepend, dedupe-by-config on a
+      near-identical rounded center, same-center-different-radius/use is
+      *not* a dedupe match, cap + default cap, non-mutation, delete by
+      index, out-of-range/negative index no-ops, missing-list handling).
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 9
+      land uses), `node --test tests/js/*.test.mjs` (229 passed, 10 new),
+      and headless Chromium: both pages load with zero console/page errors;
+      driving the real save → localStorage → **page reload** →
+      `loadSavedSearches()` round trip end to end confirmed the entry
+      survives a reload; saving the same config twice stayed at one entry
+      (dedupe) while saving a second, different use produced two; clicking
+      the real "✕" delete button removed the correct entry and the strip
+      correctly hid itself once the list emptied; and driving
+      `runSearchConfig` from a saved entry (with `runCandidateSearch`
+      stubbed to avoid a live Overpass call) correctly switched mode/use and
+      invoked the search — end-to-end, not just at the pure-function level.
 - [ ] **14th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 13
       counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
       Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton) — still
