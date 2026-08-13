@@ -1831,26 +1831,38 @@ Ground rules for each run:
       `runSearchConfig` from a saved entry (with `runCandidateSearch`
       stubbed to avoid a live Overpass call) correctly switched mode/use and
       invoked the search — end-to-end, not just at the pure-function level.
-- [ ] **14th parcel county.** `PARCEL_SOURCES` (`web/explore.html`) covers 13
-      counties now (Travis, Maricopa, Harris, Bexar, LA, King, Cook,
-      Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton) — still
-      nothing in the Mountain West or mid-Atlantic outside Allegheny. Salt
-      Lake County, UT and Fairfax County, VA have both been suggested in
-      prior rounds but not yet picked; either extends coverage into a new
-      region. Same recipe every prior county addition followed: this
-      sandbox 403s on direct ArcGIS REST introspection, so confirm the
-      MapServer URL and field names via web search against multiple
-      independent sources rather than a direct fetch; add any genuinely new
-      id/owner/address/land-use/value field names to the shared `pick()`
-      candidate lists rather than assuming they match an existing county's
-      schema; leave a field unmapped (don't guess) if its unit doesn't match
-      what `pick()` expects; write a real `zoning_note`/`county_state` for
-      the state (check whether it actually has zoning and unincorporated
-      county land, the way Allegheny's entry had to); and prefer a real
-      per-parcel record deep link only if one is documented, otherwise link
-      to the assessor's search page. Verify with `python -m pytest -q`,
-      `simy validate`, `node --test tests/js/*.test.mjs`, and headless
-      Chromium confirming both pages still load with zero console errors.
+- [x] **14th parcel county.** Added Salt Lake County, UT as a 14th
+      `PARCEL_SOURCES` entry (`web/explore.html`) — the first Mountain West
+      county. Uses UGRC's (Utah's state GIS office) per-county extract of
+      the statewide LIR parcel-sharing layer, `Parcels_SaltLake_LIR`, hosted
+      as an Esri ArcGIS Online FeatureServer (same class of host — public,
+      default-CORS-enabled — as Travis's own `TCAD_Selected_Locations`
+      fallback host). Same recipe every prior county addition followed:
+      this sandbox 403s on direct ArcGIS REST introspection (confirmed
+      again this round — `services1.arcgis.com`, `gis.utah.gov`,
+      `opendata.gis.utah.gov`, and `apps.saltlakecounty.gov` all egress-blocked
+      even via WebFetch), so field names (`PARCEL_ID`, `PARCEL_ADD`,
+      `PARCEL_ACRES`, `PROP_CLASS`, `TOTAL_MKT_VALUE`) were confirmed via
+      multiple independent search-indexed sources instead and added to the
+      shared `pick()` candidate lists. Owner name is confirmed *absent* from
+      this public LIR layer (not just unmapped, unlike a unit-mismatch
+      case) — same graceful partial-field-coverage every prior thin-schema
+      county here has. No documented per-`PARCEL_ID` deep link for the
+      Assessor's Parcel Search app, so — same cautious call as
+      Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/Allegheny/Fulton —
+      `record()` links to the search app itself. `zoning_note` confirms Utah
+      counties (unlike TX) do zone unincorporated land. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources/16
+      layers/10 land uses unaffected by a parcel-source-only change),
+      `node --test tests/js/*.test.mjs` (229 passed, no JS logic touched by
+      this change), and headless Chromium confirms both pages load with
+      zero console/page errors; a real simulated map click at a downtown
+      Salt Lake City coordinate correctly matched the new county's bbox and
+      attempted the live fetch (reported "couldn't reach the county parcel
+      service" — the expected sandbox-network-blocked outcome, not the
+      "no parcel layer wired" message a bbox miss would produce) with zero
+      throws. A live end-to-end parcel fetch on the real site is a good
+      human spot-check.
 - [x] **10th land use: child care center / daycare.** Added `child_care_center`
       to `data_sources/layers.yaml` following the same cheap-to-add shape
       every use since `senior_living` has used: `requires.demand.

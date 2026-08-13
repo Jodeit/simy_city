@@ -738,6 +738,29 @@ const PARCEL_SOURCES=[
     // GA/TX/AZ/CA/WA/IL/FL/NC county here where unincorporated land is common.
     zoning_note:"almost no unincorporated land remains in Fulton County (absorbed by city incorporations through 2021, except a small pocket near Fulton County Executive Airport) — check the zoning of whichever city the parcel sits in (Atlanta, Sandy Springs, Alpharetta, etc.)",
   },
+  {
+    name:"UGRC Parcels — Salt Lake County (Salt Lake County, UT)",
+    // UGRC (Utah's state GIS office) publishes a per-county extract of the
+    // statewide LIR parcel-sharing layer for Salt Lake County specifically,
+    // hosted on ArcGIS Online (unlike a county-run host, so CORS is Esri's
+    // default public-FeatureServer behavior — same class of host Travis's
+    // TCAD_Selected_Locations fallback already uses successfully).
+    urls:["https://services1.arcgis.com/99lidPhWCzftIe9K/arcgis/rest/services/Parcels_SaltLake_LIR/FeatureServer/0"],
+    bbox:[-112.31,40.41,-111.64,40.87],
+    // Confirmed fields (via multiple independent search-indexed sources —
+    // this sandbox 403s on direct ArcGIS REST introspection like every
+    // prior county here): PARCEL_ID, PARCEL_ADD, PARCEL_ACRES, PROP_CLASS,
+    // TOTAL_MKT_VALUE. Owner name is deliberately withheld from this public
+    // LIR layer (confirmed absent, not just unmapped) — same
+    // graceful partial-field-coverage every other county here has.
+    // No documented per-PARCEL_ID deep-link URL for the Assessor's Parcel
+    // Search app, so — same cautious call as Harris/Bexar/LA/King/Miami-Dade/
+    // San Diego/Dallas/Allegheny/Fulton — send people to the search app itself.
+    record:()=>"https://apps.saltlakecounty.gov/assessor/new/query/intropage.cfm",
+    source_label:"UGRC / Salt Lake County Assessor",
+    county_state:"Salt Lake County, UT",
+    zoning_note:"unlike TX, UT counties do zone unincorporated land — check Salt Lake County's unincorporated-area zoning ordinance, or the township/city if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -2076,12 +2099,12 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE"]);
-  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE"]);
   let rows="";
   const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
