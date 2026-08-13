@@ -830,6 +830,29 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "OSM tags this reasonably unambiguously as `shop=storage_rental` \u2014 used as the live competitor/site query, same single-tag confidence as `amenity=charging_station` for EV chargers, no OR-fallback needed the way urgent_care's messy tagging required. People rent storage close to home (moving a spare room's worth of stuff a few blocks, not across town), so demand reads nearby rooftops at a tighter radius than warehouse_club but wider than food_truck_court \u2014 a first-draft heuristic, refine freely. min_buildable_acres sits between urgent_care's single-clinic lot and warehouse_club's big-box pad, matching a multi-building storage campus's actual footprint.\n"
+    },
+    "child_care_center": {
+      "label": "Child Care Center / Daycare",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 1800,
+          "drive_time_min": 6
+        },
+        "parcel": {
+          "min_buildable_acres": 0.5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "People drop kids off close to home or right on a commute route, so demand reads nearby rooftops at a radius closer to food_truck_court's (1.2 km) than urgent_care's (3 km) \u2014 a first-draft heuristic, refine freely. min_buildable_acres (0.5) sits below urgent_care's single- clinic lot: a daycare building is small, but it needs a fenced outdoor play area a clinic doesn't. OSM tags this ambiguously across two live tags \u2014 `amenity=childcare` and `amenity=kindergarten` \u2014 both queried independently for the live competitor/site read, same documented messy-tagging caveat urgent_care's OR-fallback already set a precedent for (kindergarten in OSM often means a standalone early-childhood center, not a public-school grade level, but the tag alone can't tell the two apart).\n"
     }
   },
   "actor_uses": {

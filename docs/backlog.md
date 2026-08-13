@@ -1851,29 +1851,45 @@ Ground rules for each run:
       to the assessor's search page. Verify with `python -m pytest -q`,
       `simy validate`, `node --test tests/js/*.test.mjs`, and headless
       Chromium confirming both pages still load with zero console errors.
-- [ ] **10th land use: child care center / daycare.** Every land use added
-      since `senior_living` has followed the same cheap-to-add shape: a
-      `requires.demand.min_households_drive_time`/`drive_time_min` rooftop
-      read at a use-appropriate radius, a `requires.parcel.
-      min_buildable_acres`, and a `requires.competition.
-      min_distance_km_from_nearest` gate reusing the existing "farther is
-      better" competition read `preferFar`/`rankCandidates` already handle.
-      A child care center / daycare fits the same mold: tight demand radius
-      (people drop kids off close to home or on a commute route — closer to
-      `food_truck_court`'s 1.5 km than `warehouse_club`'s), a small parcel
-      (well under an acre), and a competition gate against existing
-      daycares. OSM tags this fairly unambiguously as `amenity=childcare` or
-      `amenity=kindergarten` for the competitor/site query — check both
-      independently before committing to one, the way `urgent_care`'s
-      OR-fallback documented a messier tag landscape. Add the entry to
-      `data_sources/layers.yaml`, wire a `maybeRenderVerdict`-style function
-      in `web/explore.html` following the existing per-use pattern exactly
-      (wait-for-all-legs, PASS/SHORT copy, reverse-search signal wiring via
-      `reverseSearchSignals`), and confirm `simy validate` reports 10 land
-      uses. Verify with `python -m pytest -q`, `simy validate`, `node --test
-      tests/js/*.test.mjs`, and headless Chromium confirming both pages
-      still load with zero console errors and a simulated single-point
-      verdict renders PASS/SHORT correctly.
+- [x] **10th land use: child care center / daycare.** Added `child_care_center`
+      to `data_sources/layers.yaml` following the same cheap-to-add shape
+      every use since `senior_living` has used: `requires.demand.
+      min_households_drive_time: 1800`/`drive_time_min: 6` (a tight 1.2 km
+      trade area — people drop kids off close to home or on a commute route,
+      closer to `food_truck_court`'s radius than `urgent_care`'s),
+      `requires.parcel.min_buildable_acres: 0.5` (a small building + a fenced
+      play yard, under `urgent_care`'s single-clinic lot), and
+      `requires.competition.min_distance_km_from_nearest: 1.0` reusing the
+      existing "farther is better" competition read `preferFar`/
+      `rankCandidates` already handle. OSM tagging is ambiguous, so the live
+      competitor/site query ORs `amenity=childcare` and `amenity=kindergarten`
+      independently, same documented messy-tag caveat `urgent_care`'s
+      OR-fallback set a precedent for. Wired `maybeRenderCCVerdict` in
+      `web/explore.html` following the `self_storage`/`urgent_care` pattern
+      exactly (wait for the rooftop leg, the acreage leg, and the
+      competitor-distance leg from the existing `runDemand`/`showParcel`
+      fan-out, then render one PASS/SHORT verdict) — no changes needed to
+      `reverseSearchSignals` (web/logic.js) or the reverse-search UI/exports,
+      since both already derive their behavior generically from a use's
+      `requires` shape. `simy validate` confirms 10 land uses. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16
+      layers, 10 land uses), `node --test tests/js/*.test.mjs` (229 passed,
+      no new JS logic to test since nothing new was added to `logic.js`), and
+      headless Chromium: both pages load with zero console/page errors;
+      selecting `child_care_center` correctly enables the reverse-search
+      button with 0.6/1.2/2.4 km radius options (derived from its own 1.2 km
+      trade area, not a leftover from another use); driving
+      `maybeRenderCCVerdict` directly through PASS / SHORT-on-demand /
+      SHORT-on-site-size / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected all produced correct verdict text and CSS classes
+      with zero throws; a full simulated map click with `child_care_center`
+      selected rendered the whole result panel without throwing; and a
+      mocked end-to-end reverse search (fake rooftops + one fake competitor)
+      returned 8 ranked candidates and rendered the results list/markers with
+      zero console errors. Outbound network to Overpass/ArcGIS is blocked
+      from this sandbox, so a live end-to-end rooftop/competitor fetch on the
+      real site is a good human spot-check.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

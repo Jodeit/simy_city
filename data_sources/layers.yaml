@@ -364,6 +364,36 @@ land_uses:
       single-clinic lot and warehouse_club's big-box pad, matching a
       multi-building storage campus's actual footprint.
 
+  child_care_center:      # daycare / early-childhood education center
+    label: Child Care Center / Daycare
+    requires:
+      demand:      { min_households_drive_time: 1800, drive_time_min: 6 }
+      parcel:      { min_buildable_acres: 0.5 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living/urgent_care/self_storage established: a
+      # second daycare a few blocks from an existing one is splitting an
+      # already-served pool of families, not opening up a new one.
+      competition: { min_distance_km_from_nearest: 1.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low          # a single building + a small fenced play yard
+      carbon: low
+      traffic: low
+    notes: >
+      People drop kids off close to home or right on a commute route, so
+      demand reads nearby rooftops at a radius closer to food_truck_court's
+      (1.2 km) than urgent_care's (3 km) — a first-draft heuristic, refine
+      freely. min_buildable_acres (0.5) sits below urgent_care's single-
+      clinic lot: a daycare building is small, but it needs a fenced outdoor
+      play area a clinic doesn't. OSM tags this ambiguously across two live
+      tags — `amenity=childcare` and `amenity=kindergarten` — both queried
+      independently for the live competitor/site read, same documented
+      messy-tagging caveat urgent_care's OR-fallback already set a precedent
+      for (kindergarten in OSM often means a standalone early-childhood
+      center, not a public-school grade level, but the tag alone can't tell
+      the two apart).
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
