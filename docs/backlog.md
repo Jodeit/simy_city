@@ -1969,15 +1969,39 @@ Ground rules for each run:
       network to Overpass/ArcGIS is blocked from this sandbox, so a live
       end-to-end generator/traffic/competitor fetch on the real site is a good
       human spot-check.
-- [ ] **15th parcel county.** Pick another populous county with a free,
-      public ArcGIS REST parcel MapServer/FeatureServer (no API key) not
-      already in `PARCEL_SOURCES` — candidates to check first: Franklin
-      County, OH (Columbus, via the County Auditor's GIS), Cuyahoga County,
-      OH (Cleveland, via the Fiscal Officer's GIS), or Denver County, CO.
-      Confirm the service is genuinely free/keyless and returns parcel
-      geometry + owner/acreage fields before wiring it in, following the
-      exact `PARCEL_SOURCES` entry shape (bbox, tile export URL, point-query
-      URL, field names) the last 14 counties used.
+- [x] **15th parcel county.** Added Franklin County, OH (Columbus) to
+      `PARCEL_SOURCES` in `web/explore.html`, via the County Auditor's
+      Esri-hosted "Tax Parcel" layer (`ParcelFeatures/Parcel_Features`,
+      layer 0 — MapServer tried first, its sibling FeatureServer as
+      fallback, same two-hostnames-one-layer shape Wake County already
+      uses). Outbound network to ArcGIS hosts is blocked from this sandbox
+      (like every prior county here), so field names and URLs were confirmed
+      via WebSearch against independent search-indexed sources rather than a
+      direct REST call: `PARCELID` (11-char id), `STATEDAREA` (legal acres),
+      `ACRES` (GIS-measured acres) — owner name and situs address aren't
+      published on this public boundary layer (same graceful
+      partial-field-coverage as King/Cook/Salt Lake's thin schemas). The
+      Auditor's per-parcel Datalet detail page needs an extra `jur`
+      jurisdiction code not derivable from `PARCELID` alone, so — same
+      cautious call as 9 prior counties with no confirmed deep-link shape —
+      `record()` sends people to the Auditor's own parcel-ID search page
+      instead of guessing a link. Zoning note is Ohio-specific and new
+      among the 15: unlike every other state covered so far, Ohio
+      *townships* (not the county) hold default zoning authority in
+      unincorporated territory (ORC Ch. 519) unless a township's voters
+      replaced it with county zoning (ORC Ch. 303), so the note points
+      first to the township zoning office. `bbox` is a rough county extent
+      from the county's known center/area (a pre-filter only, not exact —
+      same harmless-slack tolerance as LA County's). Verified: `python -m
+      pytest -q` and `simy validate` still pass (this change is pure
+      client-side JS, doesn't touch `data_sources/*.yaml` or the compiled
+      model), and headless Chromium confirms both `web/explore.html` and
+      `web/index.html` load with zero console/page errors and a simulated
+      map click still runs the full parcel flow without throwing. Live
+      resolution of the new host (does the layer actually respond, do the
+      field names match exactly) is unverified from this sandbox — worth a
+      human spot-check on the live site, same caveat as the last several
+      counties added this way.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

@@ -780,6 +780,38 @@ const PARCEL_SOURCES=[
     county_state:"Salt Lake County, UT",
     zoning_note:"unlike TX, UT counties do zone unincorporated land — check Salt Lake County's unincorporated-area zoning ordinance, or the township/city if incorporated",
   },
+  {
+    name:"Franklin County Auditor GIS (Franklin County, OH)",
+    // Auditor-hosted "Tax Parcel" layer (layer 0 of the ParcelFeatures/Parcel_Features
+    // service) — both hostnames documented for the same layer, MapServer tried first
+    // since every other county here queries via MapServer's /query endpoint.
+    urls:[
+      "https://gis.franklincountyohio.gov/hosting/rest/services/ParcelFeatures/Parcel_Features/MapServer/0",
+      "https://gis.franklincountyohio.gov/hosting/rest/services/ParcelFeatures/Parcel_Features/FeatureServer/0",
+    ],
+    bbox:[-83.25,39.72,-82.75,40.13],
+    // Confirmed fields (via multiple independent search-indexed sources — this
+    // sandbox 403s/blocks direct ArcGIS REST introspection like every prior
+    // county here): PARCELID (11-char string id), STATEDAREA (legal acres),
+    // ACRES (GIS-measured acres). Owner name and situs address aren't published
+    // on this public boundary layer (they live in the separate non-GIS Auditor
+    // record system), same graceful partial-field-coverage as King County/
+    // Cook County/Salt Lake here.
+    // No documented per-PARCELID deep-link URL for the Auditor's Datalet detail
+    // page (the working examples found all require an extra `jur` jurisdiction
+    // code not derivable from PARCELID alone), so — same cautious call as
+    // Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/Allegheny/Fulton — send
+    // people to the parcel-ID search page instead of guessing a link shape.
+    record:()=>"https://property.franklincountyauditor.com/_web/search/commonsearch.aspx?mode=parid",
+    source_label:"Franklin County Auditor",
+    county_state:"Franklin County, OH",
+    // Ohio townships hold zoning authority in unincorporated territory by
+    // default (ORC Ch. 519); county zoning (ORC Ch. 303) only applies where a
+    // township's voters replaced it with county zoning — unlike every other
+    // state covered so far, so check the township zoning office first, or the
+    // city's if incorporated.
+    zoning_note:"Ohio townships (not the county) hold default zoning authority in unincorporated areas — check the township zoning office, or the city's if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
