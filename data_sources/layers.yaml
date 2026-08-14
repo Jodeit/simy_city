@@ -394,6 +394,46 @@ land_uses:
       center, not a public-school grade level, but the tag alone can't tell
       the two apart).
 
+  hotel:                  # hotel / extended-stay lodging
+    label: Hotel / Extended-Stay Lodging
+    requires:
+      # Unlike every use above (a rooftop headcount), a hotel's demand is
+      # nearby *demand generators* — travelers come for a hospital visit, a
+      # business meeting, or an event, not because they live close by. Counted
+      # live as nearby hospitals/offices/conference & event venues, same
+      # "count of Overpass hits" shape every other `demand` field already
+      # uses, just a different set of tags.
+      demand:      { min_demand_generators: 15, drive_time_min: 12 }
+      # A hotel needs highway/arterial visibility and easy off-ramp access —
+      # the first use since warehouse_club/fast_casual to gate on the real
+      # AADT traffic-count layer (`AADT_SOURCE` in web/explore.html), at a
+      # threshold between fast_casual's arterial bar (20000) and a genuine
+      # highway (40000): a hotel wants a busy road, not necessarily an
+      # interstate.
+      transportation: { near_arterial_aadt: 15000 }
+      parcel:      { min_buildable_acres: 1.5 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living/urgent_care/self_storage/
+      # child_care_center established: a second hotel a few blocks from an
+      # existing one is splitting an already-served pool of travelers, not
+      # opening up a new one.
+      competition: { min_distance_km_from_nearest: 1.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: medium      # a multi-story building + a full parking field
+      carbon: low
+      traffic: medium         # meaningful check-in/checkout and event traffic
+    notes: >
+      The first use to blend the AADT traffic-count layer into an actual
+      verdict (warehouse_club/fast_casual already fetch it, but only
+      fast_casual/warehouse_club consumed it before this). min_demand_generators
+      (15, within a 5 km radius) and near_arterial_aadt (15000) are first-draft
+      heuristics — refine freely, same as every other threshold here. OSM tags
+      lodging fairly unambiguously (`tourism=hotel`/`tourism=motel`), so the
+      live competitor/site query needs no OR-fallback the way urgent_care's/
+      child_care_center's messy tagging required.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

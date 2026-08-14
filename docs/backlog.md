@@ -1919,21 +1919,56 @@ Ground rules for each run:
       already lives in one function each, this is mostly a rendering/
       orchestration layer, not new domain logic — should be doable without
       touching `data_sources/layers.yaml` at all.
-- [ ] **11th land use: hotel / extended-stay lodging.** Every use added so
-      far has been demand- or competition-driven; a hotel site is judged
-      differently — proximity to a highway/arterial with real traffic volume
-      (the AADT traffic-count layer added in "Wire a real highway/arterial
-      traffic-count check" is sitting unused by any verdict) plus nearby
-      demand generators (hospitals, offices, event/convention venues via
-      Overpass `amenity=hospital`/`office=*`/`amenity=conference_centre`)
-      and a "farther from existing hotels is better" competition read
-      (`requires.competition.min_distance_km_from_nearest`, the same
-      `preferFar` pattern every use since `food_truck_court` has used) plus
-      a parking-lot-sized acreage floor. This is the first use to blend the
-      traffic layer into a verdict — good breadth, and a natural fit for the
-      existing reverse-search machinery once `requires` is filled in (no
-      `reverseSearchSignals` changes needed, same as every use added since
-      step 3).
+- [x] **11th land use: hotel / extended-stay lodging.** Added `hotel` to
+      `data_sources/layers.yaml` — the first use whose demand read isn't a
+      rooftop headcount at all: `requires.demand.min_demand_generators: 15`
+      counts nearby hospitals/offices/event venues (Overpass
+      `amenity=hospital`/`office=*`/`amenity=conference_centre`) within a 5 km
+      radius, reusing `fast_casual`'s existing daytime-population-leg
+      machinery (`cfg.daytimeQ`/`daytimeRadius`) generalized from
+      fast_casual-only to `(current==="fast_casual"||current==="hotel")` —
+      same query shape, different tags, no new plumbing. Also
+      `requires.transportation.near_arterial_aadt: 15000` — the first new use
+      since fast_casual/warehouse_club to consume the existing AADT
+      traffic-count leg (`AADT_SOURCE`/`trafficLeg`, generalized the same way
+      to include `current==="hotel"`), between fast_casual's arterial bar
+      (20000) and warehouse_club's highway bar (40000). Plus
+      `requires.parcel.min_buildable_acres: 1.5` (a parking-lot-sized floor)
+      and the established "farther from existing hotels is better" competition
+      read (`requires.competition.min_distance_km_from_nearest: 1.0`, the same
+      `preferFar` pattern every use since `food_truck_court` has used, live
+      query `tourism=hotel`/`tourism=motel`, unambiguous OSM tagging, no
+      OR-fallback needed). `simy validate` confirms 11 land uses. Wired
+      `maybeRenderHLVerdict` in `web/explore.html`, waiting on all four legs
+      (generators, acreage, traffic, competitor-distance) — unlike every
+      rooftop-headcount use, there's no single "no read at all" signal to hide
+      the whole verdict block on, so it always renders once all four legs
+      resolve (same as `data_center`'s pattern), with "?" text standing in for
+      any one unavailable leg rather than hiding everything. No
+      `reverseSearchSignals`/reverse-search UI changes needed — it already
+      derives `preferFar` generically from `requires.competition`. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16
+      layers, 11 land uses), `node --test tests/js/*.test.mjs` (229 passed, no
+      logic.js changes needed since nothing new was added there), and headless
+      Chromium: both pages load with zero console/page errors; selecting
+      `hotel` shows the correct label and enables the reverse-search button
+      with 2.5/5/10 km radius options (0.5x/1x/2x its own 5 km trade area) with
+      "Nearest competitor" as the sort option (not "Nearby rooftops" — its
+      `preferNear` signal is correctly off, since `roofNeed` is 0); a full
+      simulated map click with `hotel` selected renders the whole result panel
+      without throwing; driving `maybeRenderHLVerdict` directly through PASS /
+      SHORT-on-generators / SHORT-on-acreage / SHORT-on-traffic /
+      SHORT-on-competitor-too-close / PASS-with-a-distant-competitor /
+      generators-unavailable / acreage-unavailable / traffic-unavailable /
+      competitor-unavailable / no-NHS-route-in-range / wrong-use-selected-noop
+      all produced correct verdict text and CSS classes with zero throws; and
+      a mocked end-to-end reverse search (fake demand-generator points + one
+      fake competitor hotel) returned 8 ranked candidates and rendered the
+      results list/markers with zero console errors beyond the expected
+      sandbox-blocked `ERR_TUNNEL_CONNECTION_FAILED` network errors. Outbound
+      network to Overpass/ArcGIS is blocked from this sandbox, so a live
+      end-to-end generator/traffic/competitor fetch on the real site is a good
+      human spot-check.
 - [ ] **15th parcel county.** Pick another populous county with a free,
       public ArcGIS REST parcel MapServer/FeatureServer (no API key) not
       already in `PARCEL_SOURCES` — candidates to check first: Franklin

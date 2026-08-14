@@ -853,6 +853,32 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "People drop kids off close to home or right on a commute route, so demand reads nearby rooftops at a radius closer to food_truck_court's (1.2 km) than urgent_care's (3 km) \u2014 a first-draft heuristic, refine freely. min_buildable_acres (0.5) sits below urgent_care's single- clinic lot: a daycare building is small, but it needs a fenced outdoor play area a clinic doesn't. OSM tags this ambiguously across two live tags \u2014 `amenity=childcare` and `amenity=kindergarten` \u2014 both queried independently for the live competitor/site read, same documented messy-tagging caveat urgent_care's OR-fallback already set a precedent for (kindergarten in OSM often means a standalone early-childhood center, not a public-school grade level, but the tag alone can't tell the two apart).\n"
+    },
+    "hotel": {
+      "label": "Hotel / Extended-Stay Lodging",
+      "requires": {
+        "demand": {
+          "min_demand_generators": 15,
+          "drive_time_min": 12
+        },
+        "transportation": {
+          "near_arterial_aadt": 15000
+        },
+        "parcel": {
+          "min_buildable_acres": 1.5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "medium",
+        "carbon": "low",
+        "traffic": "medium"
+      },
+      "notes": "The first use to blend the AADT traffic-count layer into an actual verdict (warehouse_club/fast_casual already fetch it, but only fast_casual/warehouse_club consumed it before this). min_demand_generators (15, within a 5 km radius) and near_arterial_aadt (15000) are first-draft heuristics \u2014 refine freely, same as every other threshold here. OSM tags lodging fairly unambiguously (`tourism=hotel`/`tourism=motel`), so the live competitor/site query needs no OR-fallback the way urgent_care's/ child_care_center's messy tagging required.\n"
     }
   },
   "actor_uses": {
