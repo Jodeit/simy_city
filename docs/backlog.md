@@ -1903,6 +1903,47 @@ Ground rules for each run:
       from this sandbox, so a live end-to-end rooftop/competitor fetch on the
       real site is a good human spot-check.
 
+## Next (breadth) — newly added (14)
+- [ ] **"Best fit here" — run every land use's verdict at once for a single
+      clicked site.** Today Test-a-use mode only ever evaluates the one land
+      use selected in the dropdown; a user curious "what *should* go on this
+      lot" has to re-click through all 10 uses one at a time. Add a mode (or
+      a button next to the use selector, e.g. "🏆 Best fit here") that runs
+      every `maybeRender*Verdict` function's underlying legs for the current
+      point/parcel against all registered land uses (reusing the exact same
+      `runDemand`/`showParcel`/competitor-scan fan-out already in flight for
+      the single-use flow — no duplicate network calls) and renders a small
+      ranked summary table: land use, PASS/SHORT, and the one-line reason
+      already produced per use. Clicking a row switches Test-a-use to that
+      use and shows its full existing panel. Since every use's verdict logic
+      already lives in one function each, this is mostly a rendering/
+      orchestration layer, not new domain logic — should be doable without
+      touching `data_sources/layers.yaml` at all.
+- [ ] **11th land use: hotel / extended-stay lodging.** Every use added so
+      far has been demand- or competition-driven; a hotel site is judged
+      differently — proximity to a highway/arterial with real traffic volume
+      (the AADT traffic-count layer added in "Wire a real highway/arterial
+      traffic-count check" is sitting unused by any verdict) plus nearby
+      demand generators (hospitals, offices, event/convention venues via
+      Overpass `amenity=hospital`/`office=*`/`amenity=conference_centre`)
+      and a "farther from existing hotels is better" competition read
+      (`requires.competition.min_distance_km_from_nearest`, the same
+      `preferFar` pattern every use since `food_truck_court` has used) plus
+      a parking-lot-sized acreage floor. This is the first use to blend the
+      traffic layer into a verdict — good breadth, and a natural fit for the
+      existing reverse-search machinery once `requires` is filled in (no
+      `reverseSearchSignals` changes needed, same as every use added since
+      step 3).
+- [ ] **15th parcel county.** Pick another populous county with a free,
+      public ArcGIS REST parcel MapServer/FeatureServer (no API key) not
+      already in `PARCEL_SOURCES` — candidates to check first: Franklin
+      County, OH (Columbus, via the County Auditor's GIS), Cuyahoga County,
+      OH (Cleveland, via the Fiscal Officer's GIS), or Denver County, CO.
+      Confirm the service is genuinely free/keyless and returns parcel
+      geometry + owner/acreage fields before wiring it in, following the
+      exact `PARCEL_SOURCES` entry shape (bbox, tile export URL, point-query
+      URL, field names) the last 14 counties used.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
