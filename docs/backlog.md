@@ -1904,21 +1904,46 @@ Ground rules for each run:
       real site is a good human spot-check.
 
 ## Next (breadth) — newly added (14)
-- [ ] **"Best fit here" — run every land use's verdict at once for a single
-      clicked site.** Today Test-a-use mode only ever evaluates the one land
-      use selected in the dropdown; a user curious "what *should* go on this
-      lot" has to re-click through all 10 uses one at a time. Add a mode (or
-      a button next to the use selector, e.g. "🏆 Best fit here") that runs
-      every `maybeRender*Verdict` function's underlying legs for the current
-      point/parcel against all registered land uses (reusing the exact same
-      `runDemand`/`showParcel`/competitor-scan fan-out already in flight for
-      the single-use flow — no duplicate network calls) and renders a small
-      ranked summary table: land use, PASS/SHORT, and the one-line reason
-      already produced per use. Clicking a row switches Test-a-use to that
-      use and shows its full existing panel. Since every use's verdict logic
-      already lives in one function each, this is mostly a rendering/
-      orchestration layer, not new domain logic — should be doable without
-      touching `data_sources/layers.yaml` at all.
+- [x] **"Best fit here" step 1: shared verdict-scoring core.** Five of the
+      eleven `maybeRender*Verdict` functions in `web/explore.html`
+      (warehouse_club, food_truck_court, urgent_care, self_storage,
+      child_care_center) each duplicate the exact same three-gate math
+      inline: rooftop demand vs. 85%-of-need, parcel acreage vs. a floor,
+      nearest-competitor distance vs. a floor (farther-is-better, no
+      competitor in range at all reads as the best case, not a data gap).
+      Extracted that shared math into a pure, tested `standardUseVerdict(reads,
+      thresholds)` in `web/logic.js` — `reads.roofs==null` returns `null`
+      ("no read at all," same contract as `blendedDemand`/`seniorDemandRead`);
+      `thresholds.minAcres`/`minCompetitorKm` are each optional, omitting one
+      skips that gate entirely (reads as trivially satisfied) for uses that
+      don't have it (e.g. `ev_charging_hub`'s substation-distance gate isn't
+      this shape); a competitor-lookup error fails the distance gate outright,
+      matching every existing `farOk` computation. Also added
+      `rankLandUseVerdicts(entries)` — sorts a flat list of per-use verdicts
+      into the order a future ranked summary table needs: every passing use
+      first (highest need-normalized `ratio` — i.e. most comfortable margin —
+      first), then every short/no-read use after (closest-to-passing first),
+      stable on ties. `ratio` is comparable across land uses with very
+      different `roofNeed` magnitudes, which a raw rooftop count wouldn't be.
+      Added 20 new unit tests (both null-input edge cases, each gate's
+      boundary condition, the AND-of-all-three `pass` computation, a zero/
+      missing `roofNeed` not dividing by zero, ranking order across pass/short
+      groups, ratio ties, a missing `ratio` sorting last within its group,
+      non-mutation, empty/missing input). Verified: `python -m pytest -q` (15
+      passed), `simy validate` (OK, unchanged — no `layers.yaml` touched),
+      `node --test tests/js/*.test.mjs` (247 passed, 20 new), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` still
+      load with zero console/page errors (this item touches only
+      `web/logic.js`/its tests — none of the 40+ existing per-use network-
+      callback gates in `explore.html` were touched, so no existing single-use
+      flow's behavior changed). This unblocks the next "Best fit here" step:
+      wiring a "🏆 Best fit here" button that runs the underlying legs for
+      every registered land use against the current point/parcel (reusing
+      `standardUseVerdict` for the five uses above; the other six —
+      data_center, residential_subdivision, fast_casual, ev_charging_hub,
+      senior_living, hotel — keep their own bespoke leg math) and renders the
+      `rankLandUseVerdicts`-ordered table; clicking a row switches Test-a-use
+      to that use.
 - [x] **11th land use: hotel / extended-stay lodging.** Added `hotel` to
       `data_sources/layers.yaml` — the first use whose demand read isn't a
       rooftop headcount at all: `requires.demand.min_demand_generators: 15`

@@ -67,6 +67,49 @@ function blendedDemand(roofs,daytime,weight,need){
 function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
   const a=Math.sin(d(la2-la1)/2)**2+Math.cos(d(la1))*Math.cos(d(la2))*Math.sin(d(lo2-lo1)/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
+// "Best fit here" step 1: the shared demand+site-size+competitor-distance
+// verdict math that warehouse_club/food_truck_court/urgent_care/self_storage/
+// child_care_center's maybeRender*Verdict functions in explore.html each
+// duplicate inline. `reads.roofs==null` (no rooftop read at all) returns null,
+// same "nothing to show" contract as blendedDemand/seniorDemandRead. `ratio`
+// is need-normalized (effective/need), the same 0.85-of-need pass bar every
+// one of those five uses already applies — and, unlike a raw rooftop count,
+// comparable across land uses with very different roofNeed magnitudes, which
+// is what a future ranked "best fit here" table needs. `thresholds.minAcres`/
+// `minCompetitorKm` are optional — omit either to skip that gate entirely
+// (it reads as trivially satisfied), for uses that don't have it. A
+// competitor-lookup error (`reads.compErr`) fails the distance gate outright
+// rather than being ignored, matching every existing farOk computation; no
+// competitor found within range (`nearestCompKm==null` with no error) is the
+// best possible outcome, not a data gap.
+function standardUseVerdict(reads,thresholds){
+  const {roofs,acres,nearestCompKm,compErr}=reads||{};
+  const {roofNeed,minAcres,minCompetitorKm}=thresholds||{};
+  if(roofs==null)return null;
+  const ratio=roofNeed?roofs/roofNeed:null;
+  const demandOk=ratio!=null&&ratio>=0.85;
+  const siteOk=minAcres==null?true:(acres!=null&&acres>=minAcres);
+  const farOk=minCompetitorKm==null?true
+    :compErr?false
+    :(nearestCompKm==null||nearestCompKm>=minCompetitorKm);
+  return {pass:demandOk&&siteOk&&farOk,demandOk,siteOk,farOk,ratio};
+}
+// "Best fit here" step 1: turns a flat list of per-land-use verdicts into the
+// ranked order a "🏆 Best fit here" summary table would show — every passing
+// use first (most-comfortable-margin first), then every short/no-read use
+// after (closest-to-passing first, so "almost works" sorts above "way off"),
+// ties keeping their original (e.g. registry) order via a stable sort. A
+// missing `ratio` (a use whose verdict has no comparable margin, e.g. a leg
+// still unavailable) sorts to the bottom of its pass/short group rather than
+// throwing or crashing the sort.
+function rankLandUseVerdicts(entries){
+  return (entries||[]).map((e,i)=>({e,i})).sort((a,b)=>{
+    if(!!a.e.pass!==!!b.e.pass)return a.e.pass?-1:1;
+    const ra=a.e.ratio==null?-Infinity:a.e.ratio, rb=b.e.ratio==null?-Infinity:b.e.ratio;
+    if(ra!==rb)return rb-ra;
+    return a.i-b.i;
+  }).map(x=>x.e);
+}
 // senior_living's demand read: every other use above reads demand as a
 // headcount (rooftops, or blendedDemand's rooftop-equivalent units) compared
 // against a threshold. Senior living instead reads demand as whether the
@@ -882,5 +925,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts};
 }

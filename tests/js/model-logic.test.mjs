@@ -23,6 +23,7 @@ const {
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
+  standardUseVerdict, rankLandUseVerdicts,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -203,6 +204,132 @@ test("seniorDemandRead: a much younger trade area clearly fails", () => {
   const young = seniorDemandRead(28, 40);
   assert.equal(young.pass, false);
   assert.ok(young.ratio < 0.85);
+});
+
+// ---- standardUseVerdict / rankLandUseVerdicts ("Best fit here" step 1) ----
+
+test("standardUseVerdict: null roofs means no verdict at all", () => {
+  assert.equal(standardUseVerdict({ roofs: null }, { roofNeed: 100 }), null);
+});
+
+test("standardUseVerdict: full PASS when demand, site size and competitor distance all clear", () => {
+  const v = standardUseVerdict(
+    { roofs: 100, acres: 5, nearestCompKm: 2 },
+    { roofNeed: 100, minAcres: 2, minCompetitorKm: 1 }
+  );
+  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, ratio: 1 });
+});
+
+test("standardUseVerdict: pass threshold is 85% of need, same bar blendedDemand/seniorDemandRead use", () => {
+  const justUnder = standardUseVerdict({ roofs: 84.9 }, { roofNeed: 100 }); // 84.9%
+  const justOver = standardUseVerdict({ roofs: 85 }, { roofNeed: 100 });   // 85.0%
+  assert.equal(justUnder.demandOk, false);
+  assert.equal(justOver.demandOk, true);
+});
+
+test("standardUseVerdict: omitting minAcres skips the site-size gate entirely", () => {
+  const v = standardUseVerdict({ roofs: 100, acres: null }, { roofNeed: 100 });
+  assert.equal(v.siteOk, true);
+});
+
+test("standardUseVerdict: minAcres set but acreage unlisted fails the site-size gate", () => {
+  const v = standardUseVerdict({ roofs: 100, acres: null }, { roofNeed: 100, minAcres: 2 });
+  assert.equal(v.siteOk, false);
+});
+
+test("standardUseVerdict: acreage below the floor fails, at/above passes", () => {
+  const short = standardUseVerdict({ roofs: 100, acres: 1.9 }, { roofNeed: 100, minAcres: 2 });
+  const exact = standardUseVerdict({ roofs: 100, acres: 2 }, { roofNeed: 100, minAcres: 2 });
+  assert.equal(short.siteOk, false);
+  assert.equal(exact.siteOk, true);
+});
+
+test("standardUseVerdict: omitting minCompetitorKm skips the competitor gate entirely", () => {
+  const v = standardUseVerdict({ roofs: 100, nearestCompKm: 0.01 }, { roofNeed: 100 });
+  assert.equal(v.farOk, true);
+});
+
+test("standardUseVerdict: no competitor found in range at all is the best case, not a data gap", () => {
+  const v = standardUseVerdict({ roofs: 100, nearestCompKm: null }, { roofNeed: 100, minCompetitorKm: 1 });
+  assert.equal(v.farOk, true);
+});
+
+test("standardUseVerdict: a competitor closer than the floor fails, at/beyond the floor passes", () => {
+  const near = standardUseVerdict({ roofs: 100, nearestCompKm: 0.9 }, { roofNeed: 100, minCompetitorKm: 1 });
+  const far = standardUseVerdict({ roofs: 100, nearestCompKm: 1 }, { roofNeed: 100, minCompetitorKm: 1 });
+  assert.equal(near.farOk, false);
+  assert.equal(far.farOk, true);
+});
+
+test("standardUseVerdict: a competitor-lookup error fails the distance gate even with no competitor on record", () => {
+  const v = standardUseVerdict(
+    { roofs: 100, nearestCompKm: null, compErr: true },
+    { roofNeed: 100, minCompetitorKm: 1 }
+  );
+  assert.equal(v.farOk, false);
+  assert.equal(v.pass, false);
+});
+
+test("standardUseVerdict: pass is the AND of all three gates — any single failure fails the whole verdict", () => {
+  const base = { roofs: 100, acres: 5, nearestCompKm: 2 };
+  const thresholds = { roofNeed: 100, minAcres: 2, minCompetitorKm: 1 };
+  assert.equal(standardUseVerdict(base, thresholds).pass, true);
+  assert.equal(standardUseVerdict({ ...base, roofs: 10 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, acres: 0.1 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, nearestCompKm: 0.1 }, thresholds).pass, false);
+});
+
+test("standardUseVerdict: a zero/missing roofNeed doesn't divide by zero", () => {
+  const v = standardUseVerdict({ roofs: 50 }, { roofNeed: 0 });
+  assert.equal(v.ratio, null);
+  assert.equal(v.demandOk, false);
+});
+
+test("rankLandUseVerdicts: passing uses sort before short uses", () => {
+  const ranked = rankLandUseVerdicts([
+    { id: "a", pass: false, ratio: 0.9 },
+    { id: "b", pass: true, ratio: 0.5 },
+  ]);
+  assert.deepEqual(ranked.map(r => r.id), ["b", "a"]);
+});
+
+test("rankLandUseVerdicts: within a group, higher ratio (more comfortable margin) sorts first", () => {
+  const ranked = rankLandUseVerdicts([
+    { id: "a", pass: true, ratio: 1.1 },
+    { id: "b", pass: true, ratio: 2.0 },
+    { id: "c", pass: true, ratio: 1.5 },
+  ]);
+  assert.deepEqual(ranked.map(r => r.id), ["b", "c", "a"]);
+});
+
+test("rankLandUseVerdicts: ties preserve original order (stable sort)", () => {
+  const ranked = rankLandUseVerdicts([
+    { id: "a", pass: true, ratio: 1 },
+    { id: "b", pass: true, ratio: 1 },
+    { id: "c", pass: true, ratio: 1 },
+  ]);
+  assert.deepEqual(ranked.map(r => r.id), ["a", "b", "c"]);
+});
+
+test("rankLandUseVerdicts: a missing ratio sorts to the bottom of its pass/short group", () => {
+  const ranked = rankLandUseVerdicts([
+    { id: "a", pass: true, ratio: 0.5 },
+    { id: "b", pass: true, ratio: undefined },
+    { id: "c", pass: true, ratio: 2 },
+  ]);
+  assert.deepEqual(ranked.map(r => r.id), ["c", "a", "b"]);
+});
+
+test("rankLandUseVerdicts: doesn't mutate the input array", () => {
+  const input = [{ id: "a", pass: false, ratio: 0.1 }, { id: "b", pass: true, ratio: 1 }];
+  const copy = input.map(x => ({ ...x }));
+  rankLandUseVerdicts(input);
+  assert.deepEqual(input, copy);
+});
+
+test("rankLandUseVerdicts: empty and missing input don't throw", () => {
+  assert.deepEqual(rankLandUseVerdicts([]), []);
+  assert.deepEqual(rankLandUseVerdicts(undefined), []);
 });
 
 // ---- parcel helpers (inBbox / pick) ----
