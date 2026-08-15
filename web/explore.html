@@ -276,6 +276,7 @@
       <div class="chips" id="uses"></div>
       <div class="searchToggleRow">
         <button class="toolbtn" id="searchToggle" type="button" aria-expanded="false">🔍 Find candidate sites</button>
+        <button class="toolbtn" id="bestFitToggle" type="button" aria-expanded="false">🏆 Best fit here</button>
       </div>
       <div class="searchPanel" id="searchPanel" style="display:none">
         <div class="lbl">Search radius (around map center)</div>
@@ -289,6 +290,10 @@
         <span class="ok" id="searchSaveMsg"></span>
         <div class="live" id="searchStatus" style="display:none"></div>
         <div id="searchResults"></div>
+      </div>
+      <div class="searchPanel" id="bestFitPanel" style="display:none">
+        <div class="lbl">Best fit for the last point you clicked</div>
+        <div id="bestFitResults"></div>
       </div>
       <details class="recentStrip" id="savedSearchStrip" style="display:none">
         <summary>Saved searches <span id="savedCount"></span></summary>
@@ -864,7 +869,7 @@ let lastParcelSummary=null;
 if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;boot();}
 else{fetch("model.json").then(r=>r.json()).then(m=>{MODEL=m;boot();});}
 
-function boot(){ initUses(); initModes(); initSearch(); setLegend(); }
+function boot(){ initUses(); initModes(); initSearch(); initBestFit(); setLegend(); }
 
 // Wires both a click and an Enter/Space keydown to `fn` — used for elements
 // (like the explore-mode path cards) that need button-like keyboard behavior
@@ -1020,6 +1025,7 @@ function analyze(latlng){
   if(marker)marker.remove(); if(ring)ring.remove(); if(probeLayer)probeLayer.remove();
   marker=L.marker(latlng).addTo(map);
   lastLatLng=latlng;
+  closeBestFitPanel(); // ranked results are for the *previous* point — don't leave stale ones showing
   const seq=++reqSeq;
   if(mode==="build"){
     const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
@@ -1303,11 +1309,29 @@ function overpass(ql,seq,ok,fail){
 }
 function setHTML(id,html){const el=document.getElementById(id);if(el){el.classList.remove("loading");el.innerHTML=html;}}
 function errHTML(t){return `<span class="unavail">⚠ ${t}</span>`;}
+// Shared Overpass query builders — same rooftop-count / competitor-scan shape
+// every use's runDemand leg fires, factored out so "Best fit here" (below) can
+// fire the identical query text for a use that isn't the currently selected
+// one, and get a netCache hit for free whenever it happens to match.
+function roofQuery(cfg,lat,lng){
+  return `[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`;
+}
+function compQuery(cfg,lat,lng){
+  const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
+  return `[out:json][timeout:25];(${parts});out center 60;`;
+}
+// Shared Overpass element→named-distance parsing (nodes carry lat/lon
+// directly, ways/relations carry a `center` object instead), nearest-first.
+function overpassElsSorted(d,lat,lng){
+  return (d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
+    return (la&&lo)?{name:(e.tags&&(e.tags.name||e.tags.operator))||"(unnamed)",lat:la,lon:lo,km:haversine(lat,lng,la,lo)}:null;})
+    .filter(Boolean).sort((a,b)=>a.km-b.km);
+}
 
 function runDemand(latlng,seq){
   const cfg=USE_DEMAND[current], lat=latlng.lat, lng=latlng.lng;
   // 1) rooftops in the trade area — fast server-side count (household proxy)
-  overpass(`[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`,
+  overpass(roofQuery(cfg,lat,lng),
     seq, d=>{ const c=countOf(d);
       setHTML("roofVal", c==null?errHTML("rooftop count unavailable")
         : `🏠 <b>~${c.toLocaleString()}</b> rooftops within ${(cfg.radius/1000)} km <span class="src">(household proxy)</span>`);
@@ -1371,11 +1395,8 @@ function runDemand(latlng,seq){
     });
   }
   // 2) competitors / context with nearest
-  const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
-  overpass(`[out:json][timeout:25];(${parts});out center 60;`, seq, d=>{
-    const els=(d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
-      return (la&&lo)?{name:(e.tags&&(e.tags.name||e.tags.operator))||"(unnamed)",lat:la,lon:lo,km:haversine(lat,lng,la,lo)}:null;})
-      .filter(Boolean).sort((a,b)=>a.km-b.km);
+  overpass(compQuery(cfg,lat,lng), seq, d=>{
+    const els=overpassElsSorted(d,lat,lng);
     if(probeLayer)probeLayer.remove();
     if(els.length)probeLayer=L.layerGroup(els.slice(0,40).map(e=>
       L.circleMarker([e.lat,e.lon],{radius:5,color:"#16201f",weight:1,fillColor:"#d9a441",fillOpacity:.9})
@@ -1825,6 +1846,98 @@ function maybeRenderHLVerdict(seq){
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
+/* ---- "Best fit here" step 2: the ranked results button + table ----
+   Everything above judges one land use at the clicked point. This ranks
+   several at once. First cut: the five uses whose verdict is exactly
+   standardUseVerdict's three-gate shape (rooftop demand vs. need, a site-size
+   floor, and — for four of the five — a farther-is-better competitor-distance
+   floor), reusing the same pure function (web/logic.js) each of their own
+   maybeRender*Verdict functions already calls inline. The other six uses have
+   their own bespoke verdict shapes (data_center's substation/water gates,
+   fast_casual/hotel's blended daytime-demand + traffic, senior_living's
+   median-age read, ev_charging_hub's power-siting gate,
+   residential_subdivision's induced-school-capacity read) not yet folded into
+   one comparable ranking — listed below the table as "not yet ranked" rather
+   than silently omitted, an honest partial step per the backlog item's own
+   fallback note. Reuses roofQuery/compQuery/overpassElsSorted (just factored
+   out of runDemand above) so a use that happens to match the currently
+   selected one's query text gets a free netCache hit — never a per-candidate
+   fan-out, just one rooftop + (up to) one competitor query per use, same
+   "a handful of queries per click, not one per point" budget reverse search
+   already established. */
+const BEST_FIT_USES=["warehouse_club","food_truck_court","urgent_care","self_storage","child_care_center"];
+function bestFitThresholds(use){
+  const roofNeed=USE_DEMAND[use].roofNeed;
+  if(use==="warehouse_club")return{roofNeed,minAcres:WC_MIN_ACRES};
+  if(use==="food_truck_court")return{roofNeed,minAcres:FTC_MIN_ACRES,minCompetitorKm:FTC_MIN_COMPETITOR_KM};
+  if(use==="urgent_care")return{roofNeed,minAcres:UC_MIN_ACRES,minCompetitorKm:UC_MIN_COMPETITOR_KM};
+  if(use==="self_storage")return{roofNeed,minAcres:SS_MIN_ACRES,minCompetitorKm:SS_MIN_COMPETITOR_KM};
+  if(use==="child_care_center")return{roofNeed,minAcres:CC_MIN_ACRES,minCompetitorKm:CC_MIN_COMPETITOR_KM};
+}
+let bfPending=false;
+function toggleBestFitPanel(){
+  const btn=document.getElementById("bestFitToggle"), panel=document.getElementById("bestFitPanel");
+  const opening=panel.style.display==="none";
+  panel.style.display=opening?"block":"none";
+  btn.setAttribute("aria-expanded",opening?"true":"false");
+  if(opening)runBestFit();
+}
+function closeBestFitPanel(){
+  const panel=document.getElementById("bestFitPanel"); if(panel)panel.style.display="none";
+  const btn=document.getElementById("bestFitToggle"); if(btn)btn.setAttribute("aria-expanded","false");
+  const results=document.getElementById("bestFitResults"); if(results)results.innerHTML="";
+  bfPending=false;
+}
+function runBestFit(){
+  const results=document.getElementById("bestFitResults"); if(!results)return;
+  if(!lastLatLng){ results.innerHTML=`<div class="live">Click a parcel on the map first, then reopen this.</div>`; return; }
+  if(bfPending)return; // a run is already in flight for the current point
+  const {lat,lng}=lastLatLng, seq=reqSeq; // guard: discard if a new point is clicked meanwhile
+  const acres=lastParcelSummary&&lastParcelSummary.seq===seq?lastParcelSummary.acres:null;
+  bfPending=true;
+  results.innerHTML=`<div class="live loading">ranking ${BEST_FIT_USES.length} uses for this point…</div>`;
+  const bfResults={};
+  Promise.all(BEST_FIT_USES.map(use=>{
+    const cfg=USE_DEMAND[use], th=bestFitThresholds(use);
+    const roofP=overpassRaw(roofQuery(cfg,lat,lng)).then(countOf).catch(()=>null);
+    const compP=th.minCompetitorKm==null ? Promise.resolve(null)
+      : overpassRaw(compQuery(cfg,lat,lng)).then(d=>({nearest:overpassElsSorted(d,lat,lng)[0]||null})).catch(()=>({err:true}));
+    return Promise.all([roofP,compP]).then(([roofs,comp])=>{
+      const reads={roofs,acres,
+        nearestCompKm: comp&&comp.nearest?comp.nearest.km:null,
+        compErr: !!(comp&&comp.err)};
+      bfResults[use]={verdict:standardUseVerdict(reads,th), nearestComp:comp&&comp.nearest};
+    });
+  })).then(()=>{
+    bfPending=false;
+    if(seq!==reqSeq)return; // a newer point was clicked while these were in flight
+    renderBestFit(bfResults);
+  });
+}
+const BEST_FIT_LABEL=id=>MODEL.land_uses[id].label.replace(/\s*\(.*\)/,"");
+function renderBestFit(bfResults){
+  const results=document.getElementById("bestFitResults"); if(!results)return;
+  const entries=BEST_FIT_USES.map(use=>{
+    const r=bfResults[use]||{}, v=r.verdict;
+    return {key:use,label:BEST_FIT_LABEL(use),pass:v?v.pass:false,ratio:v?v.ratio:null,verdict:v};
+  });
+  const ranked=rankLandUseVerdicts(entries);
+  const rows=ranked.map(e=>{
+    if(!e.verdict)return `<div class="fitrow"><span class="fitbadge">?</span><div class="fl">${esc(e.label)}<small>rooftop data unavailable for this point</small></div>`+
+      `<button class="testbtn" data-use="${e.key}">Test →</button></div>`;
+    const badge=e.verdict.pass?`<span class="fitbadge y">PASS</span>`:`<span class="fitbadge n">SHORT</span>`;
+    const pct=e.verdict.ratio!=null?`${Math.round(e.verdict.ratio*100)}% of the demand this use needs`:"";
+    return `<div class="fitrow">${badge}<div class="fl">${esc(e.label)}<small>${esc(pct)}</small></div>`+
+      `<button class="testbtn" data-use="${e.key}">Test →</button></div>`;
+  }).join("");
+  const rest=Object.keys(USE_DEMAND).filter(id=>!BEST_FIT_USES.includes(id)).map(BEST_FIT_LABEL).join(", ");
+  results.innerHTML=rows+
+    `<div class="src" style="margin-top:6px">Quick screen only — demand + site size + (for most) competitor `+
+    `distance. Click a row for the full single-use check, which may add gates like traffic. `+
+    `Not yet ranked here: ${esc(rest)}.</div>`;
+  results.querySelectorAll(".testbtn").forEach(btn=>btn.onclick=()=>{selectUse(btn.dataset.use); if(lastLatLng)analyze(lastLatLng);});
+}
+
 /* ---- reverse search, step 3: the "🔍 Find candidate sites" search UI ----
    Everything before this flips a clicked point into an answer. This flips
    the flow: pick an area (map center + a radius) and get back a handful of
@@ -1843,6 +1956,9 @@ function initSearch(){
   document.getElementById("searchGo").onclick=runCandidateSearch;
   document.getElementById("searchSave").onclick=saveCurrentSearch;
   document.getElementById("searchShare").onclick=shareSearchLink;
+}
+function initBestFit(){
+  document.getElementById("bestFitToggle").onclick=toggleBestFitPanel;
 }
 // Carries the search's center (current map center), radius, and use into a
 // standalone `#search=..` link (encodeSearchHash, web/logic.js) — same
