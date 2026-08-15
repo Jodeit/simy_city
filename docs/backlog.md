@@ -2029,24 +2029,47 @@ Ground rules for each run:
       counties added this way.
 
 ## Next (breadth) — newly added (15)
-- [ ] **"Best fit here" step 2: the ranked results button + table.** Wire up
-      the "🏆 Best fit here" button flagged as the natural next step when
-      the shared `standardUseVerdict`/`rankLandUseVerdicts` core landed
-      (`web/logic.js`). For the currently clicked point, run the underlying
-      legs for every registered land use (`data_center`,
-      `residential_subdivision`, `fast_casual`, `warehouse_club`,
-      `food_truck_court`, `urgent_care`, `self_storage`,
-      `child_care_center`, `ev_charging_hub`, `senior_living`, `hotel`) —
-      reuse `standardUseVerdict` for the five uses that already share its
-      three-gate shape, and each of the other six uses' existing bespoke
-      verdict logic for the rest — without re-issuing any Overpass/ArcGIS
-      query already fetched for whichever use is currently selected. Render
-      a small ranked table (label, PASS/SHORT badge, one-line reason) in
-      `rankLandUseVerdicts` order; clicking a row switches Test-a-use to
-      that land use and re-renders its full single-use panel. If running
-      all eleven in one pass is too much for one session, a first cut that
-      covers just the five `standardUseVerdict` uses (with the rest shown
-      as "not yet ranked") is a reasonable, honestly-labeled partial step.
+- [x] **"Best fit here" step 2: the ranked results button + table.** Shipped
+      the honestly-labeled partial cut the item itself allowed for: a "🏆 Best
+      fit here" button (next to "🔍 Find candidate sites" in the use-selector
+      card, `web/explore.html`) that ranks the five uses whose verdict is
+      exactly `standardUseVerdict`'s three-gate shape (rooftop demand vs.
+      need, a site-size floor, and — for four of the five —
+      a farther-is-better competitor-distance floor): `warehouse_club`,
+      `food_truck_court`, `urgent_care`, `self_storage`, `child_care_center`.
+      For the last-clicked point, `runBestFit()` fires one rooftop-count query
+      and (for the four with a competitor gate) one competitor-scan query per
+      use — reusing `roofQuery`/`compQuery`, two query-string builders newly
+      factored out of `runDemand`'s existing inline query construction (a
+      pure refactor, same query text as before) — so a use that happens to
+      match whichever one is currently selected gets a free `netCache` hit
+      instead of a duplicate fetch; acreage is read from the already-resolved
+      `lastParcelSummary` snapshot, no extra query at all. Once all five
+      resolve, `standardUseVerdict`/`rankLandUseVerdicts` (already shipped,
+      already tested — this item just wires them up) rank them into a
+      PASS/SHORT table reusing the existing `.fitrow`/`.fitbadge`/`.testbtn`
+      styling from the "What could go here?" fit list; clicking a row
+      switches Test-a-use to that use and re-runs the full single-use
+      analysis (the authoritative read, including gates like traffic this
+      quick screen doesn't check) at the same point. The other six uses
+      (`data_center`, `residential_subdivision`, `fast_casual`,
+      `ev_charging_hub`, `senior_living`, `hotel` — each with its own bespoke
+      verdict shape: blended daytime demand, a power-siting gate, a median-age
+      read, an induced-school-capacity read) are listed below the table as
+      "not yet ranked" rather than silently omitted. Results reset on every
+      new point click (`closeBestFitPanel()` in `analyze()`) so a stale
+      ranking for a previous point can never linger. Verified in headless
+      Chromium: both pages load with zero console/page errors; opening the
+      panel before any parcel is clicked shows a clear "click a parcel first"
+      state instead of erroring; a real simulated map click with a mocked
+      Overpass `fetch` (rooftop counts + a competitor node) drove the whole
+      flow end-to-end — five ranked rows in the correct demand-ratio order,
+      clicking the top row's "Test →" switched to that use and re-analyzed
+      without throwing; and desktop/mobile screenshots confirm the new button
+      sits cleanly beside "Find candidate sites" with no overlap. Full
+      eleven-use coverage (the six bespoke-shaped verdicts) is left as a
+      follow-up, same "reasonable, honestly-labeled partial step" the item
+      itself anticipated.
 - [ ] **12th land use: grocery store / supermarket.** Add `grocery_store`
       to `data_sources/layers.yaml` — rooftop demand within a walkable/
       short-drive radius (reuse the existing rooftop trade-area read, likely
