@@ -2028,6 +2028,50 @@ Ground rules for each run:
       human spot-check on the live site, same caveat as the last several
       counties added this way.
 
+## Next (breadth) — newly added (15)
+- [ ] **"Best fit here" step 2: the ranked results button + table.** Wire up
+      the "🏆 Best fit here" button flagged as the natural next step when
+      the shared `standardUseVerdict`/`rankLandUseVerdicts` core landed
+      (`web/logic.js`). For the currently clicked point, run the underlying
+      legs for every registered land use (`data_center`,
+      `residential_subdivision`, `fast_casual`, `warehouse_club`,
+      `food_truck_court`, `urgent_care`, `self_storage`,
+      `child_care_center`, `ev_charging_hub`, `senior_living`, `hotel`) —
+      reuse `standardUseVerdict` for the five uses that already share its
+      three-gate shape, and each of the other six uses' existing bespoke
+      verdict logic for the rest — without re-issuing any Overpass/ArcGIS
+      query already fetched for whichever use is currently selected. Render
+      a small ranked table (label, PASS/SHORT badge, one-line reason) in
+      `rankLandUseVerdicts` order; clicking a row switches Test-a-use to
+      that land use and re-renders its full single-use panel. If running
+      all eleven in one pass is too much for one session, a first cut that
+      covers just the five `standardUseVerdict` uses (with the rest shown
+      as "not yet ranked") is a reasonable, honestly-labeled partial step.
+- [ ] **12th land use: grocery store / supermarket.** Add `grocery_store`
+      to `data_sources/layers.yaml` — rooftop demand within a walkable/
+      short-drive radius (reuse the existing rooftop trade-area read, likely
+      a radius between `fast_casual` and `warehouse_club`), a buildable-acreage
+      floor sized for a mid-box store + parking, and the established
+      "farther from existing supermarkets is better" competition read
+      (`shop=supermarket` in OSM) at a saturation distance — the same
+      three-gate shape `standardUseVerdict` (from the "Best fit here" step 1
+      work) already covers, so this should need little beyond the
+      `layers.yaml` entry, a `USE_DEMAND`/`maybeRender*Verdict` wire-up in
+      `web/explore.html` following the `food_truck_court`/`hotel` pattern,
+      and unit tests for any new pure logic. Verify with `simy validate`,
+      `pytest`, `node --test tests/js`, and headless Chromium as usual.
+- [ ] **16th parcel county.** Add one more county to `PARCEL_SOURCES` in
+      `web/explore.html`, continuing the established pattern (WebSearch to
+      confirm a live ArcGIS MapServer/FeatureServer parcel layer and its
+      real field names since this sandbox can't reach ArcGIS hosts
+      directly; graceful partial-field-coverage when owner/address/land-use
+      aren't publicly exposed; a per-source `zoning_note`; `record()` links
+      to a search page instead of a guessed per-parcel deep link when no
+      stable URL scheme is confirmed). Good candidates not yet covered:
+      Hennepin County, MN (Minneapolis); Tarrant County, TX (Fort Worth);
+      Orange County, CA; Clark County, NV (Las Vegas); or Mecklenburg
+      County, NC (Charlotte).
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
