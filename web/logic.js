@@ -110,6 +110,22 @@ function rankLandUseVerdicts(entries){
     return a.i-b.i;
   }).map(x=>x.e);
 }
+// "Best fit here" step 2: the one-line reason shown next to each row of the
+// ranked table, from a raw `standardUseVerdict()` result (or `null`, "no
+// rooftop read at all" — same contract as the function itself). Checked in
+// the same gate order the underlying math applies (demand, then site size,
+// then competitor distance), so a use failing more than one gate at once
+// still reads as "the first real reason it's short," not a vague blanket
+// verdict; a pass reports the same need-normalized `ratio` the ranking order
+// itself sorts by, so the number in the reason text always matches the row's
+// position in the list.
+function bestFitReasonText(v){
+  if(!v)return "no rooftop read for this point";
+  if(v.pass)return `~${Math.round((v.ratio||0)*100)}% of the demand this use needs`;
+  if(!v.demandOk)return `demand only ${Math.round((v.ratio||0)*100)}% of what this use needs`;
+  if(!v.siteOk)return "parcel too small for this use";
+  return "an existing competitor is too close";
+}
 // senior_living's demand read: every other use above reads demand as a
 // headcount (rooftops, or blendedDemand's rooftop-equivalent units) compared
 // against a threshold. Senior living instead reads demand as whether the
@@ -925,5 +941,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,bestFitReasonText};
 }
