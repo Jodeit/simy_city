@@ -2029,24 +2029,63 @@ Ground rules for each run:
       counties added this way.
 
 ## Next (breadth) — newly added (15)
-- [ ] **"Best fit here" step 2: the ranked results button + table.** Wire up
-      the "🏆 Best fit here" button flagged as the natural next step when
-      the shared `standardUseVerdict`/`rankLandUseVerdicts` core landed
-      (`web/logic.js`). For the currently clicked point, run the underlying
-      legs for every registered land use (`data_center`,
-      `residential_subdivision`, `fast_casual`, `warehouse_club`,
-      `food_truck_court`, `urgent_care`, `self_storage`,
-      `child_care_center`, `ev_charging_hub`, `senior_living`, `hotel`) —
-      reuse `standardUseVerdict` for the five uses that already share its
-      three-gate shape, and each of the other six uses' existing bespoke
-      verdict logic for the rest — without re-issuing any Overpass/ArcGIS
-      query already fetched for whichever use is currently selected. Render
-      a small ranked table (label, PASS/SHORT badge, one-line reason) in
-      `rankLandUseVerdicts` order; clicking a row switches Test-a-use to
-      that land use and re-renders its full single-use panel. If running
-      all eleven in one pass is too much for one session, a first cut that
-      covers just the five `standardUseVerdict` uses (with the rest shown
-      as "not yet ranked") is a reasonable, honestly-labeled partial step.
+- [x] **"Best fit here" step 2: the ranked results button + table.** Wired up
+      a real "🏆 Best fit here" button (in the shared toolbar `fillTools`
+      renders for every analyzed point, both Explore and Test-a-use modes —
+      "what's the best use for this point" doesn't require a use to already
+      be selected). Covers the honestly-labeled partial scope the step-1
+      item itself allowed for: of the eleven land uses, only
+      `food_truck_court`/`urgent_care`/`self_storage`/`child_care_center`/
+      `grocery_store` actually share `standardUseVerdict`'s rooftop +
+      acreage + competitor-distance three-gate shape in the current code
+      (re-checked against the live `maybeRender*Verdict` functions rather
+      than trusting the step-1 write-up's use list verbatim —
+      `warehouse_club`'s third gate turned out to be AADT traffic, not
+      competitor distance, so it doesn't actually fit); the other six
+      (`data_center`, `residential_subdivision`, `fast_casual`,
+      `warehouse_club`, `ev_charging_hub`, `senior_living`, `hotel`) each
+      have bespoke verdict math and are listed in the panel as "not yet
+      ranked here" rather than forced into a shape that doesn't fit them.
+      Parcel acreage is shared across every use (one ArcGIS query per point,
+      independent of which use is selected) so it's read straight off the
+      already-resolved `lastParcelSummary` — guarded on
+      `lastParcelSummary.seq===reqSeq` so a still-loading parcel shows "try
+      again in a moment" instead of a false site-too-small read. The
+      rooftop/competitor-distance Overpass queries for all five uses build
+      the exact same query text `runDemand` already builds for whichever of
+      the five happens to be currently selected, so `overpassRaw`'s
+      session cache (`netCache`) transparently reuses that use's
+      already-fetched results instead of re-querying — only the other four
+      uses' distinct queries actually hit the network, satisfying the "don't
+      re-issue an already-fetched query" requirement for free, no extra
+      plumbing needed. Results render via the existing `.candRow`/
+      `.candList` list styling (`rankLandUseVerdicts` order — best-passing
+      first, closest-to-passing next), each row clickable/keyboard-activable
+      (`wireActivate`) to `selectUse()` + `setMode("build")`, which
+      re-renders the full single-use verdict panel for that use. Added a
+      new pure `bestFitReasonText(v)` to `web/logic.js` (a
+      `standardUseVerdict()` result → the one-line reason text, checked in
+      the same demand→site→competitor gate order the underlying math
+      applies, so a use failing more than one gate still reads as "the
+      first real reason," not a vague blanket verdict) with 6 new unit
+      tests (null/no-read, pass-reports-ratio, each gate failing in
+      priority order, a zero/missing-ratio edge case that doesn't throw or
+      print `NaN%`). Verified: `python -m pytest -q` (15 passed), `simy
+      validate` (OK, unchanged — no `layers.yaml` touched), `node --test
+      tests/js/*.test.mjs` (253 passed, 6 new), and headless Chromium with
+      mocked Overpass/ArcGIS responses driving the real button click (not
+      just the pure functions): both pages still load with zero
+      console/page errors; a real click flow in Test-a-use mode opened the
+      panel, ran the five-use fan-out, and rendered 5 correctly-ranked rows
+      with correct SHORT reasons and percentages; the same flow in default
+      Explore mode (no use pre-selected) worked identically and a PASS-rigged
+      mock produced correct PASS badges/ratios; clicking a result row
+      switched mode + use and re-rendered the single-use panel with zero
+      throws; the toggle button opens/closes the panel correctly across a
+      fresh re-render; and the stale-parcel guard renders its message
+      without throwing. Outbound network to Overpass/ArcGIS is blocked from
+      this sandbox, so a live end-to-end five-use fan-out on the real site
+      is a good human spot-check, same caveat as every other live-data item.
 - [x] **12th land use: grocery store / supermarket.** Added `grocery_store`
       to `data_sources/layers.yaml` — rooftop demand within an 8 km trade area
       (`requires.demand.min_households_drive_time: 12000`, between

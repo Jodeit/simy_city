@@ -1095,6 +1095,8 @@ function analyze(latlng){
 function renderExplore(latlng){
   let h=`<h2>This property</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}</div>`;
   h+=`<div class="toolbar" id="tools"></div>`;
+  h+=`<div class="block" id="bestFitBlock" style="display:none"><h3>🏆 Best fit here</h3>
+      <div id="bestFitResults"></div></div>`;
   h+=`<div class="block" id="parcelBlock"><h3>Parcel / property</h3>
       <div id="parcelVal" class="loading">identifying parcel…</div></div>`;
   h+=`<div class="block"><h3>What could go here?</h3>
@@ -1129,7 +1131,8 @@ function fillTools(latlng){
   const el=document.getElementById("tools"); if(!el)return;
   const link=permalink(latlng);
   let h=`<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`+
-    `<button class="toolbtn" id="pinBtn">📌 Pin to compare</button><span class="ok" id="pinMsg"></span>`;
+    `<button class="toolbtn" id="pinBtn">📌 Pin to compare</button><span class="ok" id="pinMsg"></span>`+
+    `<button class="toolbtn" id="bestFitBtn" type="button" aria-expanded="false">🏆 Best fit here</button>`;
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     h+=`<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
@@ -1148,6 +1151,7 @@ function fillTools(latlng){
     const m=document.getElementById("pinMsg");
     if(m){m.textContent=(r.ok?"✓ ":"⚠ ")+r.msg; setTimeout(()=>m.textContent="",2500);}
   };
+  document.getElementById("bestFitBtn").onclick=toggleBestFit;
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     document.getElementById("caseCopy").onclick=()=>copy(txt,"copied");
@@ -1225,6 +1229,8 @@ function renderBuild(use,latlng){
   let h=`<h2>${label}</h2><div class="where">@ ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)} — testing this site</div>`;
   h+=`<div class="toolbar" id="tools"></div>`;
   h+=`<pre class="printCase" id="printCase"></pre>`;
+  h+=`<div class="block" id="bestFitBlock" style="display:none"><h3>🏆 Best fit here</h3>
+      <div id="bestFitResults"></div></div>`;
 
   // PARCEL identity (filled async by runParcel) — "what am I actually looking at?"
   h+=`<div class="block" id="parcelBlock"><h3>Parcel / property</h3>
@@ -1901,6 +1907,104 @@ function maybeRenderGSVerdict(seq){
   el.className="verdict "+(v.pass?"aligned":"contested");
   el.innerHTML=(v.pass?"✓ PASS — enough nearby demand, room for the store, and clear of existing competitors"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+
+/* ---- "Best fit here" step 2: the ranked "🏆 Best fit here" table ----
+   Step 1 (web/logic.js) extracted the rooftop-demand + parcel-acreage +
+   competitor-distance three-gate math five of the maybeRender*Verdict
+   functions above duplicate inline into a shared, pure `standardUseVerdict`,
+   plus `rankLandUseVerdicts` to order a flat list of per-use verdicts. This
+   wires that into an actual "what's the best use for THIS point" answer: for
+   the currently clicked parcel, run every use that shares that exact
+   rooftop+acreage+competitor-distance shape — food_truck_court, urgent_care,
+   self_storage, child_care_center, grocery_store (warehouse_club's third gate
+   is highway/arterial traffic, not competitor distance, so it doesn't fit
+   this shape; every other use has its own bespoke verdict math entirely) —
+   and rank them. A first, honestly-labeled partial step, same "not yet
+   ranked" fallback the item that flagged this next step itself allowed for.
+
+   Acreage is shared across every use (one ArcGIS parcel query per point,
+   independent of which use happens to be selected), so it's read straight off
+   `lastParcelSummary` rather than re-fetched. The rooftop/competitor Overpass
+   queries reuse the exact same query text `runDemand` builds for whichever of
+   the five uses is currently selected — `overpassRaw`'s session cache
+   (`netCache`) dedupes by that query text, so the currently selected use's
+   two queries resolve from cache instantly instead of hitting the network
+   again; only the other four uses' distinct queries actually fire. */
+const BF_USES=["food_truck_court","urgent_care","self_storage","child_care_center","grocery_store"];
+const BF_THRESHOLDS={
+  food_truck_court:{minAcres:FTC_MIN_ACRES,minCompetitorKm:FTC_MIN_COMPETITOR_KM},
+  urgent_care:{minAcres:UC_MIN_ACRES,minCompetitorKm:UC_MIN_COMPETITOR_KM},
+  self_storage:{minAcres:SS_MIN_ACRES,minCompetitorKm:SS_MIN_COMPETITOR_KM},
+  child_care_center:{minAcres:CC_MIN_ACRES,minCompetitorKm:CC_MIN_COMPETITOR_KM},
+  grocery_store:{minAcres:GS_MIN_ACRES,minCompetitorKm:GS_MIN_COMPETITOR_KM},
+};
+let bfSeq=0;
+function bfRoofQuery(cfg,lat,lng){
+  return `[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`;
+}
+function bfCompQuery(cfg,lat,lng){
+  const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
+  return `[out:json][timeout:25];(${parts});out center 60;`;
+}
+function bfNearestCompKm(d,lat,lng){
+  const kms=(d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
+    return (la!=null&&lo!=null)?haversine(lat,lng,la,lo):null;}).filter(v=>v!=null);
+  return kms.length?Math.min(...kms):null;
+}
+function toggleBestFit(){
+  const block=document.getElementById("bestFitBlock"); if(!block)return;
+  const opening=block.style.display==="none"||!block.style.display;
+  block.style.display=opening?"block":"none";
+  const btn=document.getElementById("bestFitBtn"); if(btn)btn.setAttribute("aria-expanded",opening?"true":"false");
+  if(opening)runBestFit();
+}
+function runBestFit(){
+  const out=document.getElementById("bestFitResults"); if(!out||!lastLatLng)return;
+  // Parcel acreage comes from the same ArcGIS query showParcel already ran
+  // for this click — wait for it rather than risk a false "site too small"
+  // read from a still-in-flight (or not-yet-started) parcel lookup.
+  if(!lastParcelSummary||lastParcelSummary.seq!==reqSeq){
+    out.innerHTML=`<p class="src">Still identifying the parcel — try again in a moment.</p>`;
+    return;
+  }
+  const {lat,lng}=lastLatLng, acres=lastParcelSummary.acres, seq=++bfSeq;
+  out.innerHTML=`<div class="loading">ranking ${BF_USES.length} land uses…</div>`;
+  Promise.all(BF_USES.map(u=>{
+    const cfg=USE_DEMAND[u];
+    return Promise.all([
+      overpassRaw(bfRoofQuery(cfg,lat,lng)).then(countOf).catch(()=>null),
+      overpassRaw(bfCompQuery(cfg,lat,lng)).then(d=>({km:bfNearestCompKm(d,lat,lng),err:false})).catch(()=>({km:null,err:true})),
+    ]).then(([roofs,comp])=>({
+      use:u,
+      v:standardUseVerdict({roofs,acres,nearestCompKm:comp.km,compErr:comp.err},
+        {roofNeed:cfg.roofNeed,minAcres:BF_THRESHOLDS[u].minAcres,minCompetitorKm:BF_THRESHOLDS[u].minCompetitorKm}),
+    }));
+  })).then(entries=>{
+    if(seq!==bfSeq)return; // a newer "Best fit here" run (or a fresh click) superseded this one
+    renderBestFit(entries);
+  });
+}
+function renderBestFit(entries){
+  const out=document.getElementById("bestFitResults"); if(!out)return;
+  const shaped=entries.map(e=>({...e,pass:e.v?e.v.pass:false,ratio:e.v?e.v.ratio:null}));
+  const ranked=rankLandUseVerdicts(shaped);
+  const rows=ranked.map(e=>{
+    const badge=!e.v?`<b class="unavail">?</b>`
+      :e.v.pass?`<b style="color:var(--aligned-fg)">✓ PASS</b>`
+      :`<b style="color:var(--contested-fg)">✗ SHORT</b>`;
+    return `<div class="candRow" data-use="${e.use}" role="button" tabindex="0">
+      <span>${esc(useLabel(e.use))}</span><span>${badge} <small>${esc(bestFitReasonText(e.v))}</small></span>
+    </div>`;
+  }).join("");
+  const rest=Object.keys(USE_DEMAND).filter(u=>!BF_USES.includes(u)).map(u=>esc(useLabel(u))).join(", ");
+  out.innerHTML=`<div class="candList">${rows}</div>
+    <div class="src">Ranks the ${BF_USES.length} land uses that share this point's demand + site-size +
+    distance-from-competitors read. Not yet ranked here (each has its own verdict shape): ${rest}.
+    Click a row to switch <b>Test a use</b> to it.</div>`;
+  out.querySelectorAll(".candRow").forEach(row=>{
+    wireActivate(row,()=>{ selectUse(row.dataset.use); setMode("build"); });
+  });
 }
 
 /* ---- reverse search, step 3: the "🔍 Find candidate sites" search UI ----

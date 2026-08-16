@@ -23,7 +23,7 @@ const {
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
-  standardUseVerdict, rankLandUseVerdicts,
+  standardUseVerdict, rankLandUseVerdicts, bestFitReasonText,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -1818,4 +1818,35 @@ test("maxAadtWithinRadius: carries the route name through on the winning point",
   const center = { lat: 30.0, lng: -97.0 };
   const hit = { lat: 30.001, lng: -97.0, aadt: 40000, route: "I-35" };
   assert.equal(maxAadtWithinRadius([hit], center, 1000).route, "I-35");
+});
+
+// ---- bestFitReasonText ("Best fit here" step 2: ranked-table reason text) ----
+test("bestFitReasonText: null verdict (no rooftop read) has its own reason", () => {
+  assert.equal(bestFitReasonText(null), "no rooftop read for this point");
+});
+
+test("bestFitReasonText: a pass reports the need-normalized ratio as a percent", () => {
+  const v = standardUseVerdict({ roofs: 90, acres: 5, nearestCompKm: 2 }, { roofNeed: 100, minAcres: 1, minCompetitorKm: 1 });
+  assert.equal(bestFitReasonText(v), "~90% of the demand this use needs");
+});
+
+test("bestFitReasonText: demand gate failing reports the demand shortfall first", () => {
+  const v = standardUseVerdict({ roofs: 50, acres: 0.1, nearestCompKm: 0.1 }, { roofNeed: 100, minAcres: 1, minCompetitorKm: 1 });
+  assert.equal(bestFitReasonText(v), "demand only 50% of what this use needs");
+});
+
+test("bestFitReasonText: demand ok but site too small reports the site-size gate", () => {
+  const v = standardUseVerdict({ roofs: 100, acres: 0.1, nearestCompKm: 0.1 }, { roofNeed: 100, minAcres: 1, minCompetitorKm: 1 });
+  assert.equal(bestFitReasonText(v), "parcel too small for this use");
+});
+
+test("bestFitReasonText: demand and site ok but a competitor too close reports the competitor gate", () => {
+  const v = standardUseVerdict({ roofs: 100, acres: 5, nearestCompKm: 0.1 }, { roofNeed: 100, minAcres: 1, minCompetitorKm: 1 });
+  assert.equal(bestFitReasonText(v), "an existing competitor is too close");
+});
+
+test("bestFitReasonText: a zero/missing ratio on pass doesn't throw or print NaN%", () => {
+  const v = standardUseVerdict({ roofs: 0 }, {}); // roofNeed omitted -> ratio stays null, demandOk false
+  assert.equal(v.pass, false);
+  assert.equal(bestFitReasonText(v), "demand only 0% of what this use needs");
 });
