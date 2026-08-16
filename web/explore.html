@@ -433,6 +433,9 @@ const USE_DEMAND={
     compQ:'nwr["tourism"="hotel"];nwr["tourism"="motel"]', compLabel:"hotels/motels",
     daytimeRadius:5000, daytimeQ:'nwr["amenity"="hospital"];nwr["office"];nwr["amenity"="conference_centre"]',
     daytimeLabel:"nearby hospitals/offices/event venues (demand generators)" },
+  grocery_store:{ radius:8000, roofNeed:12000, needLabel:"the trade area a full-line supermarket needs",
+    // Unlike urgent_care/child_care_center, OSM tags this unambiguously — no OR-fallback needed.
+    compQ:'nwr["shop"="supermarket"]', compLabel:"grocery stores/supermarkets" },
 };
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
@@ -526,6 +529,15 @@ let ccState=null;
 // existing hotels/motels — waits for all four legs.
 const HL_MIN_GENERATORS=15, HL_AADT_MIN=15000, HL_MIN_ACRES=1.5, HL_MIN_COMPETITOR_KM=1.0;
 let hlState=null;
+// grocery_store's real verdict: rooftop demand within an 8 km trade area,
+// blended with the site-size gate (`parcel.min_buildable_acres: 5.0` — a
+// mid-box anchor + parking field, smaller than warehouse_club's 15-acre pad)
+// and the same farther-is-better competition read every use since
+// food_truck_court established, against existing supermarkets — waits for
+// all three legs. The first use wired up via the shared `standardUseVerdict`
+// (web/logic.js) instead of duplicating this three-gate math inline.
+const GS_MIN_ACRES=5.0, GS_MIN_COMPETITOR_KM=2.0;
+let gsState=null;
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -901,7 +913,7 @@ function setLegend(){
     : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
 }
 function initUses(){
-  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel"];
+  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store"];
   const el=document.getElementById("uses");
   order.forEach(id=>{
     const b=document.createElement("button");
@@ -1037,6 +1049,7 @@ function analyze(latlng){
     ssState = current==="self_storage" ? {seq} : null;
     ccState = current==="child_care_center" ? {seq} : null;
     hlState = current==="hotel" ? {seq} : null;
+    gsState = current==="grocery_store" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
@@ -1050,6 +1063,7 @@ function analyze(latlng){
     ssState=null;
     ccState=null;
     hlState=null;
+    gsState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -1208,8 +1222,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care", isSS=current==="self_storage", isCC=current==="child_care_center", isHL=current==="hotel";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":isSS?"demand + site-size + distance-from-competitors check":isCC?"demand + site-size + distance-from-competitors check":isHL?"demand generators + traffic + site-size + distance-from-competitors check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care", isSS=current==="self_storage", isCC=current==="child_care_center", isHL=current==="hotel", isGS=current==="grocery_store";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":isSS?"demand + site-size + distance-from-competitors check":isCC?"demand + site-size + distance-from-competitors check":isHL?"demand generators + traffic + site-size + distance-from-competitors check":isGS?"demand + site-size + distance-from-competitors check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -1225,6 +1239,7 @@ function renderBuild(use,latlng){
               :isSS?"nearby rooftops + parcel size + distance from the nearest existing self-storage facility (farther is better) decide the verdict"
               :isCC?"nearby rooftops + parcel size + distance from the nearest existing child care center (farther is better) decide the verdict"
               :isHL?"nearby demand generators (not rooftops) + highway/arterial traffic count + parcel acreage + distance from the nearest existing hotel (farther is better) decide the verdict"
+              :isGS?"nearby rooftops + parcel size + distance from the nearest existing supermarket (farther is better) decide the verdict"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -1318,6 +1333,7 @@ function runDemand(latlng,seq){
       else if(current==="urgent_care"&&ucState&&ucState.seq===seq){ ucState.roofs=c; maybeRenderUCVerdict(seq); }
       else if(current==="self_storage"&&ssState&&ssState.seq===seq){ ssState.roofs=c; maybeRenderSSVerdict(seq); }
       else if(current==="child_care_center"&&ccState&&ccState.seq===seq){ ccState.roofs=c; maybeRenderCCVerdict(seq); }
+      else if(current==="grocery_store"&&gsState&&gsState.seq===seq){ gsState.roofs=c; maybeRenderGSVerdict(seq); }
       else if(cfg.roofNeed) renderDemandVerdict(c,cfg);
     }, ()=>{
       setHTML("roofVal",errHTML("couldn’t reach OpenStreetMap — model above still works."));
@@ -1328,6 +1344,7 @@ function runDemand(latlng,seq){
       if(current==="urgent_care"&&ucState&&ucState.seq===seq){ ucState.roofs=null; maybeRenderUCVerdict(seq); }
       if(current==="self_storage"&&ssState&&ssState.seq===seq){ ssState.roofs=null; maybeRenderSSVerdict(seq); }
       if(current==="child_care_center"&&ccState&&ccState.seq===seq){ ccState.roofs=null; maybeRenderCCVerdict(seq); }
+      if(current==="grocery_store"&&gsState&&gsState.seq===seq){ gsState.roofs=null; maybeRenderGSVerdict(seq); }
     });
   // 1b) fast_casual/hotel only: daytime population / demand-generator proxy —
   // lunch traffic comes from workers and shoppers too, not just nearby homes
@@ -1425,6 +1442,12 @@ function runDemand(latlng,seq){
       // existing hotels/motels.
       hlState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderHLVerdict(seq);
+    } else if(current==="grocery_store"&&gsState&&gsState.seq===seq){
+      // Same farther-is-better read as food_truck_court/ev_charging_hub/
+      // senior_living/urgent_care/self_storage/child_care_center/hotel,
+      // against existing supermarkets.
+      gsState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
+      maybeRenderGSVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
@@ -1437,6 +1460,7 @@ function runDemand(latlng,seq){
     else if(current==="self_storage"&&ssState&&ssState.seq===seq){ ssState.compErr=true; maybeRenderSSVerdict(seq); }
     else if(current==="child_care_center"&&ccState&&ccState.seq===seq){ ccState.compErr=true; maybeRenderCCVerdict(seq); }
     else if(current==="hotel"&&hlState&&hlState.seq===seq){ hlState.compErr=true; maybeRenderHLVerdict(seq); }
+    else if(current==="grocery_store"&&gsState&&gsState.seq===seq){ gsState.compErr=true; maybeRenderGSVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -1822,6 +1846,39 @@ function maybeRenderHLVerdict(seq){
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — enough nearby demand generators, a busy enough road, room for the hotel, and clear of existing competitors"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// grocery_store's real verdict — waits for the rooftop leg, the acreage leg,
+// and the competitor-distance leg (all from runDemand/showParcel) before
+// rendering once. Same farther-is-better competitor read every use since
+// food_truck_court has established, against existing supermarkets. Unlike
+// every prior maybeRender*Verdict here, the pass/fail math itself is not
+// duplicated inline — it's the shared `standardUseVerdict` (web/logic.js,
+// "Best fit here" step 1), the first land use to actually consume it.
+function maybeRenderGSVerdict(seq){
+  if(current!=="grocery_store"||mode!=="build"||!gsState||gsState.seq!==seq)return;
+  const s=gsState, cfg=USE_DEMAND.grocery_store;
+  const haveComp = s.nearestComp!==undefined || s.compErr;
+  if(s.roofs===undefined||s.acres===undefined||!haveComp)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.roofs==null){ el.style.display="none"; return; } // no rooftop read at all — nothing to show
+  const v=standardUseVerdict(
+    {roofs:s.roofs, acres:s.acres, nearestCompKm:s.nearestComp?s.nearestComp.km:null, compErr:s.compErr},
+    {roofNeed:cfg.roofNeed, minAcres:GS_MIN_ACRES, minCompetitorKm:GS_MIN_COMPETITOR_KM});
+  const legs=[
+    v.demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
+      : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
+    v.siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${GS_MIN_ACRES} ac for a mid-box store + parking)`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${GS_MIN_ACRES} ac for a mid-box store + parking)`,
+    s.compErr?`? nearest supermarket distance unavailable`
+      : !s.nearestComp?`✓ no existing supermarket within ${(cfg.radius/1000)} km — wide open`
+      : v.farOk?`✓ nearest supermarket <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${GS_MIN_COMPETITOR_KM} km)`
+      : `✗ nearest supermarket <b>${esc(s.nearestComp.name)}</b> only ${s.nearestComp.km.toFixed(1)} km away (need ≥${GS_MIN_COMPETITOR_KM} km)`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(v.pass?"aligned":"contested");
+  el.innerHTML=(v.pass?"✓ PASS — enough nearby demand, room for the store, and clear of existing competitors"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
@@ -2272,6 +2329,7 @@ function showParcel(geo,src,seq){
   if(current==="self_storage"&&ssState&&ssState.seq===seq){ ssState.acres=acN; maybeRenderSSVerdict(seq); }
   if(current==="child_care_center"&&ccState&&ccState.seq===seq){ ccState.acres=acN; maybeRenderCCVerdict(seq); }
   if(current==="hotel"&&hlState&&hlState.seq===seq){ hlState.acres=acN; maybeRenderHLVerdict(seq); }
+  if(current==="grocery_store"&&gsState&&gsState.seq===seq){ gsState.acres=acN; maybeRenderGSVerdict(seq); }
   setLastParcelSummary({seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,

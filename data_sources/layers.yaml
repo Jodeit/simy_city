@@ -434,6 +434,39 @@ land_uses:
       live competitor/site query needs no OR-fallback the way urgent_care's/
       child_care_center's messy tagging required.
 
+  grocery_store:          # grocery store / full-line supermarket
+    label: Grocery Store / Supermarket
+    requires:
+      demand:      { min_households_drive_time: 12000, drive_time_min: 10 }
+      parcel:      { min_buildable_acres: 5.0 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living/urgent_care/self_storage/
+      # child_care_center/hotel established: a second supermarket a couple
+      # miles from an existing one is splitting an already-served grocery
+      # trade area, not opening up a new one.
+      competition: { min_distance_km_from_nearest: 2.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: medium      # a mid-box building + a full parking field
+      carbon: low
+      traffic: medium         # steady daily trip generation, a real anchor-tenant draw
+    notes: >
+      A rooftop-headcount demand read like warehouse_club/fast_casual, at a
+      radius (8 km) between the two — a supermarket's trade area is wider
+      than a fast-casual restaurant's walk-up/short-drive crowd but far
+      tighter than a warehouse club's citywide draw. min_households_drive_time
+      (12000) and min_buildable_acres (5.0, a mid-box anchor + parking field,
+      smaller than warehouse_club's 15-acre big-box pad) are first-draft
+      heuristics — refine freely, same as every other threshold here. This is
+      the first new land use to be wired up using `standardUseVerdict` (web/
+      logic.js, "Best fit here" step 1's shared demand+site-size+competitor-
+      distance core) directly instead of duplicating that three-gate math
+      inline, since its requires shape is exactly what that helper models:
+      a rooftop-need ratio, an acreage floor, and a farther-is-better
+      competitor-distance floor. OSM tags this unambiguously (`shop=
+      supermarket`), so the live competitor/site query needs no OR-fallback.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

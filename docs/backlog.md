@@ -2047,19 +2047,46 @@ Ground rules for each run:
       all eleven in one pass is too much for one session, a first cut that
       covers just the five `standardUseVerdict` uses (with the rest shown
       as "not yet ranked") is a reasonable, honestly-labeled partial step.
-- [ ] **12th land use: grocery store / supermarket.** Add `grocery_store`
-      to `data_sources/layers.yaml` — rooftop demand within a walkable/
-      short-drive radius (reuse the existing rooftop trade-area read, likely
-      a radius between `fast_casual` and `warehouse_club`), a buildable-acreage
-      floor sized for a mid-box store + parking, and the established
-      "farther from existing supermarkets is better" competition read
-      (`shop=supermarket` in OSM) at a saturation distance — the same
-      three-gate shape `standardUseVerdict` (from the "Best fit here" step 1
-      work) already covers, so this should need little beyond the
-      `layers.yaml` entry, a `USE_DEMAND`/`maybeRender*Verdict` wire-up in
-      `web/explore.html` following the `food_truck_court`/`hotel` pattern,
-      and unit tests for any new pure logic. Verify with `simy validate`,
-      `pytest`, `node --test tests/js`, and headless Chromium as usual.
+- [x] **12th land use: grocery store / supermarket.** Added `grocery_store`
+      to `data_sources/layers.yaml` — rooftop demand within an 8 km trade area
+      (`requires.demand.min_households_drive_time: 12000`, between
+      fast_casual's 6 km/9k-rooftop restaurant crowd and warehouse_club's
+      15 km/100k-rooftop citywide draw), `requires.parcel.min_buildable_acres:
+      5.0` (a mid-box anchor + parking field, smaller than warehouse_club's
+      15-acre big-box pad), and the established "farther from existing
+      supermarkets is better" competition read
+      (`requires.competition.min_distance_km_from_nearest: 2.0`, live query
+      `shop=supermarket` — unambiguous OSM tagging, no OR-fallback needed).
+      `simy validate` confirms 12 land uses. Wired `maybeRenderGSVerdict` in
+      `web/explore.html` (`USE_DEMAND.grocery_store`, `gsState`, the `order`/
+      `isXX` lists, the rooftop/competitor-distance network callbacks in
+      `runDemand`, the acreage callback in `showParcel`) following the
+      `food_truck_court`/`hotel` pattern — but this is the **first land use
+      to actually call the shared `standardUseVerdict`** (`web/logic.js`,
+      landed but unused in "Best fit here" step 1) instead of duplicating its
+      three-gate demand/site-size/competitor-distance math inline, since
+      grocery_store's requires shape is exactly what that helper models.
+      No `reverseSearchSignals`/reverse-search UI changes needed — it already
+      derives `preferFar`/`preferNear` generically from `requires.competition`
+      and `roofNeed`. No new pure logic landed in `logic.js` itself (just a
+      new caller of the existing `standardUseVerdict`), so `node --test`'s
+      count is unchanged at 247. Verified: `python -m pytest -q` (15 passed),
+      `simy validate` (OK, 32 sources, 16 layers, 12 land uses), `node --test
+      tests/js/*.test.mjs` (247 passed, unchanged), and headless Chromium:
+      both pages load with zero console/page errors; selecting `grocery_store`
+      shows the correct label, enables "🔍 Find candidate sites" with 4/8/16 km
+      radius options (0.5x/1x/2x its own 8 km trade area — `preferFar`/
+      `preferNear` both correctly on), and a simulated map click renders the
+      full result panel without throwing; driving `maybeRenderGSVerdict`
+      directly through PASS / PASS-with-no-competitor-in-range /
+      SHORT-on-demand / SHORT-on-acreage / SHORT-on-competitor-too-close /
+      acreage-unavailable / no-rooftop-read (verdict block correctly hidden)
+      / competitor-lookup-error / wrong-use-selected-noop all produced
+      correct verdict text, CSS classes, and display state with zero throws.
+      Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
+      live end-to-end rooftop/competitor fetch on the real site is a good
+      human spot-check, same caveat as every prior live-data land use added
+      this way.
 - [ ] **16th parcel county.** Add one more county to `PARCEL_SOURCES` in
       `web/explore.html`, continuing the established pattern (WebSearch to
       confirm a live ArcGIS MapServer/FeatureServer parcel layer and its
