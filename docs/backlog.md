@@ -2087,17 +2087,42 @@ Ground rules for each run:
       live end-to-end rooftop/competitor fetch on the real site is a good
       human spot-check, same caveat as every prior live-data land use added
       this way.
-- [ ] **16th parcel county.** Add one more county to `PARCEL_SOURCES` in
-      `web/explore.html`, continuing the established pattern (WebSearch to
-      confirm a live ArcGIS MapServer/FeatureServer parcel layer and its
-      real field names since this sandbox can't reach ArcGIS hosts
-      directly; graceful partial-field-coverage when owner/address/land-use
-      aren't publicly exposed; a per-source `zoning_note`; `record()` links
-      to a search page instead of a guessed per-parcel deep link when no
-      stable URL scheme is confirmed). Good candidates not yet covered:
-      Hennepin County, MN (Minneapolis); Tarrant County, TX (Fort Worth);
-      Orange County, CA; Clark County, NV (Las Vegas); or Mecklenburg
-      County, NC (Charlotte).
+- [x] **16th parcel county.** Added Tarrant County, TX (Fort Worth/Arlington) as
+      a 16th `PARCEL_SOURCES` entry — the Tarrant Appraisal District's
+      `mapit.tarrantcounty.com` ArcGIS `Tax/TCProperty/MapServer/0` layer
+      (found via WebSearch since this sandbox blocks direct ArcGIS REST
+      introspection, same constraint every prior county hit). Confirmed field
+      names via multiple independent search-indexed sources: `TAXPIN` (parcel
+      id, added to the shared `pick()` id list), `OWNER_NAME`, `SITUS_ADDR`
+      (both already covered by the shared owner/address lists), `LAND_ACRES`
+      (added to the acreage list), `ACCOUNT`, and `TOTAL_VALU` (added to the
+      value list). No confirmed land-use/property-type field — the layer's
+      other fields (`LIVING_ARE`/`BEDROOMS`/`BATHROOMS`/`SW_POOL`) read as
+      residential-appraisal columns rather than a generic use code, so land
+      use is left unmapped, same graceful partial-field-coverage as
+      Dallas/Fulton. Unlike most prior counties, TAD *does* publish a
+      confirmed per-account deep link (`tad.org/property?account=<ACCOUNT>`,
+      independently confirmed via search-indexed results including a live
+      `?account=0` example page), so `record()` builds a real per-parcel URL
+      instead of falling back to a search page. Tarrant is a TX county, so it
+      reuses the "TX counties don't zone" `zoning_note`. Verified: `python -m
+      pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16 layers, 12
+      land uses), `node --test tests/js/*.test.mjs` (247 passed, unchanged —
+      this item touches only inline `PARCEL_SOURCES` data/pick() lists in
+      `explore.html`, no new pure `logic.js` helpers). Verified in headless
+      Chromium: both pages load with zero console/page errors; `inBbox`
+      correctly routes a downtown-Fort-Worth point to the new source, still
+      finds Dallas County's own source for a Dallas-side point (no bbox
+      cross-contamination), and correctly finds no source for an
+      out-of-coverage point (Denver); driving `showParcel` directly with a
+      mocked Tarrant ArcGIS attribute payload (including an empty-attributes
+      edge case) rendered correctly and didn't throw; and a real end-to-end
+      `analyze()` click at a Fort Worth point with a mocked `fetch` response
+      rendered parcel ID/owner/address/acreage/appraised-value and the
+      correct `tad.org/property?account=…` record link, all with zero
+      console errors. Live ArcGIS endpoint reachability (the exact field
+      values on real parcels) couldn't be confirmed from this sandbox — a
+      live spot-check is a good human follow-up, same as every prior county.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
