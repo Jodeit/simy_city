@@ -2168,6 +2168,51 @@ Ground rules for each run:
       values on real parcels) couldn't be confirmed from this sandbox — a
       live spot-check is a good human follow-up, same as every prior county.
 
+## Next (breadth) — newly added (16)
+- [ ] **13th land use: gas station / convenience store (c-store).** Add
+      `gas_station` to `data_sources/layers.yaml` — demand driven by nearby
+      traffic counts (reuse the existing AADT traffic-check pattern already
+      wired for other uses, e.g. `warehouse_club`/`data_center`, rather than
+      a rooftop read — c-store siting is about pass-by traffic, not resident
+      counts) plus a minimum-frontage/curb-cut-friendly acreage floor, and a
+      "farther from existing gas stations/c-stores is better" competition
+      read (OSM `amenity=fuel` / `shop=convenience`) at a saturation
+      distance short enough that this doesn't just degenerate into
+      `warehouse_club`'s numbers (gas stations cluster near intersections
+      far more tightly than big-box stores do). Wire a
+      `maybeRenderGasStationVerdict` in `web/explore.html` following the
+      `data_center`/`ev_charging_hub` traffic-based pattern (not the
+      rooftop-based `standardUseVerdict` five). Verify with `simy validate`,
+      `pytest`, `node --test tests/js`, and headless Chromium as usual.
+- [ ] **17th parcel county.** Add one more county to `PARCEL_SOURCES` in
+      `web/explore.html`, continuing the established pattern (WebSearch to
+      confirm a live ArcGIS MapServer/FeatureServer parcel layer and its
+      real field names since this sandbox can't reach ArcGIS hosts
+      directly; graceful partial-field-coverage when owner/address/land-use
+      aren't publicly exposed; a per-source `zoning_note`; `record()` links
+      to a search page instead of a guessed per-parcel deep link when no
+      stable URL scheme is confirmed). Good candidates not yet covered:
+      Hennepin County, MN (Minneapolis); Orange County, CA; Clark County, NV
+      (Las Vegas); or Mecklenburg County, NC (Charlotte).
+- [ ] **"Best fit here" step 3: rank the other seven land uses too.** The
+      "🏆 Best fit here" panel (step 2, above) only ranks the five uses that
+      reduce exactly to `standardUseVerdict`'s three-gate shape
+      (`food_truck_court`/`urgent_care`/`self_storage`/`child_care_center`/
+      `grocery_store`); `data_center`, `warehouse_club`, `fast_casual`,
+      `residential_subdivision`, `ev_charging_hub`, `senior_living`, and
+      `hotel` each show up in a plain "not scored here" note instead because
+      they have at least one leg `standardUseVerdict` doesn't model (AADT
+      traffic, a substation-distance gate, a median-age demand read, or no
+      rooftop demand at all). Either extend `standardUseVerdict` (or add a
+      small number of sibling scorers) to cover those extra leg shapes, or
+      give `rankLandUseVerdicts` a way to compare verdicts of genuinely
+      different shapes on a common footing (e.g. a normalized 0–1
+      margin-of-pass score each verdict type knows how to produce for
+      itself) so all twelve land uses can be ranked side by side for a
+      clicked point. Add unit tests for whatever new pure logic lands in
+      `web/logic.js`, and verify the panel end-to-end in headless Chromium
+      with a mocked `fetch` the same way step 2 was verified.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
