@@ -2168,6 +2168,50 @@ Ground rules for each run:
       values on real parcels) couldn't be confirmed from this sandbox — a
       live spot-check is a good human follow-up, same as every prior county.
 
+## Next (breadth) — newly added (16)
+- [ ] **Multi-tract Census ACS trade area for `grocery_store`.** The
+      "🏘️ Trade-area demographics (ACS)" checklist row is gated on
+      `AMENITY_USES.has(current)||current==="senior_living"` (`web/explore.html`,
+      near the `devCensusTA` block) — a hand-picked list from when only
+      `fast_casual`/`warehouse_club` (and later `senior_living`) had a
+      multi-km rooftop trade area worth sampling. `grocery_store` (added
+      later, `USE_DEMAND.grocery_store.radius: 8000`, `roofNeed: 12000`) meets
+      the exact same "large multi-km trade area with real rooftop demand"
+      criterion but was never added to the gate, so it's the one land use
+      with a genuine trade area that's missing this row today. Add it to the
+      condition (both places it appears — the row's visibility check and the
+      `runCensusTradeArea` call guard) without touching `AMENITY_USES` itself
+      (that set also drives an unrelated "amenity_seeker" persona-scoring
+      bonus in `web/logic.js` that shouldn't change for this).
+- [ ] **"Best fit here" step 3: score the other 7 land uses.** Step 2 (already
+      shipped) ranks only the five uses whose verdict reduces exactly to
+      `standardUseVerdict`'s three-gate shape (rooftop demand + site size +
+      farther-is-better competitor distance) — `food_truck_court`,
+      `urgent_care`, `self_storage`, `child_care_center`, `grocery_store`.
+      The other seven (`data_center`, `warehouse_club`, `fast_casual`,
+      `residential_subdivision`, `ev_charging_hub`, `senior_living`, `hotel`)
+      show as a plain "not scored here" note because each has at least one
+      leg the shared helper doesn't model (AADT traffic, a substation-distance
+      gate, a median-age demand read, or a school-capacity gate instead of
+      rooftop demand). Either extend `standardUseVerdict`/
+      `rankLandUseVerdicts` to model those extra legs, or give
+      `rankLandUseVerdicts` a way to rank verdicts of different shapes
+      side-by-side, so fewer (ideally none) of the 12 land uses end up
+      unscored in the Best Fit panel.
+- [ ] **17th parcel county.** Pick one U.S. county not yet in
+      `PARCEL_SOURCES` (16 covered so far: Travis, Maricopa, Harris, Bexar,
+      LA, King, Cook, Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton,
+      Salt Lake, Franklin, Tarrant — e.g. Clark County, NV / Las Vegas, or
+      Hennepin County, MN / Minneapolis, are both plausible next picks with
+      public ArcGIS parcel layers). Same recipe as the last several: WebSearch
+      for the county's public ArcGIS parcel MapServer endpoint and its real
+      field names (id/owner/address/land-use/acreage/appraised-value), add a
+      `PARCEL_SOURCES` entry with the right `bbox`, extend the shared
+      `pick()` candidate field lists only for genuinely new field names, set
+      `zoning_note`/`county_state` correctly for the state, and confirm
+      `inBbox` routes a real point in that county to the new source without
+      stealing coverage from a neighboring county already in the list.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
