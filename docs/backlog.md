@@ -2029,24 +2029,68 @@ Ground rules for each run:
       counties added this way.
 
 ## Next (breadth) — newly added (15)
-- [ ] **"Best fit here" step 2: the ranked results button + table.** Wire up
+- [x] **"Best fit here" step 2: the ranked results button + table.** Wired up
       the "🏆 Best fit here" button flagged as the natural next step when
       the shared `standardUseVerdict`/`rankLandUseVerdicts` core landed
-      (`web/logic.js`). For the currently clicked point, run the underlying
-      legs for every registered land use (`data_center`,
-      `residential_subdivision`, `fast_casual`, `warehouse_club`,
-      `food_truck_court`, `urgent_care`, `self_storage`,
-      `child_care_center`, `ev_charging_hub`, `senior_living`, `hotel`) —
-      reuse `standardUseVerdict` for the five uses that already share its
-      three-gate shape, and each of the other six uses' existing bespoke
-      verdict logic for the rest — without re-issuing any Overpass/ArcGIS
-      query already fetched for whichever use is currently selected. Render
-      a small ranked table (label, PASS/SHORT badge, one-line reason) in
-      `rankLandUseVerdicts` order; clicking a row switches Test-a-use to
-      that land use and re-renders its full single-use panel. If running
-      all eleven in one pass is too much for one session, a first cut that
-      covers just the five `standardUseVerdict` uses (with the rest shown
-      as "not yet ranked") is a reasonable, honestly-labeled partial step.
+      (`web/logic.js`) — the honestly-labeled **partial first cut** this
+      item's own text anticipated: only the five uses whose
+      `maybeRender*Verdict` reduces to *exactly* `standardUseVerdict`'s
+      three-gate shape (rooftop demand + site size + farther-is-better
+      competitor distance, nothing else) get ranked —
+      `food_truck_court`/`urgent_care`/`self_storage`/`child_care_center`/
+      `grocery_store` (`BEST_FIT_USES` in `web/explore.html`). The other
+      seven (`data_center`, `warehouse_club`, `fast_casual`,
+      `residential_subdivision`, `ev_charging_hub`, `senior_living`,
+      `hotel`) each have at least one leg `standardUseVerdict` doesn't model
+      (AADT traffic, a substation-distance gate, a median-age demand read,
+      or no rooftop demand at all) — force-fitting them would silently
+      misrepresent their real verdict math, so they're listed in a plain
+      "not scored here" note instead, alongside any of the five that
+      genuinely got no rooftop read at this point (e.g. a total Overpass
+      outage). For the clicked point, fetches each of the five uses' own
+      rooftop-count and competitor-scan Overpass queries (`bestFitLeg`) —
+      same query text `runDemand` already issues for whichever one of the
+      five is currently selected, through the same session-cached
+      `overpassRaw`, so that use's own two legs come back as instant cache
+      hits rather than a re-fetch; parcel acreage is shared across every use
+      already (one parcel per clicked point) and read straight from
+      `lastParcelSummary`, no extra fetch at all. Renders a ranked list
+      (`rankLandUseVerdicts` order: passing first by comfortable margin,
+      then short-by-least in the use-selector card's new "🏆 Best fit here"
+      panel (mirrors the existing "🔍 Find candidate sites" toggle/panel
+      pattern) — each row a label, PASS/SHORT badge, and one-line
+      demand/site/competitor reason; clicking a row calls `selectUse` +
+      `analyze(lastLatLng)` to switch Test-a-use to that land use and
+      re-render its full single-use panel, then closes the best-fit panel.
+      The button is disabled with a "Click a parcel first" title until
+      `lastLatLng` is set, and the panel/results are cleared on every new
+      point click (stale-result guard via its own `bfSeq` counter,
+      independent of the single-point flow's `reqSeq` and the reverse-search
+      flow's `searchReqSeq`) and on leaving Test-a-use mode. A total Overpass
+      outage (all five uses' rooftop reads fail) shows a distinct "couldn't
+      reach OpenStreetMap" state rather than an empty or fake result. No new
+      pure logic needed in `logic.js` — `standardUseVerdict`/
+      `rankLandUseVerdicts` already existed and were already tested from
+      step 1, so `node --test`'s count is unchanged at 247. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16
+      layers, 12 land uses). Verified in headless Chromium with a mocked
+      `fetch`: both pages load with zero console/page errors; a real
+      simulated map click + a real "🏆 Best fit here" button click rendered
+      exactly 5 ranked rows with the correct pass/short badges and reason
+      text; clicking the top-ranked row switched `current` to that use, ran
+      a real `analyze()`, and closed the panel; selecting one of the five
+      ranked uses (`grocery_store`) *before* clicking, so its own legs were
+      already cached by the click's `runDemand()`, then opening the best-fit
+      panel made measurably fewer new network calls than an uncached run
+      would (confirming the cache-reuse claim isn't just asserted in a
+      comment); and a simulated total-Overpass-failure run rendered the
+      "couldn't reach OpenStreetMap" state with zero throws. Outbound
+      network to Overpass is blocked from this sandbox, so a live end-to-end
+      run on the real site (does the panel read well with all 5 uses'
+      real-world data) is a good human spot-check. Ranking the other seven
+      uses — either by extending `standardUseVerdict` to model their extra
+      legs, or giving `rankLandUseVerdicts` a way to compare verdicts of
+      different shapes — is a reasonable follow-up if wanted.
 - [x] **12th land use: grocery store / supermarket.** Added `grocery_store`
       to `data_sources/layers.yaml` — rooftop demand within an 8 km trade area
       (`requires.demand.min_households_drive_time: 12000`, between

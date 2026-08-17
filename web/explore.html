@@ -162,7 +162,10 @@
   .usebar .lbl{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);margin-bottom:7px}
   .usebar .chips{display:flex;gap:6px;flex-wrap:wrap}
   /* reverse search: "find candidate sites" panel inside the use-selector card */
-  .searchToggleRow{margin-top:9px}
+  .searchToggleRow{margin-top:9px;display:flex;gap:6px;flex-wrap:wrap}
+  .toolbtn:disabled{opacity:.5;cursor:not-allowed}
+  .bfRow.bfPass{border-left:4px solid var(--aligned-fg)}
+  .bfRow.bfShort{border-left:4px solid var(--contested-fg)}
   .searchPanel{margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
   .searchRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
   .searchRow select{font:inherit;font-size:.82rem;padding:.35em .5em;border-radius:8px;
@@ -276,6 +279,12 @@
       <div class="chips" id="uses"></div>
       <div class="searchToggleRow">
         <button class="toolbtn" id="searchToggle" type="button" aria-expanded="false">🔍 Find candidate sites</button>
+        <button class="toolbtn" id="bestFitToggle" type="button" aria-expanded="false" disabled title="Click a parcel first">🏆 Best fit here</button>
+      </div>
+      <div class="searchPanel" id="bestFitPanel" style="display:none">
+        <div class="lbl">How every use scores at the clicked point</div>
+        <div class="live" id="bestFitStatus" style="display:none"></div>
+        <div id="bestFitResults"></div>
       </div>
       <div class="searchPanel" id="searchPanel" style="display:none">
         <div class="lbl">Search radius (around map center)</div>
@@ -389,6 +398,10 @@ L.Icon.Default.imagePath = "vendor/leaflet/images/";
 const LAYER_COLOR={power:"#e8843c",water:"#3a8fb7",broadband:"#2f9e44",transportation:"#5b6b6a",
   parcel:"#8a6d3b",environment:"#6b8f3a",entitlement:"#8a6d3b",demand:"#2f9e44",competition:"#b3541e",
   education:"#3a8fb7",health:"#b3306b",safety:"#b33030",habitat:"#1f7a33",land_cover:"#6b8f3a",carbon:"#444"};
+// Canonical registered-land-use order, shared by the use-selector chips
+// (initUses) and "Best fit here" (BEST_FIT_USES/runBestFit below) so the two
+// can't silently drift apart on which uses actually exist.
+const ALL_USE_KEYS=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store"];
 // Per-use LIVE demand read from OpenStreetMap: a trade-area radius, the real
 // number a use needs (rooftops as a household proxy), and what to count as
 // competition/context. This is what turns "needs ~100k households" into a real,
@@ -538,6 +551,23 @@ let hlState=null;
 // (web/logic.js) instead of duplicating this three-gate math inline.
 const GS_MIN_ACRES=5.0, GS_MIN_COMPETITOR_KM=2.0;
 let gsState=null;
+// "Best fit here" step 2: the land uses whose maybeRender*Verdict already
+// reduces to exactly the shared standardUseVerdict shape — a rooftop-demand
+// leg, a site-size leg, and a *farther-is-better* competitor-distance leg,
+// nothing else (warehouse_club has an AADT traffic leg, ev_charging_hub/hotel
+// have a substation/AADT leg instead of or in addition to acreage,
+// data_center/residential_subdivision/senior_living don't read rooftop demand
+// at all — none of those five fit this exact shape, so they're left out
+// rather than force-fit). Ranking those other uses without duplicating their
+// bespoke verdict math is a larger follow-up; the panel lists them as "not
+// yet ranked" instead of silently omitting them.
+const BEST_FIT_USES=[
+  {key:"food_truck_court", minAcres:FTC_MIN_ACRES, minCompetitorKm:FTC_MIN_COMPETITOR_KM},
+  {key:"urgent_care", minAcres:UC_MIN_ACRES, minCompetitorKm:UC_MIN_COMPETITOR_KM},
+  {key:"self_storage", minAcres:SS_MIN_ACRES, minCompetitorKm:SS_MIN_COMPETITOR_KM},
+  {key:"child_care_center", minAcres:CC_MIN_ACRES, minCompetitorKm:CC_MIN_COMPETITOR_KM},
+  {key:"grocery_store", minAcres:GS_MIN_ACRES, minCompetitorKm:GS_MIN_COMPETITOR_KM},
+];
 
 // Parcel sources, county-by-county (there is no single free national parcel API
 // with property lines). Each is an ArcGIS REST polygon layer queried by point.
@@ -920,7 +950,7 @@ function applyModeUI(m){
     b.setAttribute("aria-pressed",on?"true":"false");
   });
   document.getElementById("useBar").style.display = m==="build" ? "block" : "none";
-  if(m!=="build")closeSearchPanel();
+  if(m!=="build"){closeSearchPanel();closeBestFitPanel();}
   setLegend();
 }
 function setMode(m){
@@ -934,9 +964,8 @@ function setLegend(){
     : `🔎 <b>Explore:</b> click any property to see what it is, if it's for sale, and what could go there. Switch base map / parcels top-right. Default: <b>78738</b> (Lake Travis).`;
 }
 function initUses(){
-  const order=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store"];
   const el=document.getElementById("uses");
-  order.forEach(id=>{
+  ALL_USE_KEYS.forEach(id=>{
     const b=document.createElement("button");
     b.className="ubtn"+(id===current?" active":"");
     b.setAttribute("aria-pressed",id===current?"true":"false");
@@ -1053,6 +1082,8 @@ function analyze(latlng){
   if(marker)marker.remove(); if(ring)ring.remove(); if(probeLayer)probeLayer.remove();
   marker=L.marker(latlng).addTo(map);
   lastLatLng=latlng;
+  closeBestFitPanel(); // stale results from the previous point, if any
+  updateBestFitAvailability();
   const seq=++reqSeq;
   if(mode==="build"){
     const use=MODEL.land_uses[current], cfg=USE_DEMAND[current];
@@ -1903,6 +1934,111 @@ function maybeRenderGSVerdict(seq){
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
+/* ---- "Best fit here" step 2: rank every BEST_FIT_USES use at the clicked
+   point (web/logic.js's standardUseVerdict + rankLandUseVerdicts, "Best fit
+   here" step 1). Reuses each use's own USE_DEMAND radius/compQ — the exact
+   same rooftop-count and competitor-scan Overpass query text runDemand()
+   already issues for whichever use is currently selected — through the same
+   session-cached overpassRaw() (web/logic.js's makeSessionCache) runDemand
+   uses, so the currently-selected use's own two legs are never re-fetched,
+   just read back from cache; only the other four uses' legs are genuinely
+   new network calls. Parcel acreage is shared across every use (one parcel
+   per clicked point) and already resolved by showParcel regardless of which
+   use is selected, read straight from `lastParcelSummary` — no new fetch
+   needed for that leg at all. */
+let bfSeq=0;
+function bestFitLeg(useKey,lat,lng){
+  const cfg=USE_DEMAND[useKey];
+  const roofQ=`[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`;
+  const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
+  const compQ=`[out:json][timeout:25];(${parts});out center 60;`;
+  const roofP=overpassRaw(roofQ).then(d=>countOf(d)).catch(()=>null);
+  const compP=overpassRaw(compQ).then(d=>{
+    const els=(d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
+      return (la&&lo)?{km:haversine(lat,lng,la,lo)}:null;}).filter(Boolean).sort((a,b)=>a.km-b.km);
+    return {nearestComp: els.length?{km:els[0].km}:null, compErr:false};
+  }).catch(()=>({nearestComp:null,compErr:true}));
+  return Promise.all([roofP,compP]).then(([roofs,comp])=>({roofs,nearestComp:comp.nearestComp,compErr:comp.compErr}));
+}
+function bestFitReasonText(e){
+  return [
+    e.demandOk?`✓ demand ${Math.round(e.ratio*100)}% of need`
+      : `✗ demand only ${Math.round(e.ratio*100)}% of need`,
+    e.siteOk?`✓ site ${e.acres.toFixed(1)} ac`
+      : e.acres==null?"? site size unlisted"
+      : `✗ site only ${e.acres.toFixed(1)} ac (need ≥${e.minAcres})`,
+    e.compErr?"? competitor distance unavailable"
+      : !e.nearestComp?"✓ no existing competitor in range"
+      : e.farOk?`✓ nearest competitor ${e.nearestComp.km.toFixed(1)} km away`
+      : `✗ nearest competitor only ${e.nearestComp.km.toFixed(1)} km away (need ≥${e.minCompetitorKm})`,
+  ].join(" · ");
+}
+function updateBestFitAvailability(){
+  const btn=document.getElementById("bestFitToggle"); if(!btn)return;
+  btn.disabled=!lastLatLng;
+  btn.title=lastLatLng?"":"Click a parcel first";
+}
+function toggleBestFitPanel(){
+  const btn=document.getElementById("bestFitToggle");
+  if(btn.disabled)return;
+  const panel=document.getElementById("bestFitPanel");
+  const opening=panel.style.display==="none";
+  panel.style.display=opening?"block":"none";
+  btn.setAttribute("aria-expanded",opening?"true":"false");
+  if(opening)runBestFit();
+}
+function closeBestFitPanel(){
+  const panel=document.getElementById("bestFitPanel"); if(panel)panel.style.display="none";
+  const btn=document.getElementById("bestFitToggle"); if(btn)btn.setAttribute("aria-expanded","false");
+  const results=document.getElementById("bestFitResults"); if(results)results.innerHTML="";
+  const status=document.getElementById("bestFitStatus"); if(status)status.style.display="none";
+}
+function runBestFit(){
+  if(!lastLatLng)return;
+  const seq=++bfSeq, lat=lastLatLng.lat, lng=lastLatLng.lng;
+  const acres=lastParcelSummary?lastParcelSummary.acres:null;
+  const statusEl=document.getElementById("bestFitStatus"), resEl=document.getElementById("bestFitResults");
+  statusEl.style.display="block"; statusEl.className="live loading"; statusEl.textContent="scoring every use at this point…";
+  resEl.innerHTML="";
+  Promise.all(BEST_FIT_USES.map(u=>bestFitLeg(u.key,lat,lng).then(r=>({u,r}))))
+    .then(list=>{
+      if(seq!==bfSeq)return;
+      if(list.every(({r})=>r.roofs==null)){
+        statusEl.className="live"; statusEl.innerHTML=errHTML("couldn’t reach OpenStreetMap to score this point.");
+        return;
+      }
+      statusEl.style.display="none";
+      const scored=[], noRead=[];
+      list.forEach(({u,r})=>{
+        const cfg=USE_DEMAND[u.key];
+        const v=standardUseVerdict(
+          {roofs:r.roofs, acres, nearestCompKm:r.nearestComp?r.nearestComp.km:null, compErr:r.compErr},
+          {roofNeed:cfg.roofNeed, minAcres:u.minAcres, minCompetitorKm:u.minCompetitorKm});
+        if(v==null){ noRead.push(u.key); return; }
+        scored.push(Object.assign({key:u.key, acres, nearestComp:r.nearestComp, compErr:r.compErr,
+          minAcres:u.minAcres, minCompetitorKm:u.minCompetitorKm}, v));
+      });
+      renderBestFit(rankLandUseVerdicts(scored), noRead);
+    });
+}
+function renderBestFit(ranked,noRead){
+  const resEl=document.getElementById("bestFitResults");
+  const notRanked=ALL_USE_KEYS.filter(id=>!BEST_FIT_USES.some(u=>u.key===id)).concat(noRead);
+  const rows=ranked.map((e,i)=>
+    `<div class="candRow bfRow ${e.pass?'bfPass':'bfShort'}" data-key="${e.key}" role="button" tabindex="0">
+       <span class="candNum">${i+1}</span>
+       <span><b>${esc(useLabel(e.key))}</b> — ${e.pass?"✓ PASS":"✗ SHORT"}<br>
+       <small>${esc(bestFitReasonText(e))}</small></span>
+     </div>`).join("");
+  const notRankedHtml=notRanked.length
+    ? `<p class="src">Not scored here (no shared demand/site/competitor read, or no rooftop data at this point): ${notRanked.map(k=>esc(useLabel(k))).join(", ")}</p>` : "";
+  resEl.innerHTML=(ranked.length?`<div class="candList">${rows}</div>`
+    : `<p class="src">No candidates could be scored at this point.</p>`)+notRankedHtml;
+  resEl.querySelectorAll(".bfRow").forEach(row=>{
+    wireActivate(row,()=>{ selectUse(row.dataset.key); if(lastLatLng)analyze(lastLatLng); closeBestFitPanel(); });
+  });
+}
+
 /* ---- reverse search, step 3: the "🔍 Find candidate sites" search UI ----
    Everything before this flips a clicked point into an answer. This flips
    the flow: pick an area (map center + a radius) and get back a handful of
@@ -1921,6 +2057,7 @@ function initSearch(){
   document.getElementById("searchGo").onclick=runCandidateSearch;
   document.getElementById("searchSave").onclick=saveCurrentSearch;
   document.getElementById("searchShare").onclick=shareSearchLink;
+  document.getElementById("bestFitToggle").onclick=toggleBestFitPanel;
 }
 // Carries the search's center (current map center), radius, and use into a
 // standalone `#search=..` link (encodeSearchHash, web/logic.js) — same
