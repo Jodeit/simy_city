@@ -2212,19 +2212,40 @@ Ground rules for each run:
       `rankLandUseVerdicts` a way to rank verdicts of different shapes
       side-by-side, so fewer (ideally none) of the 12 land uses end up
       unscored in the Best Fit panel.
-- [ ] **17th parcel county.** Pick one U.S. county not yet in
-      `PARCEL_SOURCES` (16 covered so far: Travis, Maricopa, Harris, Bexar,
-      LA, King, Cook, Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton,
-      Salt Lake, Franklin, Tarrant — e.g. Clark County, NV / Las Vegas, or
-      Hennepin County, MN / Minneapolis, are both plausible next picks with
-      public ArcGIS parcel layers). Same recipe as the last several: WebSearch
-      for the county's public ArcGIS parcel MapServer endpoint and its real
-      field names (id/owner/address/land-use/acreage/appraised-value), add a
-      `PARCEL_SOURCES` entry with the right `bbox`, extend the shared
-      `pick()` candidate field lists only for genuinely new field names, set
-      `zoning_note`/`county_state` correctly for the state, and confirm
-      `inBbox` routes a real point in that county to the new source without
-      stealing coverage from a neighboring county already in the list.
+- [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
+      17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s
+      `HennepinData/LAND_PROPERTY/MapServer/1` "County Parcels" layer (found
+      via WebSearch, same recipe as every prior county; direct ArcGIS REST
+      introspection is blocked from this sandbox like always). Confirmed
+      fields: `PID` (13-digit parcel id) and `OWNER_NM` (owner name), both
+      added to the shared `pick()` candidate lists. Situs address/land-use/
+      acreage/appraised-value field names weren't independently confirmed on
+      this layer, so — same cautious call as Dallas/Fulton/Franklin — left
+      unmapped rather than guessed. A `pidresult.jsp` per-PID deep link
+      exists but its query-param name wasn't confirmed with enough
+      confidence, so `record()` links to the county's own property-search
+      page instead of guessing a link shape that might 404, same call as
+      most counties here. Confirmed via WebSearch that Hennepin County does
+      hold zoning authority over unincorporated land (unlike TX) but almost
+      none remains (Hassan Township, the last one, is now largely
+      incorporated) — `zoning_note` reflects that near-total-incorporation
+      case, same pattern as Fulton County's. Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK, 32 sources, 16 layers, 12 land
+      uses), `node --test tests/js/*.test.mjs` (247 passed, unchanged — this
+      item touches only inline `PARCEL_SOURCES` data/pick() lists in
+      `explore.html`, no new pure `logic.js` helpers). Verified in headless
+      Chromium: both pages load with zero console/page errors; `inBbox`
+      correctly routes a downtown-Minneapolis point to the new source, still
+      finds Salt Lake County's own source for a Salt-Lake-side point (no
+      bbox cross-contamination), and correctly finds no source for an
+      out-of-coverage point (Denver); a real `analyze()` click at the
+      Minneapolis point followed by driving `showParcel` directly with a
+      mocked Hennepin-shaped ArcGIS attribute payload (`PID`/`OWNER_NM`,
+      plus an empty-attributes edge case) rendered the parcel ID, owner,
+      zoning note, and record link correctly with zero throws. Live ArcGIS
+      endpoint reachability (the exact `PID`/`OWNER_NM` field values on real
+      parcels) couldn't be confirmed from this sandbox — a live spot-check
+      is a good human follow-up, same as every prior county.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
