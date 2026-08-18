@@ -2169,20 +2169,34 @@ Ground rules for each run:
       live spot-check is a good human follow-up, same as every prior county.
 
 ## Next (breadth) — newly added (16)
-- [ ] **Multi-tract Census ACS trade area for `grocery_store`.** The
-      "🏘️ Trade-area demographics (ACS)" checklist row is gated on
+- [x] **Multi-tract Census ACS trade area for `grocery_store`.** The
+      "🏘️ Trade-area demographics (ACS)" checklist row was gated on
       `AMENITY_USES.has(current)||current==="senior_living"` (`web/explore.html`,
       near the `devCensusTA` block) — a hand-picked list from when only
       `fast_casual`/`warehouse_club` (and later `senior_living`) had a
       multi-km rooftop trade area worth sampling. `grocery_store` (added
       later, `USE_DEMAND.grocery_store.radius: 8000`, `roofNeed: 12000`) meets
       the exact same "large multi-km trade area with real rooftop demand"
-      criterion but was never added to the gate, so it's the one land use
-      with a genuine trade area that's missing this row today. Add it to the
-      condition (both places it appears — the row's visibility check and the
-      `runCensusTradeArea` call guard) without touching `AMENITY_USES` itself
-      (that set also drives an unrelated "amenity_seeker" persona-scoring
-      bonus in `web/logic.js` that shouldn't change for this).
+      criterion but was never added to the gate, so it was the one land use
+      with a genuine trade area missing this row. Added `current==="grocery_store"`
+      to the condition in both places it appears — the row's visibility check
+      and the `runCensusTradeArea` call guard — without touching `AMENITY_USES`
+      itself (that set also drives an unrelated "amenity_seeker" persona-scoring
+      bonus in `web/logic.js` that didn't need to change for this). Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16
+      layers, 12 land uses), `node --test tests/js/*.test.mjs` (247 passed,
+      unchanged — this item is pure gate-condition wiring in `explore.html`,
+      no new pure `logic.js` helpers). Verified in headless Chromium: both
+      pages load with zero console/page errors; a real end-to-end `analyze()`
+      run (mocking only the ArcGIS parcel point-query so `showParcel` executes
+      instead of taking the network-fail path) with `grocery_store` selected
+      now renders the "🏘️ Trade-area demographics (ACS)" row and calls
+      `runCensusTradeArea`; `data_center` (no trade area) correctly still
+      shows neither; and `warehouse_club` (pre-existing `AMENITY_USES` member)
+      is unregressed — still shows both. Outbound network to
+      `geo.fcc.gov`/`api.census.gov` is blocked from this sandbox, so a live
+      spot-check that the row actually populates on the real site is a good
+      human follow-up, same caveat as the original multi-tract ACS item.
 - [ ] **"Best fit here" step 3: score the other 7 land uses.** Step 2 (already
       shipped) ranks only the five uses whose verdict reduces exactly to
       `standardUseVerdict`'s three-gate shape (rooftop demand + site size +

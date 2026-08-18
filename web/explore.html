@@ -2462,7 +2462,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>💧 MUD / water district</span><b id="devDist" class="loading">checking…</b></div>
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
     <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
-    ${(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
+    ${(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"||current==="grocery_store"))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -2474,7 +2474,7 @@ function showParcel(geo,src,seq){
 
   if(lastLatLng){
     runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);
-    if(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"))runCensusTradeArea(lastLatLng,seq);
+    if(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"||current==="grocery_store"))runCensusTradeArea(lastLatLng,seq);
   }
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
   if(mode==="explore"){fillFit(acN);}
