@@ -875,6 +875,42 @@ const PARCEL_SOURCES=[
     county_state:"Tarrant County, TX",
     zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
   },
+  {
+    name:"Clark County GISMO Assessor Map (Clark County, NV)",
+    // County-run GISMO viewer's own AssessorMap service (Lotlines=0,
+    // Parcels=1, Easements=2, confirmed via the service's public layer
+    // listing) — used over the alternative NV Division of Water Resources
+    // statewide "County_Parcels_in_Nevada" aggregator (which also covers
+    // this county with standardized APN/SiteAddress/SiteCity/Acres fields)
+    // because that state service's own documentation flags an NRS 250
+    // data-sharing restriction; querying the county's own public-facing
+    // REST endpoint directly, like every other county here, avoids that.
+    urls:["https://maps.clarkcountynv.gov/arcgis/rest/services/GISMO/AssessorMap/MapServer/1"],
+    // Clark County is huge (~8,000 sq mi, mostly BLM/federal desert) —
+    // covers the Las Vegas Valley plus Laughlin, Mesquite, and the Lake
+    // Mead/Gold Butte area out to the Arizona border.
+    bbox:[-115.89,35.00,-114.04,36.85],
+    // APN is the field name every NV county standardizes on (the state's own
+    // parcel-data spec sets Display Field: APN, and Clark County's own
+    // Assessor site calls it "Assessor Parcel Number (APN)" throughout) —
+    // already in the shared id candidate list from Maricopa County, so no
+    // list change needed. This sandbox blocks direct ArcGIS REST
+    // introspection like every prior county here, so owner/address/land-use/
+    // value field names on this specific county-run layer weren't
+    // independently confirmed — left unmapped rather than guessed, same
+    // graceful partial-field-coverage as Dallas/Fulton/Allegheny here.
+    // No confirmed per-APN deep-link URL for the Assessor's real-property
+    // search app, so — same cautious call as most counties here — send
+    // people to the search page instead of guessing a link shape.
+    record:()=>"https://www.clarkcountynv.gov/government/assessor/property_search/real-property-records",
+    source_label:"Clark County Assessor",
+    county_state:"Clark County, NV",
+    // Title 30 (Clark County's Unified Development Code) governs zoning for
+    // all unincorporated county land; the five incorporated cities inside
+    // the county (Las Vegas, North Las Vegas, Henderson, Boulder City,
+    // Mesquite) each set their own zoning instead.
+    zoning_note:"unlike TX, NV counties do zone unincorporated land (Clark County's Title 30 Unified Development Code) — check that, or the city's zoning if incorporated (Las Vegas, Henderson, North Las Vegas, Boulder City, Mesquite)",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
