@@ -2212,19 +2212,43 @@ Ground rules for each run:
       `rankLandUseVerdicts` a way to rank verdicts of different shapes
       side-by-side, so fewer (ideally none) of the 12 land uses end up
       unscored in the Best Fit panel.
-- [ ] **17th parcel county.** Pick one U.S. county not yet in
-      `PARCEL_SOURCES` (16 covered so far: Travis, Maricopa, Harris, Bexar,
-      LA, King, Cook, Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton,
-      Salt Lake, Franklin, Tarrant — e.g. Clark County, NV / Las Vegas, or
-      Hennepin County, MN / Minneapolis, are both plausible next picks with
-      public ArcGIS parcel layers). Same recipe as the last several: WebSearch
-      for the county's public ArcGIS parcel MapServer endpoint and its real
-      field names (id/owner/address/land-use/acreage/appraised-value), add a
-      `PARCEL_SOURCES` entry with the right `bbox`, extend the shared
-      `pick()` candidate field lists only for genuinely new field names, set
-      `zoning_note`/`county_state` correctly for the state, and confirm
-      `inBbox` routes a real point in that county to the new source without
-      stealing coverage from a neighboring county already in the list.
+- [x] **17th parcel county.** Added Clark County, NV (Las Vegas/Henderson/
+      Laughlin) to `PARCEL_SOURCES` in `web/explore.html`. Uses the county's
+      own GIS viewer's public parcel service,
+      `GISMO/AssessorMap/MapServer/1` (layer order Lotlines=0/Parcels=1/
+      Easements=2, confirmed via the service's public layer listing) —
+      deliberately over the alternative NV Division of Water Resources
+      statewide "County_Parcels_in_Nevada" aggregator, even though that
+      service's fields (APN/SiteAddress/SiteCity/Acres/OwnerName) were more
+      fully confirmed via search, because its own documentation flags an
+      NRS 250 data-sharing restriction; querying the county's own
+      public-facing endpoint directly avoids that, same as every other
+      county here. `bbox` covers the county's full ~8,000 sq mi extent
+      (mostly BLM/federal desert) from the Las Vegas Valley out to Laughlin,
+      Mesquite, and the Lake Mead/Gold Butte area at the AZ border. `APN` —
+      the field name every NV county standardizes on per the state's own
+      parcel-data spec and Clark County's own Assessor terminology — was
+      already in the shared `pick()` id candidate list from Maricopa County,
+      so no list change was needed; this sandbox blocks direct ArcGIS REST
+      introspection like every prior county here, so owner/address/land-use/
+      value field names on this specific county-run layer weren't
+      independently confirmed and are left unmapped, same graceful
+      partial-field-coverage as Dallas/Fulton/Allegheny. No confirmed
+      per-APN deep link for the Assessor's search app either, so `record()`
+      sends people to the search page like most counties here.
+      `zoning_note` covers Clark County's Title 30 Unified Development Code
+      (governs unincorporated land) vs. the five incorporated cities'
+      (Las Vegas, Henderson, North Las Vegas, Boulder City, Mesquite) own
+      zoning. Verified: `python -m pytest -q` (15 passed), `simy validate`
+      (OK, 32 sources, 16 layers, 12 land uses — this item is
+      `explore.html`-only, no `data_sources/`/model change), `node --test
+      tests/js/*.test.mjs` (247 passed, unchanged — no new `logic.js`
+      helpers), and headless Chromium confirms both pages still load with
+      zero genuine console/page errors. `inBbox` math confirms both a Las
+      Vegas point (36.1699, -115.1398) and a Laughlin point (35.1678,
+      -114.5719) route to the new Clark County entry, and its bbox doesn't
+      overlap any existing county's (nearest, Maricopa County AZ, tops out
+      at 34.05°N — a full degree south of Clark's 35.00°N floor).
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
