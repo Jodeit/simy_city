@@ -76,8 +76,9 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
 // one of those five uses already applies — and, unlike a raw rooftop count,
 // comparable across land uses with very different roofNeed magnitudes, which
 // is what a future ranked "best fit here" table needs. `thresholds.minAcres`/
-// `minCompetitorKm`/`minAadt` are optional — omit any to skip that gate
-// entirely (it reads as trivially satisfied), for uses that don't have it. A
+// `minCompetitorKm`/`minAadt`/`maxSubstationKm` are optional — omit any to skip
+// that gate entirely (it reads as trivially satisfied), for uses that don't
+// have it. A
 // competitor-lookup error (`reads.compErr`) fails the distance gate outright
 // rather than being ignored, matching every existing farOk computation; no
 // competitor found within range (`nearestCompKm==null` with no error) is the
@@ -86,10 +87,14 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
 // mirrors warehouse_club/fast_casual/hotel's existing inline `trafficLeg`
 // read: a lookup error or no NHS route within range both fail the gate, same
 // "closer/busier is better, no read is a gap" contract as `trafficLeg`,
-// unlike the farther-is-better competitor gate.
+// unlike the farther-is-better competitor gate. The substation gate
+// (`reads.subKm`, the nearest-substation distance in km, or `reads.subErr`)
+// mirrors ev_charging_hub/data_center's existing inline power leg and reads
+// the same way as AADT — nearer is better, so a lookup error or no substation
+// in range both fail it, the opposite of the competitor gate.
 function standardUseVerdict(reads,thresholds){
-  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr}=reads||{};
-  const {roofNeed,minAcres,minCompetitorKm,minAadt}=thresholds||{};
+  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr}=reads||{};
+  const {roofNeed,minAcres,minCompetitorKm,minAadt,maxSubstationKm}=thresholds||{};
   if(roofs==null)return null;
   const ratio=roofNeed?roofs/roofNeed:null;
   const demandOk=ratio!=null&&ratio>=0.85;
@@ -100,7 +105,10 @@ function standardUseVerdict(reads,thresholds){
   const aadtOk=minAadt==null?true
     :aadtErr?false
     :(aadtHit!=null&&aadtHit.aadt>=minAadt);
-  return {pass:demandOk&&siteOk&&farOk&&aadtOk,demandOk,siteOk,farOk,aadtOk,ratio};
+  const subOk=maxSubstationKm==null?true
+    :subErr?false
+    :(subKm!=null&&subKm<=maxSubstationKm);
+  return {pass:demandOk&&siteOk&&farOk&&aadtOk&&subOk,demandOk,siteOk,farOk,aadtOk,subOk,ratio};
 }
 // "Best fit here" step 1: turns a flat list of per-land-use verdicts into the
 // ranked order a "🏆 Best fit here" summary table would show — every passing

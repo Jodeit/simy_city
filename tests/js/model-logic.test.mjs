@@ -217,7 +217,7 @@ test("standardUseVerdict: full PASS when demand, site size and competitor distan
     { roofs: 100, acres: 5, nearestCompKm: 2 },
     { roofNeed: 100, minAcres: 2, minCompetitorKm: 1 }
   );
-  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, aadtOk: true, ratio: 1 });
+  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, aadtOk: true, subOk: true, ratio: 1 });
 });
 
 test("standardUseVerdict: pass threshold is 85% of need, same bar blendedDemand/seniorDemandRead use", () => {
@@ -316,6 +316,41 @@ test("standardUseVerdict: the AADT gate participates in pass same as the other g
   const thresholds = { roofNeed: 100, minAadt: 40000 };
   assert.equal(standardUseVerdict(base, thresholds).pass, true);
   assert.equal(standardUseVerdict({ ...base, aadtHit: { aadt: 100 } }, thresholds).pass, false);
+});
+
+test("standardUseVerdict: omitting maxSubstationKm skips the substation gate entirely", () => {
+  const v = standardUseVerdict({ roofs: 100, subKm: null }, { roofNeed: 100 });
+  assert.equal(v.subOk, true);
+});
+
+test("standardUseVerdict: no substation within range fails the gate, unlike the competitor gate", () => {
+  const v = standardUseVerdict({ roofs: 100, subKm: null }, { roofNeed: 100, maxSubstationKm: 3 });
+  assert.equal(v.subOk, false);
+});
+
+test("standardUseVerdict: a substation beyond the ceiling fails, at/inside passes", () => {
+  const far = standardUseVerdict({ roofs: 100, subKm: 3.1 }, { roofNeed: 100, maxSubstationKm: 3 });
+  const exact = standardUseVerdict({ roofs: 100, subKm: 3 }, { roofNeed: 100, maxSubstationKm: 3 });
+  assert.equal(far.subOk, false);
+  assert.equal(exact.subOk, true);
+});
+
+test("standardUseVerdict: a substation-lookup error fails the gate even with no distance on record", () => {
+  const v = standardUseVerdict(
+    { roofs: 100, subKm: null, subErr: true },
+    { roofNeed: 100, maxSubstationKm: 3 }
+  );
+  assert.equal(v.subOk, false);
+  assert.equal(v.pass, false);
+});
+
+test("standardUseVerdict: the substation gate ANDs with the other gates (ev_charging_hub's real shape)", () => {
+  const base = { roofs: 800, subKm: 1.2, nearestCompKm: 2 };
+  const thresholds = { roofNeed: 800, maxSubstationKm: 3, minCompetitorKm: 0.8 };
+  assert.equal(standardUseVerdict(base, thresholds).pass, true);
+  assert.equal(standardUseVerdict({ ...base, subKm: 9 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, nearestCompKm: 0.1 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, roofs: 10 }, thresholds).pass, false);
 });
 
 test("rankLandUseVerdicts: passing uses sort before short uses", () => {

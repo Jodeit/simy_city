@@ -2236,24 +2236,64 @@ Ground rules for each run:
       from 7 uses to the remaining 6. Live Overpass/ArcGIS reachability
       wasn't tested (sandbox blocks outbound), same caveat as every prior
       live-read item.
-- [ ] **"Best fit here" step 3, part 2: score the remaining 6 land uses.**
+- [x] **"Best fit here" step 3, part 2: add a substation-distance gate +
+      `ev_charging_hub`.** Same shape as part 1's AADT gate, for the one
+      remaining use whose verdict (`maybeRenderEVVerdict`) is
+      `standardUseVerdict`'s rooftop-demand + farther-is-better competitor
+      read plus exactly one extra leg — the nearest-substation distance
+      (`power.prefer_substation_within_km: 3`) — and no acreage gate at all.
+      Added an optional `maxSubstationKm` gate to `standardUseVerdict`
+      (`reads.subKm`/`subErr`, `thresholds.maxSubstationKm` — skipped/
+      trivially-true when omitted, same pattern as `minAcres`/
+      `minCompetitorKm`/`minAadt`). It reads *nearer is better*, like the
+      AADT gate and unlike the competitor gate: a lookup error or no
+      substation within range both fail it, since a charging hub with no
+      mapped grid capacity nearby is a real siting gap, not the best case
+      the way "no competitor in range" is. `bestFitLeg` (`web/explore.html`)
+      now fetches the nearest substation via the same `USE_DEMAND.powerQ`
+      Overpass query runDemand's own power leg uses, through the same
+      session-cached `overpassRaw`, in parallel with the existing rooftop/
+      competitor/AADT fetches and skipped entirely for uses without a
+      `maxSubstationKm` threshold (confirmed: scoring `grocery_store` issues
+      its 2 usual queries and zero substation queries). Parsing reuses the
+      existing `parseOverpassPoints` helper rather than re-inlining the
+      node-vs-way element-shape handling. `bestFitReasonText` gained a
+      matching conditional substation line. Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK, 32 sources, 16 layers, 12 land uses),
+      `node --test tests/js/*.test.mjs` (257 passed, 5 new — the substation
+      gate's skip/no-substation/at-vs-beyond-the-ceiling/lookup-error/
+      AND-with-other-gates cases, plus the existing exact-shape assertion
+      updated for the new `subOk` key). Verified in headless Chromium: both
+      pages load with zero genuine console/page errors; driving
+      `bestFitLeg`/`standardUseVerdict` with mocked Overpass responses
+      confirmed the full fetch→verdict pipeline (PASS at a 0.3 km
+      substation, flipping to SHORT on `subOk` alone at 7.0 km, and the
+      `? substation distance unavailable` line on a rejected power query);
+      and a real end-to-end `runBestFit()` rendered `ev_charging_hub` ranked
+      #1 with its substation reason line and no site-size line, while the
+      "not scored here" note correctly dropped from 6 uses to the remaining
+      5. Live Overpass reachability wasn't tested (sandbox blocks outbound),
+      same caveat as every prior live-read item.
+- [ ] **"Best fit here" step 3, part 3: score the remaining 5 land uses.**
       Still shown as "not scored here": `data_center` (substation distance +
       acreage + water-district boolean, no rooftop demand at all),
       `fast_casual` (blended rooftop+daytime demand instead of rooftops
       alone, plus the same AADT gate `warehouse_club` now has),
       `residential_subdivision` (acreage + induced-school-load ratio instead
-      of rooftop demand), `ev_charging_hub` (rooftop demand + a substation-
-      distance gate + farther-is-better competitor distance, no acreage),
-      `senior_living` (median-age demand instead of rooftop demand, plus
-      site size + farther-is-better competitor distance), and `hotel`
-      (nearby demand-generator count instead of rooftops, plus the AADT gate,
-      site size, and farther-is-better competitor distance — four gates
-      total). Each needs either a new optional gate on `standardUseVerdict`
-      (a substation-distance gate would also unlock `ev_charging_hub`/
-      `data_center`; a blended-demand or precomputed-demand-ratio input would
-      also unlock `fast_casual`/`senior_living`) or a bespoke verdict shape
-      ranked side-by-side via `rankLandUseVerdicts`, so fewer (ideally none)
-      of the 12 land uses end up unscored in the Best Fit panel.
+      of rooftop demand), `senior_living` (median-age demand instead of
+      rooftop demand, plus site size + farther-is-better competitor
+      distance), and `hotel` (nearby demand-generator count instead of
+      rooftops, plus the AADT gate, site size, and farther-is-better
+      competitor distance — four gates total). Every remaining one differs
+      in its *demand* leg, not its gates: `standardUseVerdict` hard-codes
+      `roofs/roofNeed` as the ratio, so the natural next step is letting a
+      caller pass a precomputed demand ratio (from `blendedDemand`,
+      `seniorDemandRead`, or a demand-generator count) in place of a raw
+      rooftop count — that one change would unlock `fast_casual`,
+      `senior_living`, and `hotel` at once, leaving only `data_center` and
+      `residential_subdivision` (whose water-district / school-load legs
+      have no shared-gate analogue yet) for a bespoke verdict shape ranked
+      side-by-side via `rankLandUseVerdicts`.
 - [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
       17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s "County Parcels"
       layer (`HennepinData/LAND_PROPERTY/MapServer/1`), found via WebSearch
