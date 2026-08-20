@@ -2212,19 +2212,46 @@ Ground rules for each run:
       `rankLandUseVerdicts` a way to rank verdicts of different shapes
       side-by-side, so fewer (ideally none) of the 12 land uses end up
       unscored in the Best Fit panel.
-- [ ] **17th parcel county.** Pick one U.S. county not yet in
-      `PARCEL_SOURCES` (16 covered so far: Travis, Maricopa, Harris, Bexar,
-      LA, King, Cook, Miami-Dade, San Diego, Dallas, Allegheny, Wake, Fulton,
-      Salt Lake, Franklin, Tarrant — e.g. Clark County, NV / Las Vegas, or
-      Hennepin County, MN / Minneapolis, are both plausible next picks with
-      public ArcGIS parcel layers). Same recipe as the last several: WebSearch
-      for the county's public ArcGIS parcel MapServer endpoint and its real
-      field names (id/owner/address/land-use/acreage/appraised-value), add a
-      `PARCEL_SOURCES` entry with the right `bbox`, extend the shared
-      `pick()` candidate field lists only for genuinely new field names, set
-      `zoning_note`/`county_state` correctly for the state, and confirm
-      `inBbox` routes a real point in that county to the new source without
-      stealing coverage from a neighboring county already in the list.
+- [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
+      17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s "County Parcels"
+      layer (`HennepinData/LAND_PROPERTY/MapServer/1`), found via WebSearch
+      since this sandbox blocks direct ArcGIS REST introspection, same
+      constraint every prior county hit. Confirmed fields (via multiple
+      independent search-indexed sources): `PID` (13-char parcel id),
+      `OWNER_NM` (owner), `ACRES_POLY`/`ACRES_DEED` (acreage), `EMV_TOTAL`
+      (estimated market value) — added all four to the shared `pick()`
+      candidate lists. Land use and situs address weren't confirmed on this
+      specific layer (address lives on a separate `MetroGIS Parcel
+      Addresses` layer — mixing two ArcGIS layers into one point query is
+      out of scope for the shared single-layer `pick()` pattern), so — same
+      graceful partial-field-coverage as Dallas/Fulton/Salt Lake/Franklin —
+      left unmapped rather than guessed. Unlike most prior counties, Hennepin
+      *does* publish a confirmed per-PID deep link
+      (`www16.co.hennepin.mn.us/pins/pidresult.jsp?pid=<PID>`), so `record()`
+      builds a real per-parcel URL instead of falling back to a search page.
+      Hennepin County has almost no unincorporated land left (all 45
+      municipalities set their own zoning, and the county's last remaining
+      township has been annexing into cities), so it got its own
+      `zoning_note` rather than reusing another state's. Verified: `python -m
+      pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16 layers, 12
+      land uses), `node --test tests/js/*.test.mjs` (247 passed, unchanged —
+      this item touches only inline `PARCEL_SOURCES` data/`pick()` lists in
+      `explore.html`, no new pure `logic.js` helpers). Verified in headless
+      Chromium: both pages load with zero console/page errors; `inBbox`
+      correctly routes a downtown-Minneapolis point to the new source, still
+      finds Cook County's own source for a Chicago-side point (no
+      cross-contamination), and correctly finds no source for St. Paul
+      (Ramsey County, just outside Hennepin's bbox) or an out-of-coverage
+      point (Denver); driving `record()`/`pick()` directly with a mocked
+      Hennepin ArcGIS attribute payload (including an empty-attributes edge
+      case) produced the correct deep link and parsed fields; and a real
+      end-to-end `analyze()` + `showParcel()` run at a Minneapolis point with
+      a mocked ArcGIS response rendered parcel ID/owner/acreage/
+      appraised-value and the correct `pidresult.jsp?pid=…` record link, all
+      with zero console errors. Live ArcGIS endpoint reachability (the exact
+      field values on real parcels) couldn't be confirmed from this sandbox
+      — a live spot-check is a good human follow-up, same as every prior
+      county.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
