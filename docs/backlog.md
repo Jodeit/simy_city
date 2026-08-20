@@ -2197,21 +2197,63 @@ Ground rules for each run:
       `geo.fcc.gov`/`api.census.gov` is blocked from this sandbox, so a live
       spot-check that the row actually populates on the real site is a good
       human follow-up, same caveat as the original multi-tract ACS item.
-- [ ] **"Best fit here" step 3: score the other 7 land uses.** Step 2 (already
-      shipped) ranks only the five uses whose verdict reduces exactly to
-      `standardUseVerdict`'s three-gate shape (rooftop demand + site size +
-      farther-is-better competitor distance) — `food_truck_court`,
-      `urgent_care`, `self_storage`, `child_care_center`, `grocery_store`.
-      The other seven (`data_center`, `warehouse_club`, `fast_casual`,
-      `residential_subdivision`, `ev_charging_hub`, `senior_living`, `hotel`)
-      show as a plain "not scored here" note because each has at least one
-      leg the shared helper doesn't model (AADT traffic, a substation-distance
-      gate, a median-age demand read, or a school-capacity gate instead of
-      rooftop demand). Either extend `standardUseVerdict`/
-      `rankLandUseVerdicts` to model those extra legs, or give
-      `rankLandUseVerdicts` a way to rank verdicts of different shapes
-      side-by-side, so fewer (ideally none) of the 12 land uses end up
-      unscored in the Best Fit panel.
+- [x] **"Best fit here" step 3, part 1: add an AADT traffic-count gate +
+      `warehouse_club`.** Step 2 ranked only the five uses whose verdict
+      reduces exactly to `standardUseVerdict`'s three-gate shape (rooftop
+      demand + site size + farther-is-better competitor distance).
+      `warehouse_club`'s real verdict (`maybeRenderWCVerdict`) is that same
+      shape plus one more leg — a real AADT traffic-count read via the
+      existing `AADT_SOURCE` ArcGIS layer/`maxAadtWithinRadius`
+      (`web/logic.js`), no competitor gate at all. Added an optional
+      `minAadt` gate to `standardUseVerdict` (`reads.aadtHit`/`aadtErr`,
+      `thresholds.minAadt` — skipped/trivially-true when omitted, same
+      pattern as `minAcres`/`minCompetitorKm`; a lookup error or no NHS route
+      in range both fail the gate, same "closer/busier is better, no read is
+      a gap" contract as the existing inline `trafficLeg` helper, unlike the
+      farther-is-better competitor gate). `bestFitLeg` (`web/explore.html`)
+      now takes the whole `BEST_FIT_USES` entry (not just the use key) and
+      fetches AADT via the same `arcgisNearQuery`/`maxAadtWithinRadius` call
+      `runDemand`'s own traffic leg uses, in parallel with the existing
+      rooftop/competitor Overpass fetches, skipped entirely for uses without
+      a `minAadt` threshold. `bestFitReasonText` now builds its gate list
+      conditionally (demand always shown; site/AADT/competitor lines only
+      when that use actually has the matching threshold) instead of always
+      assuming all three original legs apply — `warehouse_club` no longer
+      gets a misleading "✓ no existing competitor in range" line for a gate
+      it doesn't actually check. `warehouse_club` added to `BEST_FIT_USES`.
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 32
+      sources, 16 layers, 12 land uses), `node --test tests/js/*.test.mjs`
+      (252 passed, 5 new — the AADT gate's skip/pass/fail/error/AND-with-
+      other-gates cases, plus one existing exact-shape assertion updated for
+      the new `aadtOk` key). Verified in headless Chromium: both pages load
+      with zero console/page errors; driving `bestFitLeg`/`standardUseVerdict`
+      directly with mocked Overpass (rooftops) and ArcGIS (AADT) responses
+      confirmed the full fetch→verdict pipeline (PASS when demand/site/AADT
+      all clear, flips to SHORT when AADT alone drops below the floor); and a
+      real end-to-end `analyze()` + `runBestFit()` run rendered
+      `warehouse_club` in the ranked panel with the new AADT reason line and
+      no competitor line, while the "not scored here" note correctly dropped
+      from 7 uses to the remaining 6. Live Overpass/ArcGIS reachability
+      wasn't tested (sandbox blocks outbound), same caveat as every prior
+      live-read item.
+- [ ] **"Best fit here" step 3, part 2: score the remaining 6 land uses.**
+      Still shown as "not scored here": `data_center` (substation distance +
+      acreage + water-district boolean, no rooftop demand at all),
+      `fast_casual` (blended rooftop+daytime demand instead of rooftops
+      alone, plus the same AADT gate `warehouse_club` now has),
+      `residential_subdivision` (acreage + induced-school-load ratio instead
+      of rooftop demand), `ev_charging_hub` (rooftop demand + a substation-
+      distance gate + farther-is-better competitor distance, no acreage),
+      `senior_living` (median-age demand instead of rooftop demand, plus
+      site size + farther-is-better competitor distance), and `hotel`
+      (nearby demand-generator count instead of rooftops, plus the AADT gate,
+      site size, and farther-is-better competitor distance — four gates
+      total). Each needs either a new optional gate on `standardUseVerdict`
+      (a substation-distance gate would also unlock `ev_charging_hub`/
+      `data_center`; a blended-demand or precomputed-demand-ratio input would
+      also unlock `fast_casual`/`senior_living`) or a bespoke verdict shape
+      ranked side-by-side via `rankLandUseVerdicts`, so fewer (ideally none)
+      of the 12 land uses end up unscored in the Best Fit panel.
 - [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
       17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s "County Parcels"
       layer (`HennepinData/LAND_PROPERTY/MapServer/1`), found via WebSearch

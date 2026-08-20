@@ -217,7 +217,7 @@ test("standardUseVerdict: full PASS when demand, site size and competitor distan
     { roofs: 100, acres: 5, nearestCompKm: 2 },
     { roofNeed: 100, minAcres: 2, minCompetitorKm: 1 }
   );
-  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, ratio: 1 });
+  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, aadtOk: true, ratio: 1 });
 });
 
 test("standardUseVerdict: pass threshold is 85% of need, same bar blendedDemand/seniorDemandRead use", () => {
@@ -283,6 +283,39 @@ test("standardUseVerdict: a zero/missing roofNeed doesn't divide by zero", () =>
   const v = standardUseVerdict({ roofs: 50 }, { roofNeed: 0 });
   assert.equal(v.ratio, null);
   assert.equal(v.demandOk, false);
+});
+
+test("standardUseVerdict: omitting minAadt skips the traffic-count gate entirely", () => {
+  const v = standardUseVerdict({ roofs: 100 }, { roofNeed: 100 });
+  assert.equal(v.aadtOk, true);
+});
+
+test("standardUseVerdict: no NHS route within range fails the AADT gate, same as trafficLeg", () => {
+  const v = standardUseVerdict({ roofs: 100, aadtHit: null }, { roofNeed: 100, minAadt: 40000 });
+  assert.equal(v.aadtOk, false);
+});
+
+test("standardUseVerdict: AADT below the floor fails, at/above passes", () => {
+  const short = standardUseVerdict({ roofs: 100, aadtHit: { aadt: 39999 } }, { roofNeed: 100, minAadt: 40000 });
+  const exact = standardUseVerdict({ roofs: 100, aadtHit: { aadt: 40000 } }, { roofNeed: 100, minAadt: 40000 });
+  assert.equal(short.aadtOk, false);
+  assert.equal(exact.aadtOk, true);
+});
+
+test("standardUseVerdict: an AADT lookup error fails the traffic-count gate even with no hit on record", () => {
+  const v = standardUseVerdict(
+    { roofs: 100, aadtHit: null, aadtErr: true },
+    { roofNeed: 100, minAadt: 40000 }
+  );
+  assert.equal(v.aadtOk, false);
+  assert.equal(v.pass, false);
+});
+
+test("standardUseVerdict: the AADT gate participates in pass same as the other gates", () => {
+  const base = { roofs: 100, aadtHit: { aadt: 50000 } };
+  const thresholds = { roofNeed: 100, minAadt: 40000 };
+  assert.equal(standardUseVerdict(base, thresholds).pass, true);
+  assert.equal(standardUseVerdict({ ...base, aadtHit: { aadt: 100 } }, thresholds).pass, false);
 });
 
 test("rankLandUseVerdicts: passing uses sort before short uses", () => {
