@@ -553,23 +553,31 @@ const GS_MIN_ACRES=5.0, GS_MIN_COMPETITOR_KM=2.0;
 let gsState=null;
 // "Best fit here" step 2 (+ step 3, partial): the land uses whose
 // maybeRender*Verdict already reduces to exactly the shared standardUseVerdict
-// shape — a rooftop-demand leg, an optional site-size leg, an optional
-// *farther-is-better* competitor-distance leg, and now (step 3) an optional
-// AADT traffic-count leg (standardUseVerdict's `minAadt` gate, web/logic.js —
-// mirrors warehouse_club/fast_casual/hotel's existing inline `trafficLeg`
-// read), and (step 3, part 2) an optional nearest-substation leg
-// (standardUseVerdict's `maxSubstationKm` gate — mirrors ev_charging_hub's and
-// data_center's existing inline power leg). warehouse_club fits the AADT shape
-// exactly (rooftop demand + site size + traffic, no competitor gate);
-// ev_charging_hub fits the substation shape (rooftop demand + substation
-// distance + competitor distance, no acreage gate). hotel needs a demand-
-// generator count instead of rooftops, fast_casual blends rooftops with a
-// daytime-population leg instead of reading rooftops alone, and data_center/
-// residential_subdivision/senior_living don't read rooftop demand at all —
-// those five still don't fit this exact shape, so they're left out rather
-// than force-fit. Ranking those other uses without duplicating their bespoke
-// verdict math is a further follow-up; the panel lists them as "not yet
-// ranked" instead of silently omitting them.
+// shape — a demand leg, an optional site-size leg, an optional *farther-is-
+// better* competitor-distance leg, an optional AADT traffic-count leg
+// (standardUseVerdict's `minAadt` gate, web/logic.js — mirrors warehouse_club/
+// fast_casual/hotel's existing inline `trafficLeg` read), and an optional
+// nearest-substation leg (standardUseVerdict's `maxSubstationKm` gate — mirrors
+// ev_charging_hub's and data_center's existing inline power leg). warehouse_club
+// fits the AADT shape exactly (rooftop demand + site size + traffic, no
+// competitor gate); ev_charging_hub fits the substation shape (rooftop demand
+// + substation distance + competitor distance, no acreage gate). (Step 3,
+// part 3) fast_casual's demand leg isn't a plain rooftop headcount either —
+// it blends rooftops with a daytime-population proxy (`blendedDemand`) — but
+// that's just a different *ratio*, still bounded by the same 0.85-of-need
+// bar, so `blendDaytime:true` below tells `bestFitLeg`/`runBestFit` to fetch
+// the extra daytime-POI leg and feed `standardUseVerdict`'s `reads.demandRatio`
+// with `blendedDemand(...).ratio` instead of a raw rooftop count — no new gate
+// shape needed. hotel (generator-count demand, `generatorsErr` reads as a
+// failed-not-missing gate rather than blendedDemand's "roofs==null → no read"
+// contract) and data_center/residential_subdivision/senior_living (no rooftop-
+// shaped demand leg at all, and senior_living's medianAge leg is the
+// expensive multi-tract ACS sample, too costly to fetch for every use on
+// every "Best fit here" run) still don't fit this shape cheaply enough to
+// force in, so they're left out rather than force-fit. Ranking those other
+// uses without duplicating their bespoke verdict math (and, for senior_living,
+// without an N-way ACS fetch blowup) is a further follow-up; the panel lists
+// them as "not yet ranked" instead of silently omitting them.
 const BEST_FIT_USES=[
   {key:"warehouse_club", minAcres:WC_MIN_ACRES, minAadt:WC_AADT_MIN},
   {key:"ev_charging_hub", maxSubstationKm:EV_SUB_KM, minCompetitorKm:EV_MIN_COMPETITOR_KM},
@@ -578,6 +586,7 @@ const BEST_FIT_USES=[
   {key:"self_storage", minAcres:SS_MIN_ACRES, minCompetitorKm:SS_MIN_COMPETITOR_KM},
   {key:"child_care_center", minAcres:CC_MIN_ACRES, minCompetitorKm:CC_MIN_COMPETITOR_KM},
   {key:"grocery_store", minAcres:GS_MIN_ACRES, minCompetitorKm:GS_MIN_COMPETITOR_KM},
+  {key:"fast_casual", minAadt:FC_AADT_MIN, blendDaytime:true},
 ];
 
 // Parcel sources, county-by-county (there is no single free national parcel API
@@ -1992,7 +2001,10 @@ function maybeRenderGSVerdict(seq){
    fetched generically here — extra parallel fetches via the same
    `arcgisNearQuery`/`maxAadtWithinRadius` and `USE_DEMAND.powerQ` queries
    runDemand's own traffic/power legs use, each skipped (resolving trivially)
-   for every use without that threshold. */
+   for every use without that threshold. `u.blendDaytime` (fast_casual) adds
+   one more parallel fetch — the same `cfg.daytimeQ`/`daytimeRadius` Overpass
+   count runDemand's own daytime leg uses — skipped for every use without the
+   flag, same skip-when-not-needed pattern as the AADT/substation legs. */
 let bfSeq=0;
 function bestFitLeg(u,lat,lng){
   const cfg=USE_DEMAND[u.key];
@@ -2016,9 +2028,13 @@ function bestFitLeg(u,lat,lng){
           const km=parseOverpassPoints(d).map(p=>haversine(lat,lng,p.lat,p.lng)).sort((a,b)=>a-b);
           return {subKm:km.length?km[0]:null, subErr:false};
         }).catch(()=>({subKm:null,subErr:true}));
-  return Promise.all([roofP,compP,aadtP,subP]).then(([roofs,comp,aadt,sub])=>
+  const daytimeP = (!u.blendDaytime||!cfg.daytimeQ) ? Promise.resolve(null)
+    : overpassRaw(`[out:json][timeout:25];(${cfg.daytimeQ.split(";").filter(Boolean)
+        .map(q=>`${q}(around:${cfg.daytimeRadius},${lat},${lng});`).join("")});out count;`)
+        .then(d=>countOf(d)).catch(()=>null);
+  return Promise.all([roofP,compP,aadtP,subP,daytimeP]).then(([roofs,comp,aadt,sub,daytime])=>
     ({roofs,nearestComp:comp.nearestComp,compErr:comp.compErr,aadtHit:aadt.aadtHit,aadtErr:aadt.aadtErr,
-      subKm:sub.subKm,subErr:sub.subErr}));
+      subKm:sub.subKm,subErr:sub.subErr,daytime}));
 }
 function bestFitReasonText(e){
   const parts=[
@@ -2088,9 +2104,17 @@ function runBestFit(){
       const scored=[], noRead=[];
       list.forEach(({u,r})=>{
         const cfg=USE_DEMAND[u.key];
-        const v=standardUseVerdict(
-          {roofs:r.roofs, acres, nearestCompKm:r.nearestComp?r.nearestComp.km:null, compErr:r.compErr,
-            aadtHit:r.aadtHit, aadtErr:r.aadtErr, subKm:r.subKm, subErr:r.subErr},
+        const reads={roofs:r.roofs, acres, nearestCompKm:r.nearestComp?r.nearestComp.km:null, compErr:r.compErr,
+          aadtHit:r.aadtHit, aadtErr:r.aadtErr, subKm:r.subKm, subErr:r.subErr};
+        // fast_casual's demand leg blends rooftops with a daytime-population
+        // proxy instead of reading rooftops alone — same blendedDemand() call
+        // maybeRenderFCVerdict makes, fed into standardUseVerdict's
+        // reads.demandRatio (step 3, part 3) instead of a raw rooftop count.
+        if(u.blendDaytime){
+          const b=blendedDemand(r.roofs,r.daytime,FC_DAYTIME_WEIGHT,cfg.roofNeed);
+          reads.demandRatio = b?b.ratio:null;
+        }
+        const v=standardUseVerdict(reads,
           {roofNeed:cfg.roofNeed, minAcres:u.minAcres, minCompetitorKm:u.minCompetitorKm, minAadt:u.minAadt,
             maxSubstationKm:u.maxSubstationKm});
         if(v==null){ noRead.push(u.key); return; }

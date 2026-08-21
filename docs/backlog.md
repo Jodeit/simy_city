@@ -2274,26 +2274,81 @@ Ground rules for each run:
       "not scored here" note correctly dropped from 6 uses to the remaining
       5. Live Overpass reachability wasn't tested (sandbox blocks outbound),
       same caveat as every prior live-read item.
-- [ ] **"Best fit here" step 3, part 3: score the remaining 5 land uses.**
-      Still shown as "not scored here": `data_center` (substation distance +
-      acreage + water-district boolean, no rooftop demand at all),
-      `fast_casual` (blended rooftop+daytime demand instead of rooftops
-      alone, plus the same AADT gate `warehouse_club` now has),
+- [x] **"Best fit here" step 3, part 3: demand-ratio generalization +
+      `fast_casual`.** `standardUseVerdict` (`web/logic.js`) hard-coded
+      `roofs/roofNeed` as its demand ratio, so any use whose demand leg isn't
+      a plain rooftop headcount couldn't be ranked without force-fitting.
+      Added an optional `reads.demandRatio` — when supplied (even `0`), it's
+      used directly as the ratio instead of computing `roofs/roofNeed`;
+      `demandRatio:null` returns `null` (no verdict at all), the same "still
+      waiting on a leg" contract `roofs:null` already had, so a use *with* a
+      demand-ratio leg that hasn't resolved yet doesn't silently fall through
+      to a stale rooftop computation — `demandRatio` being `undefined`
+      (not just any falsy value) is what means "no ratio supplied, use
+      roofs/roofNeed" (existing callers, which never pass `demandRatio`,
+      are unaffected). Wired up the one use this unlocks per-run:
+      `fast_casual`'s real verdict blends rooftops with a daytime-population
+      proxy (`blendedDemand`, already used by `maybeRenderFCVerdict`) instead
+      of reading rooftops alone — added `fast_casual` to `BEST_FIT_USES`
+      with `blendDaytime:true` and `minAadt:FC_AADT_MIN` (matches its real
+      demand+traffic gate shape, no site-size or competitor gate); `bestFitLeg`
+      now fetches one more parallel Overpass count (`cfg.daytimeQ`/
+      `daytimeRadius`, the same query `runDemand`'s own daytime leg issues),
+      skipped for every use without `blendDaytime`; `runBestFit` feeds
+      `blendedDemand(...).ratio` into `reads.demandRatio` for that one use.
+      `bestFitReasonText` needed no change — it already renders off `e.ratio`/
+      `e.demandOk` generically, regardless of how the ratio was computed.
+      Added 6 new unit tests for the `demandRatio` gate (fallback-when-
+      undefined, direct-ratio-used, below-the-0.85-bar fails, `null` means no
+      verdict even with `roofs` present, ANDs with the AADT gate — `fast_casual`'s
+      real shape). Verified: `python -m pytest -q` (15 passed), `simy validate`
+      (OK, 32 sources, 16 layers, 12 land uses), `node --test tests/js/*.test.mjs`
+      (263 passed, 6 new — the object-shape assertion at
+      `standardUseVerdict: full PASS...` is unaffected since `demandRatio`
+      isn't part of the returned shape, only an alternate ratio *input*).
+      Verified in headless Chromium: both pages load with zero console/page
+      errors; driving `standardUseVerdict`/`bestFitLeg` directly with mocked
+      Overpass responses confirmed the daytime leg fetches and blends
+      correctly; and a real end-to-end `runBestFit()` run with all Overpass/
+      ArcGIS calls mocked ranked `fast_casual` alongside the other seven uses
+      with the correct blended-demand percentage and only its two real gate
+      lines (demand + AADT, no site/competitor line) — and the "not scored
+      here" note correctly dropped `fast_casual` from its list, down to the
+      remaining four. `hotel` (whose `generatorsErr` reads as a *failed* gate,
+      not a "no read at all" `null` — a different contract than
+      `blendedDemand`'s "roofs==null → null" one) and `senior_living` (whose
+      `medianAge` leg is the expensive multi-tract Census ACS sample — up to
+      9 FCC + 9 ACS fetches per use, too costly to add to a fan-out that
+      already runs it once per `BEST_FIT_USES` entry on every panel open)
+      weren't force-fit into this same generalization and are left for a
+      follow-up below, alongside `data_center`/`residential_subdivision`
+      (no shared-gate analogue for their water-district/school-load legs at
+      all).
+- [ ] **"Best fit here" step 3, part 4: score the remaining 4 land uses.**
+      Still shown as "not scored here" after part 3's `demandRatio`
+      generalization: `data_center` (substation distance + acreage +
+      water-district boolean, no rooftop-shaped demand leg at all —
+      `standardUseVerdict` has no water-district gate analogue),
       `residential_subdivision` (acreage + induced-school-load ratio instead
-      of rooftop demand), `senior_living` (median-age demand instead of
-      rooftop demand, plus site size + farther-is-better competitor
-      distance), and `hotel` (nearby demand-generator count instead of
-      rooftops, plus the AADT gate, site size, and farther-is-better
-      competitor distance — four gates total). Every remaining one differs
-      in its *demand* leg, not its gates: `standardUseVerdict` hard-codes
-      `roofs/roofNeed` as the ratio, so the natural next step is letting a
-      caller pass a precomputed demand ratio (from `blendedDemand`,
-      `seniorDemandRead`, or a demand-generator count) in place of a raw
-      rooftop count — that one change would unlock `fast_casual`,
-      `senior_living`, and `hotel` at once, leaving only `data_center` and
-      `residential_subdivision` (whose water-district / school-load legs
-      have no shared-gate analogue yet) for a bespoke verdict shape ranked
-      side-by-side via `rankLandUseVerdicts`.
+      of rooftop demand — also no shared-gate analogue), `senior_living`
+      (`seniorDemandRead`'s median-age ratio would slot into
+      `reads.demandRatio` cleanly, site size + farther-is-better competitor
+      distance both already fit — but its `medianAge` leg is the expensive
+      multi-tract Census ACS sample, so `bestFitLeg` would need to actually
+      run that per-use, per-panel-open, worth thinking about a cost
+      mitigation — e.g. session-cache the trade-area sample by radius+center
+      so re-scoring doesn't refetch, or explicitly document the extra
+      latency/request-volume trade-off as intentional first), and `hotel`
+      (nearby demand-generator count instead of rooftops, plus the AADT
+      gate, site size, and farther-is-better competitor distance — but
+      `generatorsErr` reads as a *failed* demand gate, not a "no read at
+      all" `null`, unlike every `demandRatio` source used so far
+      (`blendedDemand`/`seniorDemandRead` both return `null` on missing
+      input) — `standardUseVerdict`'s `demandRatio==null` contract would
+      need to either grow a second "ratio 0 on error" convention or `hotel`
+      would need its error path mapped to `demandRatio:0` before calling
+      `standardUseVerdict`, a small but real semantic decision worth making
+      deliberately rather than papering over).
 - [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
       17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s "County Parcels"
       layer (`HennepinData/LAND_PROPERTY/MapServer/1`), found via WebSearch
