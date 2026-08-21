@@ -2324,37 +2324,69 @@ Ground rules for each run:
       here" note — down from 5. Live Overpass/FCC/Census reachability wasn't
       tested (sandbox blocks outbound), same caveat as every prior live-read
       item.
-- [ ] **"Best fit here" step 3, part 4: score the last 2 land uses
-      (`data_center`, `residential_subdivision`).** The two holdouts from
-      part 3 don't fit `standardUseVerdict`'s gate shape at all, not just its
-      demand leg: `data_center`'s real verdict (`maybeRenderDCVerdict`) has
-      no demand ratio whatsoever (nobody "needs" a data center nearby by
-      design) and instead ANDs three site-selection gates — nearest
-      substation (`standardUseVerdict` already has this one, `maxSubstationKm`),
-      acreage (already has this one too, `minAcres`), and a water-district
-      boolean the shared function has no equivalent of at all (`s.mud===true`
-      via the existing `runDistricts`/`DISTRICT_SOURCES` ArcGIS point query).
-      `residential_subdivision`'s real verdict (`maybeRenderResVerdict`) has
-      no site-size *gate* either — acreage instead feeds the demand
-      calculation directly (`kids = acres*RES_UNITS_PER_ACRE*RES_STUDENTS_PER_HOME`
-      vs. `capacity = schools*RES_SEATS_PER_SCHOOL`), so ranking it needs a
-      demand read shaped like `{ratio:capacity/kids, pass:capacity>=kids}`
-      fed through the same `reads.demand` override part 3 added, with
-      `thresholds` carrying none of the other gates at all (no
-      minAcres/minCompetitorKm/minAadt/maxSubstationKm — a genuinely
-      gate-less use). Two small, independent pieces of work: (1) a new
-      optional `thresholds.requireDistrict`/`reads.districtOk` gate on
-      `standardUseVerdict` for data_center, fetched in `bestFitLeg` via the
-      same `DISTRICT_SOURCES`/`arcgisPointQuery` call `runDistricts` already
-      makes (bbox-gated — Texas-only coverage today, same caveat every
-      DISTRICT_SOURCES-reliant read already carries) and a trivial always-true
-      `demand:{ratio:1,pass:true}` (data_center's "need" is fully captured by
-      the site/power/water gates, not a separate demand leg); (2) a pure
+- [x] **"Best fit here" step 3, part 4: score the last 2 land uses
+      (`data_center`, `residential_subdivision`).** The two final holdouts —
+      `standardUseVerdict` (`web/logic.js`) gained a `requireDistrict`
+      threshold + `reads.mud` gate for data_center's water-district leg
+      (`mudOk = requireDistrict ? mud===true : true` — a 3-state `mud`
+      matching `maybeRenderDCVerdict`'s own `s.mud` contract exactly: `true`
+      inside a district, `false` queried-and-not-inside, `null` either
+      no-districts-layer-for-this-area or every candidate host failed, and
+      `null` reads as a fail here just like `false`). `bestFitLeg`
+      (`web/explore.html`) gained a matching `bestFitDistrict(lat,lng)` — the
+      same `DISTRICT_SOURCES`/`arcgisPointQuery` per-host fallback chain
+      `runDistricts`/`tryDistrict` already use for the live developer
+      checklist, factored out to resolve a plain value instead of writing the
+      DOM or gating on `reqSeq`/`dcState`, so it can run for a use that isn't
+      necessarily selected/clicked. data_center's substation leg turned out
+      to need *zero* new fetches: its own `USE_DEMAND.compQ` is already a
+      power-substation query (not a competitor query), so `bestFitLeg` now
+      derives `subKm` from the same `compP` leg every use already fetches
+      instead of a separate `powerQ` call, mirroring how
+      `maybeRenderDCVerdict` derives `dcState.subKm` from `runDemand`'s own
+      compQ leg. data_center's demand leg is the trivial always-true
+      `{ratio:1,pass:true}` a new `demandKind:"trivial"` selects (its "need"
+      is fully captured by the substation/acreage/water gates, not a separate
+      demand leg). Added a pure
       `schoolLoadDemandRead(acres,schools,unitsPerAcre,studentsPerHome,seatsPerSchool)`
-      helper for residential_subdivision, mirroring `seniorDemandRead`'s
-      style, fed through `reads.demand` with an otherwise-empty `thresholds`.
-      Once both land, the "not scored here" note in `renderBestFit` should be
-      permanently empty for every registered land use.
+      to `web/logic.js` for residential_subdivision — mirrors
+      `maybeRenderResVerdict`'s own projection math exactly (units = acres ×
+      3/ac, kids = units × 0.5/home, capacity = schools × 750 seats), fed
+      through the same `reads.demand` override step 3, part 3 added; a new
+      `demandKind:"schoolLoad"` selects it in `bestFitLeg`, reusing the
+      already-fetched competitor-scan *count* (residential_subdivision's own
+      `compQ` is a school-count query) — no new fetch there either, just a
+      new `count` field on the existing `compP` leg's return shape. Zero
+      induced kids reads as `ratio:null` (no meaningful margin to report,
+      `pass` still true) rather than a divide-by-zero, same contract
+      `countDemandRead`'s zero-need case already established. Both
+      `BEST_FIT_USES` entries now carry the real thresholds
+      `maybeRenderDCVerdict`/`maybeRenderResVerdict` use
+      (`DC_MIN_ACRES`/`DC_SUB_KM`/`requireDistrict` for data_center, nothing
+      but `demandKind` for residential_subdivision — a genuinely gate-less
+      use). Added 10 new unit tests (the water-district gate's skip/
+      unknown-fails-like-false/false/true/AND-with-other-gates cases, plus
+      `schoolLoadDemandRead`'s null-acres/null-schools/real-projection-math/
+      boundary-pass/zero-kids-null-ratio cases) and updated the existing
+      exact-return-shape assertion for the new `mudOk` key. Verified: `python
+      -m pytest -q` (15 passed), `simy validate` (OK, 32 sources, 16 layers,
+      12 land uses), `node --test tests/js/*.test.mjs` (276 passed, 10 new).
+      Verified in headless Chromium: both pages load with zero console/page
+      errors; drove `standardUseVerdict`/`bestFitDistrict`/`bestFitReasonText`
+      directly through data_center's PASS / mud-false / mud-unknown states
+      with correct `mudOk`/reason text each time; drove `bestFitLeg` directly
+      for both new uses with a mocked Overpass/ArcGIS `fetch`, confirming
+      data_center's `subKm` came from the shared compQ leg (no separate power
+      query) and residential_subdivision's `demand` matched the hand-computed
+      school-load math; confirmed `BEST_FIT_USES` now covers all 12
+      `ALL_USE_KEYS` so the "not scored here" note's filter list is
+      permanently empty; and a real end-to-end `runBestFit()` run (mode
+      switched to Test-a-use, a mocked point/parcel, mocked network) rendered
+      all uses ranked with data_center showing "✓ substation 0.1 km away · ✓
+      inside a mapped water district" and residential_subdivision showing its
+      real demand percentage — both PASS, zero throws. Live Overpass/ArcGIS
+      reachability wasn't tested (sandbox blocks outbound), same caveat as
+      every prior live-read item.
 - [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
       17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s "County Parcels"
       layer (`HennepinData/LAND_PROPERTY/MapServer/1`), found via WebSearch

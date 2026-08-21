@@ -568,21 +568,35 @@ let gsState=null;
 // ("blended" = blendedDemand's rooftop+daytime-POI blend, "senior" =
 // seniorDemandRead's trade-area median-age read, "generators" =
 // countDemandRead's demand-generator count) — same reads.demand override
-// step 3, part 3 added to standardUseVerdict. data_center/
-// residential_subdivision are still left out: data_center's water-district
-// gate and residential_subdivision's induced-school-load ratio (where
-// acreage is a demand *input*, not a separate site-size gate) don't fit this
-// shape's gates at all, so ranking those two is a further follow-up; the
-// panel lists them as "not yet ranked" instead of silently omitting them.
+// step 3, part 3 added to standardUseVerdict.
+//
+// step 3, part 4: the last two holdouts, data_center and
+// residential_subdivision, don't fit the gate shape at all (not just the
+// demand leg): data_center has no demand ratio whatsoever (nobody "needs" a
+// data center nearby by design) — `demandKind:"trivial"` gives it the
+// always-true `{ratio:1,pass:true}` read standardUseVerdict's `reads.demand`
+// override expects, so its verdict is entirely the AND of its three real
+// site-selection gates (substation, acreage, water district — the last via
+// the new `requireDistrict`/`reads.mud` gate standardUseVerdict gained for
+// exactly this use). Its substation distance reuses the *same* Overpass
+// fetch its own `nearestComp` leg already makes below — data_center's
+// `USE_DEMAND.compQ` is a power-substation query, not a competitor query, so
+// there's no separate powerQ fetch needed the way ev_charging_hub has one.
+// residential_subdivision has no site-size *gate* either — acreage instead
+// feeds `demandKind:"schoolLoad"`'s induced-school-load ratio directly (see
+// `schoolLoadDemandRead` in logic.js), so its BEST_FIT_USES entry carries no
+// thresholds at all beyond the demand read itself.
 const BEST_FIT_USES=[
+  {key:"data_center", minAcres:DC_MIN_ACRES, maxSubstationKm:DC_SUB_KM, requireDistrict:true, demandKind:"trivial"},
   {key:"warehouse_club", minAcres:WC_MIN_ACRES, minAadt:WC_AADT_MIN},
-  {key:"ev_charging_hub", maxSubstationKm:EV_SUB_KM, minCompetitorKm:EV_MIN_COMPETITOR_KM},
+  {key:"fast_casual", demandKind:"blended", minAadt:FC_AADT_MIN},
+  {key:"residential_subdivision", demandKind:"schoolLoad"},
   {key:"food_truck_court", minAcres:FTC_MIN_ACRES, minCompetitorKm:FTC_MIN_COMPETITOR_KM},
+  {key:"ev_charging_hub", maxSubstationKm:EV_SUB_KM, minCompetitorKm:EV_MIN_COMPETITOR_KM},
+  {key:"senior_living", demandKind:"senior", minAcres:SL_MIN_ACRES, minCompetitorKm:SL_MIN_COMPETITOR_KM},
   {key:"urgent_care", minAcres:UC_MIN_ACRES, minCompetitorKm:UC_MIN_COMPETITOR_KM},
   {key:"self_storage", minAcres:SS_MIN_ACRES, minCompetitorKm:SS_MIN_COMPETITOR_KM},
   {key:"child_care_center", minAcres:CC_MIN_ACRES, minCompetitorKm:CC_MIN_COMPETITOR_KM},
-  {key:"fast_casual", demandKind:"blended", minAadt:FC_AADT_MIN},
-  {key:"senior_living", demandKind:"senior", minAcres:SL_MIN_ACRES, minCompetitorKm:SL_MIN_COMPETITOR_KM},
   {key:"hotel", demandKind:"generators", minAcres:HL_MIN_ACRES, minAadt:HL_AADT_MIN, minCompetitorKm:HL_MIN_COMPETITOR_KM},
   {key:"grocery_store", minAcres:GS_MIN_ACRES, minCompetitorKm:GS_MIN_COMPETITOR_KM},
 ];
@@ -1997,15 +2011,24 @@ function maybeRenderGSVerdict(seq){
    warehouse_club/fast_casual/hotel, `u.minAadt` set), the nearest substation
    (for ev_charging_hub, `u.maxSubstationKm` set), the daytime-POI/
    demand-generator count (for fast_casual/hotel, `u.demandKind` set +
-   `cfg.daytimeQ`), and senior_living's trade-area median age (`u.demandKind
-   === "senior"`, via `bestFitMedianAge`) are the legs not already fetched
-   generically here — extra parallel fetches via the same
+   `cfg.daytimeQ`), senior_living's trade-area median age (`u.demandKind
+   === "senior"`, via `bestFitMedianAge`), and data_center's water-district
+   membership (`u.requireDistrict`, via `bestFitDistrict`) are the legs not
+   already fetched generically here — extra parallel fetches via the same
    `arcgisNearQuery`/`maxAadtWithinRadius`, `USE_DEMAND.powerQ`/
-   `USE_DEMAND.daytimeQ` queries, and multi-tract ACS pipeline runDemand's own
-   traffic/power/daytime legs and the "🏘️ Trade-area demographics" row use,
-   each skipped (resolving trivially) for every use that doesn't need it. */
+   `USE_DEMAND.daytimeQ` queries, multi-tract ACS pipeline, and
+   `DISTRICT_SOURCES`/`arcgisPointQuery` chain runDemand's own traffic/power/
+   daytime legs, the "🏘️ Trade-area demographics" row, and the developer
+   checklist's own "MUD / water district" row use, each skipped (resolving
+   trivially) for every use that doesn't need it. data_center's own
+   substation distance is the one exception that reuses an *already-fetched*
+   leg instead of a new one — see the comment on its `subKm`/`subErr`
+   override below. residential_subdivision's acreage→school-load demand read
+   (`u.demandKind === "schoolLoad"`) needs no extra fetch at all: it's built
+   from the shared acreage parameter and the generic competitor-scan leg's
+   count (residential_subdivision's own `compQ` is a school count). */
 let bfSeq=0;
-function bestFitLeg(u,lat,lng){
+function bestFitLeg(u,lat,lng,acres){
   const cfg=USE_DEMAND[u.key];
   const roofQ=`[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`;
   const parts=cfg.compQ.split(";").filter(Boolean).map(q=>`${q}(around:${cfg.radius},${lat},${lng});`).join("");
@@ -2014,8 +2037,8 @@ function bestFitLeg(u,lat,lng){
   const compP=overpassRaw(compQ).then(d=>{
     const els=(d.elements||[]).map(e=>{const la=e.lat??(e.center&&e.center.lat), lo=e.lon??(e.center&&e.center.lon);
       return (la&&lo)?{km:haversine(lat,lng,la,lo)}:null;}).filter(Boolean).sort((a,b)=>a.km-b.km);
-    return {nearestComp: els.length?{km:els[0].km}:null, compErr:false};
-  }).catch(()=>({nearestComp:null,compErr:true}));
+    return {nearestComp: els.length?{km:els[0].km}:null, compErr:false, count:els.length};
+  }).catch(()=>({nearestComp:null,compErr:true,count:null}));
   const aadtP = u.minAadt==null ? Promise.resolve({aadtHit:null,aadtErr:false})
     : arcgisNearQuery(AADT_SOURCE,{lat,lng},cfg.radius)
         .then(d=>({aadtHit:maxAadtWithinRadius(parseAadtFeatures(d),{lat,lng},cfg.radius), aadtErr:false}))
@@ -2042,14 +2065,46 @@ function bestFitLeg(u,lat,lng){
   // runCensusTradeArea uses, just resolving to a value instead of writing the
   // DOM so it can run for a use that isn't necessarily the selected one.
   const medianAgeP = u.demandKind==="senior" ? bestFitMedianAge(lat,lng,cfg.radius/1000) : Promise.resolve(null);
-  return Promise.all([roofP,compP,aadtP,subP,daytimeP,medianAgeP]).then(([roofs,comp,aadt,sub,daytime,medianAge])=>{
+  // step 3, part 4: data_center's water-district gate — fetched only for the
+  // one use that carries `requireDistrict`, same skip-when-unneeded pattern
+  // every other optional leg above already follows.
+  const districtP = u.requireDistrict ? bestFitDistrict(lat,lng) : Promise.resolve(null);
+  return Promise.all([roofP,compP,aadtP,subP,daytimeP,medianAgeP,districtP]).then(([roofs,comp,aadt,sub,daytime,medianAge,mud])=>{
     let demand;
     if(u.demandKind==="blended")demand=blendedDemand(roofs,daytime,FC_DAYTIME_WEIGHT,cfg.roofNeed);
     else if(u.demandKind==="generators")demand=countDemandRead(daytime,HL_MIN_GENERATORS);
     else if(u.demandKind==="senior")demand=seniorDemandRead(medianAge,SL_AGE_THRESHOLD);
+    else if(u.demandKind==="trivial")demand={ratio:1,pass:true};
+    else if(u.demandKind==="schoolLoad")demand=schoolLoadDemandRead(acres,comp.count,RES_UNITS_PER_ACRE,RES_STUDENTS_PER_HOME,RES_SEATS_PER_SCHOOL);
+    // data_center's substation distance reuses the same compQ fetch above —
+    // its USE_DEMAND entry's "competition" query *is* power substations, so
+    // there's no separate powerQ leg for it (cfg.powerQ is undefined),
+    // mirroring how maybeRenderDCVerdict derives dcState.subKm from the same
+    // compQ leg runDemand issues for the currently-selected use.
+    const subKm = u.key==="data_center" ? (comp.nearestComp?comp.nearestComp.km:null) : sub.subKm;
+    const subErr = u.key==="data_center" ? comp.compErr : sub.subErr;
     return {roofs,demand,nearestComp:comp.nearestComp,compErr:comp.compErr,aadtHit:aadt.aadtHit,aadtErr:aadt.aadtErr,
-      subKm:sub.subKm,subErr:sub.subErr};
+      subKm,subErr,mud};
   });
+}
+// data_center's water-district gate at an arbitrary point (not necessarily
+// the currently-selected use/click) — same DISTRICT_SOURCES/arcgisPointQuery
+// per-host fallback chain `runDistricts`/`tryDistrict` use for the live
+// developer-checklist row, just resolving to a plain `true`/`false`/`null`
+// value instead of writing the DOM or gating on `reqSeq`/`dcState`. `null`
+// covers both "no districts layer for this area" and "every candidate host
+// failed to respond" — `false` only once a host has actually answered with
+// no match, same 3-state contract `s.mud` already has in maybeRenderDCVerdict.
+function bestFitDistrict(lat,lng){
+  const src=DISTRICT_SOURCES.find(s=>inBbox({lat,lng},s.bbox));
+  if(!src)return Promise.resolve(null);
+  const tryUrls=(urls,responded)=>{
+    if(!urls.length)return Promise.resolve(responded?false:null);
+    return arcgisPointQuery(urls[0],{lat,lng},false)
+      .then(feats=>feats[0] ? true : tryUrls(urls.slice(1),true))
+      .catch(()=>tryUrls(urls.slice(1),responded));
+  };
+  return tryUrls(src.urls.slice(),false);
 }
 // Resolves to the trade-area's household-weighted median age (or `null` on
 // any failure/no-coverage), the same sample-9-points → dedupe-tracts →
@@ -2100,6 +2155,11 @@ function bestFitReasonText(e){
       : e.farOk?`✓ nearest competitor ${e.nearestComp.km.toFixed(1)} km away`
       : `✗ nearest competitor only ${e.nearestComp.km.toFixed(1)} km away (need ≥${e.minCompetitorKm})`
   );
+  if(e.requireDistrict)parts.push(
+    e.mudOk?"✓ inside a mapped water district"
+      : e.mud===false?"✗ no mapped water district here"
+      : "? water-district coverage unknown for this area"
+  );
   return parts.join(" · ");
 }
 function updateBestFitAvailability(){
@@ -2129,7 +2189,7 @@ function runBestFit(){
   const statusEl=document.getElementById("bestFitStatus"), resEl=document.getElementById("bestFitResults");
   statusEl.style.display="block"; statusEl.className="live loading"; statusEl.textContent="scoring every use at this point…";
   resEl.innerHTML="";
-  Promise.all(BEST_FIT_USES.map(u=>bestFitLeg(u,lat,lng).then(r=>({u,r}))))
+  Promise.all(BEST_FIT_USES.map(u=>bestFitLeg(u,lat,lng,acres).then(r=>({u,r}))))
     .then(list=>{
       if(seq!==bfSeq)return;
       if(list.every(({r})=>r.roofs==null)){
@@ -2142,14 +2202,15 @@ function runBestFit(){
         const cfg=USE_DEMAND[u.key];
         const v=standardUseVerdict(
           {roofs:r.roofs, demand:r.demand, acres, nearestCompKm:r.nearestComp?r.nearestComp.km:null, compErr:r.compErr,
-            aadtHit:r.aadtHit, aadtErr:r.aadtErr, subKm:r.subKm, subErr:r.subErr},
+            aadtHit:r.aadtHit, aadtErr:r.aadtErr, subKm:r.subKm, subErr:r.subErr, mud:r.mud},
           {roofNeed:cfg.roofNeed, minAcres:u.minAcres, minCompetitorKm:u.minCompetitorKm, minAadt:u.minAadt,
-            maxSubstationKm:u.maxSubstationKm});
+            maxSubstationKm:u.maxSubstationKm, requireDistrict:u.requireDistrict});
         if(v==null){ noRead.push(u.key); return; }
         scored.push(Object.assign({key:u.key, acres, nearestComp:r.nearestComp, compErr:r.compErr,
           minAcres:u.minAcres, minCompetitorKm:u.minCompetitorKm,
           aadtHit:r.aadtHit, aadtErr:r.aadtErr, minAadt:u.minAadt,
-          subKm:r.subKm, subErr:r.subErr, maxSubstationKm:u.maxSubstationKm}, v));
+          subKm:r.subKm, subErr:r.subErr, maxSubstationKm:u.maxSubstationKm,
+          mud:r.mud, requireDistrict:u.requireDistrict}, v));
       });
       renderBestFit(rankLandUseVerdicts(scored), noRead);
     });

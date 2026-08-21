@@ -23,7 +23,7 @@ const {
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
-  standardUseVerdict, rankLandUseVerdicts, countDemandRead,
+  standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -217,7 +217,7 @@ test("standardUseVerdict: full PASS when demand, site size and competitor distan
     { roofs: 100, acres: 5, nearestCompKm: 2 },
     { roofNeed: 100, minAcres: 2, minCompetitorKm: 1 }
   );
-  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, aadtOk: true, subOk: true, ratio: 1 });
+  assert.deepEqual(v, { pass: true, demandOk: true, siteOk: true, farOk: true, aadtOk: true, subOk: true, mudOk: true, ratio: 1 });
 });
 
 test("standardUseVerdict: pass threshold is 85% of need, same bar blendedDemand/seniorDemandRead use", () => {
@@ -353,6 +353,38 @@ test("standardUseVerdict: the substation gate ANDs with the other gates (ev_char
   assert.equal(standardUseVerdict({ ...base, roofs: 10 }, thresholds).pass, false);
 });
 
+// ---- standardUseVerdict's `requireDistrict`/`reads.mud` gate ("Best fit here" step 3, part 4) ----
+
+test("standardUseVerdict: omitting requireDistrict skips the water-district gate entirely", () => {
+  const v = standardUseVerdict({ roofs: 100, mud: null }, { roofNeed: 100 });
+  assert.equal(v.mudOk, true);
+});
+
+test("standardUseVerdict: requireDistrict set but mud unknown (null) fails the gate, same as false", () => {
+  const v = standardUseVerdict({ roofs: 100, mud: null }, { roofNeed: 100, requireDistrict: true });
+  assert.equal(v.mudOk, false);
+  assert.equal(v.pass, false);
+});
+
+test("standardUseVerdict: requireDistrict set and mud===false fails the gate", () => {
+  const v = standardUseVerdict({ roofs: 100, mud: false }, { roofNeed: 100, requireDistrict: true });
+  assert.equal(v.mudOk, false);
+});
+
+test("standardUseVerdict: requireDistrict set and mud===true passes the gate", () => {
+  const v = standardUseVerdict({ roofs: 100, mud: true }, { roofNeed: 100, requireDistrict: true });
+  assert.equal(v.mudOk, true);
+});
+
+test("standardUseVerdict: the water-district gate ANDs with the other gates (data_center's real shape)", () => {
+  const base = { demand: { ratio: 1, pass: true }, acres: 12, subKm: 1.5, mud: true };
+  const thresholds = { minAcres: 10, maxSubstationKm: 5, requireDistrict: true };
+  assert.equal(standardUseVerdict(base, thresholds).pass, true);
+  assert.equal(standardUseVerdict({ ...base, mud: false }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, acres: 1 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, subKm: 9 }, thresholds).pass, false);
+});
+
 // ---- standardUseVerdict's `reads.demand` override ("Best fit here" step 3, part 3) ----
 
 test("standardUseVerdict: a precomputed demand object is used as-is instead of roofs/roofNeed", () => {
@@ -418,6 +450,42 @@ test("countDemandRead: a zero/missing need doesn't divide by zero", () => {
   const v = countDemandRead(5, 0);
   assert.equal(v.ratio, null);
   assert.equal(v.pass, true); // 5 >= 0
+});
+
+// ---- schoolLoadDemandRead (residential_subdivision's induced-school-load read, "Best fit here" step 3, part 4) ----
+
+test("schoolLoadDemandRead: null acres means no verdict yet", () => {
+  assert.equal(schoolLoadDemandRead(null, 3, 3, 0.5, 750), null);
+});
+
+test("schoolLoadDemandRead: null schools means no verdict yet", () => {
+  assert.equal(schoolLoadDemandRead(50, null, 3, 0.5, 750), null);
+});
+
+test("schoolLoadDemandRead: projects acreage into homes then school-age kids, same math as maybeRenderResVerdict", () => {
+  // 50 ac * 3 units/ac = 150 homes; 150 * 0.5 students/home = 75 kids
+  const v = schoolLoadDemandRead(50, 2, 3, 0.5, 750);
+  assert.equal(v.units, 150);
+  assert.equal(v.kids, 75);
+  assert.equal(v.capacity, 1500); // 2 schools * 750 seats
+  assert.equal(v.ratio, 20); // 1500/75
+  assert.equal(v.pass, true);
+});
+
+test("schoolLoadDemandRead: capacity below induced kids fails, at/above passes", () => {
+  const short = schoolLoadDemandRead(400, 0, 3, 0.5, 750); // 400ac -> 600 kids; 0 schools -> 0 capacity
+  assert.equal(short.pass, false);
+  const boundary = schoolLoadDemandRead(10, 1, 1, 0.5, 5); // units=10, kids=5, capacity=1*5=5 (kids==capacity)
+  assert.equal(boundary.kids, 5);
+  assert.equal(boundary.capacity, 5);
+  assert.equal(boundary.pass, true);
+});
+
+test("schoolLoadDemandRead: zero induced kids has no meaningful ratio (null, not a divide-by-zero)", () => {
+  const v = schoolLoadDemandRead(0, 3, 3, 0.5, 750);
+  assert.equal(v.kids, 0);
+  assert.equal(v.ratio, null);
+  assert.equal(v.pass, true); // capacity (>=0) always covers zero induced kids
 });
 
 test("rankLandUseVerdicts: passing uses sort before short uses", () => {

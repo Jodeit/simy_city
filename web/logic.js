@@ -105,9 +105,17 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
 // caller must agree on is the shape, not the formula behind it. Omitting
 // `reads.demand` entirely keeps the original rooftop-ratio behavior verbatim
 // (existing callers are unaffected).
+// "Best fit here" step 3, part 4: data_center's third gate — presence inside
+// a mapped water district (`maybeRenderDCVerdict`'s `s.mud`) — isn't a
+// distance/count comparison like every gate above, just a boolean read with a
+// 3-state contract: `true` (inside), `false` (queried successfully, not
+// inside), or `null` (no districts layer for this area, or every candidate
+// host failed to respond) — `null` reads as a fail here exactly like `false`,
+// same "no read is not the best case" contract subOk/aadtOk already use for
+// their own error states.
 function standardUseVerdict(reads,thresholds){
-  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr,demand}=reads||{};
-  const {roofNeed,minAcres,minCompetitorKm,minAadt,maxSubstationKm}=thresholds||{};
+  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr,demand,mud}=reads||{};
+  const {roofNeed,minAcres,minCompetitorKm,minAadt,maxSubstationKm,requireDistrict}=thresholds||{};
   let ratio,demandOk;
   if(demand!==undefined){
     if(demand==null)return null;
@@ -127,7 +135,8 @@ function standardUseVerdict(reads,thresholds){
   const subOk=maxSubstationKm==null?true
     :subErr?false
     :(subKm!=null&&subKm<=maxSubstationKm);
-  return {pass:demandOk&&siteOk&&farOk&&aadtOk&&subOk,demandOk,siteOk,farOk,aadtOk,subOk,ratio};
+  const mudOk=requireDistrict?mud===true:true;
+  return {pass:demandOk&&siteOk&&farOk&&aadtOk&&subOk&&mudOk,demandOk,siteOk,farOk,aadtOk,subOk,mudOk,ratio};
 }
 // "Best fit here" step 1: turns a flat list of per-land-use verdicts into the
 // ranked order a "🏆 Best fit here" summary table would show — every passing
@@ -172,6 +181,27 @@ function seniorDemandRead(medianAge,ageThreshold){
 function countDemandRead(count,need){
   if(count==null)return null;
   return {count,need,ratio:need?count/need:null,pass:count>=need};
+}
+// "Best fit here" step 3, part 4: residential_subdivision's demand read.
+// Unlike every use above, acreage here is a demand *input* (projected into
+// est. homes, then school-age kids), not a separate site-size gate — so
+// there's no standalone `minAcres` threshold for this use in BEST_FIT_USES,
+// and this needs both `acres` and a nearby-school count before it can return
+// anything at all, same "still waiting on a leg" null contract as
+// blendedDemand/seniorDemandRead/countDemandRead. Mirrors
+// `maybeRenderResVerdict`'s own projection math exactly (same
+// unitsPerAcre/studentsPerHome/seatsPerSchool constants, passed in rather
+// than hard-coded so the pure function doesn't depend on explore.html's
+// globals). `ratio` is capacity/kids — "higher is better", same direction
+// every other ratio in this file uses — but `pass` is the same flat
+// `capacity>=kids` bar maybeRenderResVerdict already applies, no 0.85 fuzz.
+// Zero induced kids (e.g. a tiny parcel) has no meaningful margin to report,
+// so `ratio` is `null` rather than a divide-by-zero, same "no comparable
+// ratio" contract as countDemandRead's zero-need case.
+function schoolLoadDemandRead(acres,schools,unitsPerAcre,studentsPerHome,seatsPerSchool){
+  if(acres==null||schools==null)return null;
+  const units=acres*unitsPerAcre, kids=units*studentsPerHome, capacity=schools*seatsPerSchool;
+  return {units,kids,capacity,ratio:kids?capacity/kids:null,pass:capacity>=kids};
 }
 
 /* ---- Census tract demographics (FCC block lookup → ACS 5-yr point read) ---- */
@@ -975,5 +1005,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead};
 }
