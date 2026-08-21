@@ -23,7 +23,7 @@ const {
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
-  standardUseVerdict, rankLandUseVerdicts,
+  standardUseVerdict, rankLandUseVerdicts, countDemandRead,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -351,6 +351,73 @@ test("standardUseVerdict: the substation gate ANDs with the other gates (ev_char
   assert.equal(standardUseVerdict({ ...base, subKm: 9 }, thresholds).pass, false);
   assert.equal(standardUseVerdict({ ...base, nearestCompKm: 0.1 }, thresholds).pass, false);
   assert.equal(standardUseVerdict({ ...base, roofs: 10 }, thresholds).pass, false);
+});
+
+// ---- standardUseVerdict's `reads.demand` override ("Best fit here" step 3, part 3) ----
+
+test("standardUseVerdict: a precomputed demand object is used as-is instead of roofs/roofNeed", () => {
+  // blendedDemand's own ratio (roofs+daytime blend) would fail a raw
+  // roofs/roofNeed check (10/100 = 10%), but the precomputed object clears
+  // the 85% bar via the daytime leg — confirms `reads.demand` overrides, not
+  // adds to, the rooftop math.
+  const demand = blendedDemand(10, 500, 20, 100); // effective 10010, ratio 100.1
+  const v = standardUseVerdict({ roofs: 10, demand }, { roofNeed: 100 });
+  assert.equal(v.ratio, demand.ratio);
+  assert.equal(v.demandOk, true);
+  assert.equal(v.pass, true);
+});
+
+test("standardUseVerdict: reads.demand===null means no verdict at all, same contract as roofs==null", () => {
+  assert.equal(standardUseVerdict({ roofs: 500, demand: null }, { roofNeed: 100 }), null);
+});
+
+test("standardUseVerdict: reads.demand's own pass flag is honored even below the 85% ratio bar (hotel's exact-count contract)", () => {
+  // countDemandRead has no 0.85 fuzz — ratio 90% still fails, unlike the
+  // default rooftop path where 90% would pass.
+  const demand = countDemandRead(9, 10); // ratio 0.9, pass false
+  const v = standardUseVerdict({ demand }, {});
+  assert.equal(v.demandOk, false);
+  assert.equal(v.pass, false);
+});
+
+test("standardUseVerdict: omitting reads.demand keeps the original roofs/roofNeed behavior verbatim", () => {
+  const withoutDemand = standardUseVerdict({ roofs: 90 }, { roofNeed: 100 });
+  assert.equal(withoutDemand.ratio, 0.9);
+  assert.equal(withoutDemand.demandOk, true);
+});
+
+test("standardUseVerdict: a precomputed demand still ANDs with the other gates", () => {
+  const demand = { ratio: 2, pass: true };
+  const base = { demand, acres: 5, nearestCompKm: 2, aadtHit: { aadt: 50000 }, subKm: 1 };
+  const thresholds = { minAcres: 2, minCompetitorKm: 1, minAadt: 20000, maxSubstationKm: 3 };
+  assert.equal(standardUseVerdict(base, thresholds).pass, true);
+  assert.equal(standardUseVerdict({ ...base, acres: 0.1 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, demand: { ratio: 2, pass: false } }, thresholds).pass, false);
+});
+
+// ---- countDemandRead (hotel's demand-generator-count read) ----
+
+test("countDemandRead: null count means no verdict yet", () => {
+  assert.equal(countDemandRead(null, 15), null);
+});
+
+test("countDemandRead: count at/above the flat floor passes, unlike a 0.85-fuzzed ratio gate", () => {
+  const short = countDemandRead(14, 15);
+  assert.equal(short.pass, false);
+  const exact = countDemandRead(15, 15);
+  assert.equal(exact.pass, true);
+});
+
+test("countDemandRead: ratio is still need-normalized for ranking purposes", () => {
+  const v = countDemandRead(9, 15);
+  assert.equal(v.ratio, 0.6);
+  assert.equal(v.pass, false);
+});
+
+test("countDemandRead: a zero/missing need doesn't divide by zero", () => {
+  const v = countDemandRead(5, 0);
+  assert.equal(v.ratio, null);
+  assert.equal(v.pass, true); // 5 >= 0
 });
 
 test("rankLandUseVerdicts: passing uses sort before short uses", () => {

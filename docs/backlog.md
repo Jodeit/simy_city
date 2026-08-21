@@ -2274,26 +2274,87 @@ Ground rules for each run:
       "not scored here" note correctly dropped from 6 uses to the remaining
       5. Live Overpass reachability wasn't tested (sandbox blocks outbound),
       same caveat as every prior live-read item.
-- [ ] **"Best fit here" step 3, part 3: score the remaining 5 land uses.**
-      Still shown as "not scored here": `data_center` (substation distance +
-      acreage + water-district boolean, no rooftop demand at all),
-      `fast_casual` (blended rooftop+daytime demand instead of rooftops
-      alone, plus the same AADT gate `warehouse_club` now has),
-      `residential_subdivision` (acreage + induced-school-load ratio instead
-      of rooftop demand), `senior_living` (median-age demand instead of
-      rooftop demand, plus site size + farther-is-better competitor
-      distance), and `hotel` (nearby demand-generator count instead of
-      rooftops, plus the AADT gate, site size, and farther-is-better
-      competitor distance — four gates total). Every remaining one differs
-      in its *demand* leg, not its gates: `standardUseVerdict` hard-codes
-      `roofs/roofNeed` as the ratio, so the natural next step is letting a
-      caller pass a precomputed demand ratio (from `blendedDemand`,
-      `seniorDemandRead`, or a demand-generator count) in place of a raw
-      rooftop count — that one change would unlock `fast_casual`,
-      `senior_living`, and `hotel` at once, leaving only `data_center` and
-      `residential_subdivision` (whose water-district / school-load legs
-      have no shared-gate analogue yet) for a bespoke verdict shape ranked
-      side-by-side via `rankLandUseVerdicts`.
+- [x] **"Best fit here" step 3, part 3: score `fast_casual`, `senior_living`,
+      and `hotel` via a precomputed demand-ratio override.** These three were
+      the only remaining uses whose *gates* fit `standardUseVerdict`'s shared
+      shape but whose *demand* leg wasn't a raw rooftop count —
+      `standardUseVerdict` (`web/logic.js`) hard-coded `roofs/roofNeed` as the
+      ratio. Generalized it to accept an optional precomputed `reads.demand`
+      — any `{ratio,pass}`-shaped object (the exact return shape
+      `blendedDemand`/`seniorDemandRead` already produce) — used as-is
+      instead of being derived from `roofs`/`roofNeed`; omitting it keeps the
+      original rooftop-ratio behavior verbatim, so every existing caller/test
+      is unaffected. Added `countDemandRead(count,need)` for hotel's shape —
+      unlike every ratio-based demand read, `maybeRenderHLVerdict`'s real bar
+      is `count>=need` outright with no 0.85-of-need fuzz, so this
+      deliberately doesn't reuse blendedDemand/seniorDemandRead's pass
+      formula even though it returns the same `{ratio,pass}` shape. Each
+      `BEST_FIT_USES` entry now carries an optional `demandKind`
+      (`"blended"`/`"senior"`/`"generators"`) that tells `bestFitLeg`
+      (`web/explore.html`) which reads to fetch and which pure function to
+      compute `demand` from: `fast_casual`/`hotel` reuse the exact
+      `cfg.daytimeQ` Overpass query `runDemand`'s own daytime leg already
+      issues (fetched only when `demandKind` is set, same skip-when-unneeded
+      pattern the AADT/substation legs established); `senior_living` reuses
+      the multi-tract FCC→ACS sample-and-aggregate pipeline the "🏘️
+      Trade-area demographics" row already has, factored out into a new
+      `bestFitMedianAge(lat,lng,radiusKm)` that resolves to a value instead
+      of writing the DOM, so "Best fit here" can read it regardless of
+      whether that row is open or senior_living is even the selected use.
+      `data_center` (water-district boolean gate, no shared-gate analogue)
+      and `residential_subdivision` (acreage is a demand *input*, not a
+      separate site-size gate) still don't fit this shape — split out below
+      as the remaining follow-up. Added 9 new unit tests (`reads.demand`
+      overriding the rooftop ratio, `demand===null` propagating to an overall
+      null verdict, a precomputed `pass` being honored below the 85% bar,
+      old behavior preserved when `demand` is omitted, `demand` still ANDing
+      with the other gates; `countDemandRead`'s null/flat-floor/ratio/
+      zero-need cases). Verified: `python -m pytest -q` (15 passed), `simy
+      validate` (OK, 32 sources, 16 layers, 12 land uses), `node --test
+      tests/js/*.test.mjs` (266 passed, 9 new). Verified in headless
+      Chromium: both pages load with zero console/page errors; drove
+      `bestFitLeg` directly for all three new uses with mocked Overpass/FCC/
+      ACS responses, confirming each computed the correct `demand` shape
+      (blended ratio, median-age ratio, generator-count ratio); and a real
+      end-to-end `runBestFit()` run with mocked network ranked all 10
+      shared-shape uses together (fast_casual/senior_living/hotel now scored
+      alongside the original 7), correctly showed hotel's own exact-count
+      pass bar failing at a ratio the default 0.85 rule would have passed,
+      and left only Data Center/Residential Subdivision in the "not scored
+      here" note — down from 5. Live Overpass/FCC/Census reachability wasn't
+      tested (sandbox blocks outbound), same caveat as every prior live-read
+      item.
+- [ ] **"Best fit here" step 3, part 4: score the last 2 land uses
+      (`data_center`, `residential_subdivision`).** The two holdouts from
+      part 3 don't fit `standardUseVerdict`'s gate shape at all, not just its
+      demand leg: `data_center`'s real verdict (`maybeRenderDCVerdict`) has
+      no demand ratio whatsoever (nobody "needs" a data center nearby by
+      design) and instead ANDs three site-selection gates — nearest
+      substation (`standardUseVerdict` already has this one, `maxSubstationKm`),
+      acreage (already has this one too, `minAcres`), and a water-district
+      boolean the shared function has no equivalent of at all (`s.mud===true`
+      via the existing `runDistricts`/`DISTRICT_SOURCES` ArcGIS point query).
+      `residential_subdivision`'s real verdict (`maybeRenderResVerdict`) has
+      no site-size *gate* either — acreage instead feeds the demand
+      calculation directly (`kids = acres*RES_UNITS_PER_ACRE*RES_STUDENTS_PER_HOME`
+      vs. `capacity = schools*RES_SEATS_PER_SCHOOL`), so ranking it needs a
+      demand read shaped like `{ratio:capacity/kids, pass:capacity>=kids}`
+      fed through the same `reads.demand` override part 3 added, with
+      `thresholds` carrying none of the other gates at all (no
+      minAcres/minCompetitorKm/minAadt/maxSubstationKm — a genuinely
+      gate-less use). Two small, independent pieces of work: (1) a new
+      optional `thresholds.requireDistrict`/`reads.districtOk` gate on
+      `standardUseVerdict` for data_center, fetched in `bestFitLeg` via the
+      same `DISTRICT_SOURCES`/`arcgisPointQuery` call `runDistricts` already
+      makes (bbox-gated — Texas-only coverage today, same caveat every
+      DISTRICT_SOURCES-reliant read already carries) and a trivial always-true
+      `demand:{ratio:1,pass:true}` (data_center's "need" is fully captured by
+      the site/power/water gates, not a separate demand leg); (2) a pure
+      `schoolLoadDemandRead(acres,schools,unitsPerAcre,studentsPerHome,seatsPerSchool)`
+      helper for residential_subdivision, mirroring `seniorDemandRead`'s
+      style, fed through `reads.demand` with an otherwise-empty `thresholds`.
+      Once both land, the "not scored here" note in `renderBestFit` should be
+      permanently empty for every registered land use.
 - [x] **17th parcel county.** Added Hennepin County, MN (Minneapolis) as a
       17th `PARCEL_SOURCES` entry — `gis.hennepin.us`'s "County Parcels"
       layer (`HennepinData/LAND_PROPERTY/MapServer/1`), found via WebSearch

@@ -92,12 +92,31 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
 // mirrors ev_charging_hub/data_center's existing inline power leg and reads
 // the same way as AADT — nearer is better, so a lookup error or no substation
 // in range both fail it, the opposite of the competitor gate.
+//
+// "Best fit here" step 3, part 3: not every use's demand leg is a raw
+// rooftop count — fast_casual blends rooftops with a daytime-population
+// proxy (blendedDemand), senior_living reads trade-area median age
+// (seniorDemandRead), and hotel counts nearby demand generators against a
+// flat floor (countDemandRead) instead. `reads.demand`, when provided, is
+// any of those functions' `{ratio,pass}`-shaped return value (or `null` for
+// their own "no read yet" case, which propagates as this function's overall
+// null the same way `roofs==null` already does) and is used as-is instead of
+// deriving `ratio`/`demandOk` from `roofs`/`roofNeed` — the one thing every
+// caller must agree on is the shape, not the formula behind it. Omitting
+// `reads.demand` entirely keeps the original rooftop-ratio behavior verbatim
+// (existing callers are unaffected).
 function standardUseVerdict(reads,thresholds){
-  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr}=reads||{};
+  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr,demand}=reads||{};
   const {roofNeed,minAcres,minCompetitorKm,minAadt,maxSubstationKm}=thresholds||{};
-  if(roofs==null)return null;
-  const ratio=roofNeed?roofs/roofNeed:null;
-  const demandOk=ratio!=null&&ratio>=0.85;
+  let ratio,demandOk;
+  if(demand!==undefined){
+    if(demand==null)return null;
+    ratio=demand.ratio; demandOk=!!demand.pass;
+  }else{
+    if(roofs==null)return null;
+    ratio=roofNeed?roofs/roofNeed:null;
+    demandOk=ratio!=null&&ratio>=0.85;
+  }
   const siteOk=minAcres==null?true:(acres!=null&&acres>=minAcres);
   const farOk=minCompetitorKm==null?true
     :compErr?false
@@ -138,6 +157,21 @@ function seniorDemandRead(medianAge,ageThreshold){
   if(medianAge==null)return null;
   const ratio=medianAge/ageThreshold;
   return {medianAge,ageThreshold,ratio,pass:ratio>=0.85};
+}
+// hotel's demand read: a raw count of nearby demand generators (hospitals,
+// offices, conference centers — cfg.daytimeQ, same query machinery
+// fast_casual's daytime leg already uses, just different tags) compared
+// against a flat floor (`HL_MIN_GENERATORS`), unlike every ratio above —
+// `maybeRenderHLVerdict`'s real bar is `count>=need` outright, no 0.85-of-need
+// fuzz, so this intentionally doesn't reuse blendedDemand/seniorDemandRead's
+// pass formula even though the returned shape (for standardUseVerdict's
+// `reads.demand`) matches theirs. `ratio` is still need-normalized so a short
+// count still sorts sensibly in rankLandUseVerdicts, it's just not what pass
+// is computed from. Returns null (no verdict yet) until count is known, same
+// contract as blendedDemand/seniorDemandRead.
+function countDemandRead(count,need){
+  if(count==null)return null;
+  return {count,need,ratio:need?count/need:null,pass:count>=need};
 }
 
 /* ---- Census tract demographics (FCC block lookup → ACS 5-yr point read) ---- */
@@ -941,5 +975,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead};
 }

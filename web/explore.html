@@ -551,25 +551,29 @@ let hlState=null;
 // (web/logic.js) instead of duplicating this three-gate math inline.
 const GS_MIN_ACRES=5.0, GS_MIN_COMPETITOR_KM=2.0;
 let gsState=null;
-// "Best fit here" step 2 (+ step 3, partial): the land uses whose
-// maybeRender*Verdict already reduces to exactly the shared standardUseVerdict
-// shape — a rooftop-demand leg, an optional site-size leg, an optional
-// *farther-is-better* competitor-distance leg, and now (step 3) an optional
-// AADT traffic-count leg (standardUseVerdict's `minAadt` gate, web/logic.js —
-// mirrors warehouse_club/fast_casual/hotel's existing inline `trafficLeg`
-// read), and (step 3, part 2) an optional nearest-substation leg
-// (standardUseVerdict's `maxSubstationKm` gate — mirrors ev_charging_hub's and
-// data_center's existing inline power leg). warehouse_club fits the AADT shape
-// exactly (rooftop demand + site size + traffic, no competitor gate);
-// ev_charging_hub fits the substation shape (rooftop demand + substation
-// distance + competitor distance, no acreage gate). hotel needs a demand-
-// generator count instead of rooftops, fast_casual blends rooftops with a
-// daytime-population leg instead of reading rooftops alone, and data_center/
-// residential_subdivision/senior_living don't read rooftop demand at all —
-// those five still don't fit this exact shape, so they're left out rather
-// than force-fit. Ranking those other uses without duplicating their bespoke
-// verdict math is a further follow-up; the panel lists them as "not yet
-// ranked" instead of silently omitting them.
+// "Best fit here" step 2 (+ step 3): the land uses whose maybeRender*Verdict
+// already reduces to exactly the shared standardUseVerdict shape — a demand
+// leg, an optional site-size leg, an optional *farther-is-better*
+// competitor-distance leg, an optional AADT traffic-count leg
+// (standardUseVerdict's `minAadt` gate, web/logic.js — mirrors
+// warehouse_club/fast_casual/hotel's existing inline `trafficLeg` read), and
+// an optional nearest-substation leg (standardUseVerdict's `maxSubstationKm`
+// gate — mirrors ev_charging_hub's and data_center's existing inline power
+// leg). warehouse_club fits the AADT shape exactly (rooftop demand + site
+// size + traffic, no competitor gate); ev_charging_hub fits the substation
+// shape (rooftop demand + substation distance + competitor distance, no
+// acreage gate). fast_casual/senior_living/hotel don't read a raw rooftop
+// count as demand at all — `demandKind` tells bestFitLeg which precomputed
+// `{ratio,pass}` reads.demand standardUseVerdict should use instead
+// ("blended" = blendedDemand's rooftop+daytime-POI blend, "senior" =
+// seniorDemandRead's trade-area median-age read, "generators" =
+// countDemandRead's demand-generator count) — same reads.demand override
+// step 3, part 3 added to standardUseVerdict. data_center/
+// residential_subdivision are still left out: data_center's water-district
+// gate and residential_subdivision's induced-school-load ratio (where
+// acreage is a demand *input*, not a separate site-size gate) don't fit this
+// shape's gates at all, so ranking those two is a further follow-up; the
+// panel lists them as "not yet ranked" instead of silently omitting them.
 const BEST_FIT_USES=[
   {key:"warehouse_club", minAcres:WC_MIN_ACRES, minAadt:WC_AADT_MIN},
   {key:"ev_charging_hub", maxSubstationKm:EV_SUB_KM, minCompetitorKm:EV_MIN_COMPETITOR_KM},
@@ -577,6 +581,9 @@ const BEST_FIT_USES=[
   {key:"urgent_care", minAcres:UC_MIN_ACRES, minCompetitorKm:UC_MIN_COMPETITOR_KM},
   {key:"self_storage", minAcres:SS_MIN_ACRES, minCompetitorKm:SS_MIN_COMPETITOR_KM},
   {key:"child_care_center", minAcres:CC_MIN_ACRES, minCompetitorKm:CC_MIN_COMPETITOR_KM},
+  {key:"fast_casual", demandKind:"blended", minAadt:FC_AADT_MIN},
+  {key:"senior_living", demandKind:"senior", minAcres:SL_MIN_ACRES, minCompetitorKm:SL_MIN_COMPETITOR_KM},
+  {key:"hotel", demandKind:"generators", minAcres:HL_MIN_ACRES, minAadt:HL_AADT_MIN, minCompetitorKm:HL_MIN_COMPETITOR_KM},
   {key:"grocery_store", minAcres:GS_MIN_ACRES, minCompetitorKm:GS_MIN_COMPETITOR_KM},
 ];
 
@@ -1975,24 +1982,28 @@ function maybeRenderGSVerdict(seq){
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 
-/* ---- "Best fit here" step 2 (+ step 3, partial): rank every BEST_FIT_USES
-   use at the clicked point (web/logic.js's standardUseVerdict +
-   rankLandUseVerdicts, "Best fit here" step 1). Reuses each use's own
-   USE_DEMAND radius/compQ — the exact same rooftop-count and competitor-scan
-   Overpass query text runDemand() already issues for whichever use is
-   currently selected — through the same session-cached overpassRaw()
-   (web/logic.js's makeSessionCache) runDemand uses, so the currently-selected
-   use's own legs are never re-fetched, just read back from cache; only the
-   other uses' legs are genuinely new network calls. Parcel acreage is shared
-   across every use (one parcel per clicked point) and already resolved by
-   showParcel regardless of which use is selected, read straight from
+/* ---- "Best fit here" step 2 (+ step 3): rank every BEST_FIT_USES use at the
+   clicked point (web/logic.js's standardUseVerdict + rankLandUseVerdicts,
+   "Best fit here" step 1). Reuses each use's own USE_DEMAND radius/compQ —
+   the exact same rooftop-count and competitor-scan Overpass query text
+   runDemand() already issues for whichever use is currently selected —
+   through the same session-cached overpassRaw() (web/logic.js's
+   makeSessionCache) runDemand uses, so the currently-selected use's own legs
+   are never re-fetched, just read back from cache; only the other uses' legs
+   are genuinely new network calls. Parcel acreage is shared across every use
+   (one parcel per clicked point) and already resolved by showParcel
+   regardless of which use is selected, read straight from
    `lastParcelSummary` — no new fetch needed for that leg at all. AADT (for
-   warehouse_club, `u.minAadt` set) and the nearest substation (for
-   ev_charging_hub, `u.maxSubstationKm` set) are the two legs not already
-   fetched generically here — extra parallel fetches via the same
-   `arcgisNearQuery`/`maxAadtWithinRadius` and `USE_DEMAND.powerQ` queries
-   runDemand's own traffic/power legs use, each skipped (resolving trivially)
-   for every use without that threshold. */
+   warehouse_club/fast_casual/hotel, `u.minAadt` set), the nearest substation
+   (for ev_charging_hub, `u.maxSubstationKm` set), the daytime-POI/
+   demand-generator count (for fast_casual/hotel, `u.demandKind` set +
+   `cfg.daytimeQ`), and senior_living's trade-area median age (`u.demandKind
+   === "senior"`, via `bestFitMedianAge`) are the legs not already fetched
+   generically here — extra parallel fetches via the same
+   `arcgisNearQuery`/`maxAadtWithinRadius`, `USE_DEMAND.powerQ`/
+   `USE_DEMAND.daytimeQ` queries, and multi-tract ACS pipeline runDemand's own
+   traffic/power/daytime legs and the "🏘️ Trade-area demographics" row use,
+   each skipped (resolving trivially) for every use that doesn't need it. */
 let bfSeq=0;
 function bestFitLeg(u,lat,lng){
   const cfg=USE_DEMAND[u.key];
@@ -2016,9 +2027,50 @@ function bestFitLeg(u,lat,lng){
           const km=parseOverpassPoints(d).map(p=>haversine(lat,lng,p.lat,p.lng)).sort((a,b)=>a-b);
           return {subKm:km.length?km[0]:null, subErr:false};
         }).catch(()=>({subKm:null,subErr:true}));
-  return Promise.all([roofP,compP,aadtP,subP]).then(([roofs,comp,aadt,sub])=>
-    ({roofs,nearestComp:comp.nearestComp,compErr:comp.compErr,aadtHit:aadt.aadtHit,aadtErr:aadt.aadtErr,
-      subKm:sub.subKm,subErr:sub.subErr}));
+  // step 3, part 3: fast_casual/hotel's demand leg isn't a raw rooftop count
+  // (fast_casual blends it with a daytime-population proxy, hotel reads
+  // demand-generator count instead of rooftops at all) — fetched only for
+  // uses with a `demandKind`, same cfg.daytimeQ query runDemand's own 1b leg
+  // already issues for whichever of the two is currently selected.
+  const daytimeP = u.demandKind && cfg.daytimeQ
+    ? overpassRaw(`[out:json][timeout:25];(${cfg.daytimeQ.split(";").filter(Boolean)
+        .map(q=>`${q}(around:${cfg.daytimeRadius},${lat},${lng});`).join("")});out count;`)
+        .then(d=>countOf(d)).catch(()=>null)
+    : Promise.resolve(null);
+  // senior_living's demand leg is trade-area median age, not a headcount at
+  // all — the same multi-tract FCC/ACS sample-and-aggregate pipeline
+  // runCensusTradeArea uses, just resolving to a value instead of writing the
+  // DOM so it can run for a use that isn't necessarily the selected one.
+  const medianAgeP = u.demandKind==="senior" ? bestFitMedianAge(lat,lng,cfg.radius/1000) : Promise.resolve(null);
+  return Promise.all([roofP,compP,aadtP,subP,daytimeP,medianAgeP]).then(([roofs,comp,aadt,sub,daytime,medianAge])=>{
+    let demand;
+    if(u.demandKind==="blended")demand=blendedDemand(roofs,daytime,FC_DAYTIME_WEIGHT,cfg.roofNeed);
+    else if(u.demandKind==="generators")demand=countDemandRead(daytime,HL_MIN_GENERATORS);
+    else if(u.demandKind==="senior")demand=seniorDemandRead(medianAge,SL_AGE_THRESHOLD);
+    return {roofs,demand,nearestComp:comp.nearestComp,compErr:comp.compErr,aadtHit:aadt.aadtHit,aadtErr:aadt.aadtErr,
+      subKm:sub.subKm,subErr:sub.subErr};
+  });
+}
+// Resolves to the trade-area's household-weighted median age (or `null` on
+// any failure/no-coverage), the same sample-9-points → dedupe-tracts →
+// aggregate pipeline `runCensusTradeArea` uses for the on-screen "🏘️
+// Trade-area demographics" row — factored out so "Best fit here" can read
+// senior_living's real demand signal for a point without that row being open
+// (or senior_living even being the selected use).
+function bestFitMedianAge(lat,lng,radiusKm){
+  const pts=sampleTradeAreaPoints(lat,lng,radiusKm);
+  return Promise.all(pts.map(p=>{
+    const fccUrl=`${FCC_BLOCK_API}?lat=${p.lat}&lon=${p.lng}&format=json`;
+    return netCache(fccUrl, ()=>fetch(fccUrl).then(r=>r.ok?r.json():Promise.reject(r.status)))
+      .then(parseFccBlockFips).catch(()=>null);
+  })).then(fipsList=>{
+    const tracts=dedupeTracts(fipsList);
+    if(!tracts.length)return null;
+    return Promise.all(tracts.map(f=>fetchAcsTractRow(ACS_YEARS.slice(),f))).then(rows=>{
+      const agg=aggregateAcsTracts(rows);
+      return agg?agg.medianAge:null;
+    });
+  }).catch(()=>null);
 }
 function bestFitReasonText(e){
   const parts=[
@@ -2089,7 +2141,7 @@ function runBestFit(){
       list.forEach(({u,r})=>{
         const cfg=USE_DEMAND[u.key];
         const v=standardUseVerdict(
-          {roofs:r.roofs, acres, nearestCompKm:r.nearestComp?r.nearestComp.km:null, compErr:r.compErr,
+          {roofs:r.roofs, demand:r.demand, acres, nearestCompKm:r.nearestComp?r.nearestComp.km:null, compErr:r.compErr,
             aadtHit:r.aadtHit, aadtErr:r.aadtErr, subKm:r.subKm, subErr:r.subErr},
           {roofNeed:cfg.roofNeed, minAcres:u.minAcres, minCompetitorKm:u.minCompetitorKm, minAadt:u.minAadt,
             maxSubstationKm:u.maxSubstationKm});
