@@ -92,11 +92,22 @@ function haversine(la1,lo1,la2,lo2){const R=6371,d=x=>x*Math.PI/180;
 // mirrors ev_charging_hub/data_center's existing inline power leg and reads
 // the same way as AADT — nearer is better, so a lookup error or no substation
 // in range both fail it, the opposite of the competitor gate.
+// "Best fit here" step 3, part 3: `reads.demandRatio` lets a caller pass an
+// already-computed need ratio (e.g. `blendedDemand(...).ratio` or
+// `seniorDemandRead(...).ratio`) instead of a raw rooftop count, for uses
+// whose demand leg isn't a plain rooftop headcount — fast_casual blends
+// rooftops with a daytime-population proxy, for instance. It's `undefined`
+// (not just `null`) that means "no ratio supplied, fall back to roofs/
+// roofNeed" — the two are deliberately different sentinels so a use *with* a
+// demandRatio leg that hasn't resolved yet can still explicitly pass `null`
+// and get the same "no read at all" `null` verdict roofs==null gives, rather
+// than silently falling through to a stale roofs/roofNeed computation.
 function standardUseVerdict(reads,thresholds){
-  const {roofs,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr}=reads||{};
+  const {roofs,demandRatio,acres,nearestCompKm,compErr,aadtHit,aadtErr,subKm,subErr}=reads||{};
   const {roofNeed,minAcres,minCompetitorKm,minAadt,maxSubstationKm}=thresholds||{};
-  if(roofs==null)return null;
-  const ratio=roofNeed?roofs/roofNeed:null;
+  const usingRatio=demandRatio!==undefined;
+  if(usingRatio?demandRatio==null:roofs==null)return null;
+  const ratio=usingRatio?demandRatio:(roofNeed?roofs/roofNeed:null);
   const demandOk=ratio!=null&&ratio>=0.85;
   const siteOk=minAcres==null?true:(acres!=null&&acres>=minAcres);
   const farOk=minCompetitorKm==null?true

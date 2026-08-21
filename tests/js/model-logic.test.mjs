@@ -353,6 +353,40 @@ test("standardUseVerdict: the substation gate ANDs with the other gates (ev_char
   assert.equal(standardUseVerdict({ ...base, roofs: 10 }, thresholds).pass, false);
 });
 
+test("standardUseVerdict: reads.demandRatio (undefined) falls back to roofs/roofNeed, unchanged behavior", () => {
+  const v = standardUseVerdict({ roofs: 85 }, { roofNeed: 100 });
+  assert.equal(v.ratio, 0.85);
+  assert.equal(v.demandOk, true);
+});
+
+test("standardUseVerdict: a supplied demandRatio is used directly, ignoring roofs/roofNeed entirely", () => {
+  const v = standardUseVerdict({ roofs: 1, demandRatio: 0.9 }, { roofNeed: 100000 });
+  assert.equal(v.ratio, 0.9);
+  assert.equal(v.demandOk, true);
+});
+
+test("standardUseVerdict: demandRatio below 0.85 fails the demand gate, same bar as the roofs path", () => {
+  const v = standardUseVerdict({ demandRatio: 0.84 }, {});
+  assert.equal(v.demandOk, false);
+  assert.equal(v.pass, false);
+});
+
+test("standardUseVerdict: demandRatio:null means no verdict at all, same contract as roofs:null", () => {
+  assert.equal(standardUseVerdict({ demandRatio: null }, {}), null);
+});
+
+test("standardUseVerdict: demandRatio:null returns null even when roofs is a real number (ratio leg, not roofs, is the read that's missing)", () => {
+  assert.equal(standardUseVerdict({ roofs: 500, demandRatio: null }, { roofNeed: 100 }), null);
+});
+
+test("standardUseVerdict: demandRatio participates in pass same as the other gates (fast_casual's real shape)", () => {
+  const base = { demandRatio: 0.9, aadtHit: { aadt: 25000 } };
+  const thresholds = { minAadt: 20000 };
+  assert.equal(standardUseVerdict(base, thresholds).pass, true);
+  assert.equal(standardUseVerdict({ ...base, demandRatio: 0.5 }, thresholds).pass, false);
+  assert.equal(standardUseVerdict({ ...base, aadtHit: { aadt: 100 } }, thresholds).pass, false);
+});
+
 test("rankLandUseVerdicts: passing uses sort before short uses", () => {
   const ranked = rankLandUseVerdicts([
     { id: "a", pass: false, ratio: 0.9 },
