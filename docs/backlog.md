@@ -2429,24 +2429,28 @@ Ground rules for each run:
       county.
 
 ## Now (high value) — newly added
-- [ ] **Installable PWA (web app manifest + icons).** `web/explore.html` and
-      `web/index.html` have only an inline-SVG-data-URI `<link rel="icon">`
-      (no manifest, no `theme-color`, no apple-touch-icon), so the app can't
-      be "Add to Home Screen"/installed on mobile or desktop, and browser
-      chrome (tab bar on Android, iOS status bar) doesn't pick up the site's
-      dark green brand color. Add `web/manifest.json` (name "SIMyCity",
-      `short_name`, `start_url: "explore.html"`, `display: "standalone"`,
-      `theme_color`/`background_color` matching the existing dark palette,
-      and PNG icons rasterized from the existing inline favicon SVG — no new
-      art asset needed, since the "S" mark already exists as a data URI).
-      Link it from both pages (`<link rel="manifest">`), add a matching
-      `<meta name="theme-color">` and `<link rel="apple-touch-icon">` (iOS
-      ignores manifest icons and needs its own tag). Fully verifiable without
-      live network: `manifest.json` is valid JSON with all required fields,
-      the generated PNGs decode correctly, and both pages still load with
-      zero console/page errors in headless Chromium (a missing/malformed
-      manifest triggers a DevTools console warning, which the existing
-      zero-console-error check will already catch).
+- [x] **Installable PWA (web app manifest + icons).** Added `web/manifest.json`
+      (name/short_name "SIMyCity", `start_url: "explore.html"`, `scope: "."`,
+      `display: "standalone"`, `theme_color`/`background_color` both
+      `#16201f` — the same dark ink the existing favicon SVG already uses as
+      its background). Rasterized that exact favicon SVG (the rounded dark
+      square + green "S" mark) into real PNGs — `web/icons/icon-192.png`,
+      `icon-512.png`, and `icons/apple-touch-icon.png` (180×180) — via
+      headless Chromium (no PIL/cairosvg available in this sandbox, so used
+      the pre-installed Playwright Chromium to screenshot the SVG at each
+      target size with a transparent background instead), so no new art
+      asset was hand-drawn — it's a pixel-accurate render of the existing
+      mark. Linked from both `web/explore.html` and `web/index.html`:
+      `<link rel="manifest">`, `<meta name="theme-color">`, and
+      `<link rel="apple-touch-icon">` (iOS ignores manifest icons and needs
+      its own tag), inserted right next to the existing favicon `<link>` in
+      each `<head>`. Verified: `manifest.json` parses as valid JSON with all
+      required fields; fetching it and each referenced icon via a real
+      Chromium `file://` navigation returned HTTP 200 with correct PNG magic
+      bytes at the expected byte sizes (no 404s, no broken references); and
+      both pages load with zero console/page errors in headless Chromium
+      (a missing/malformed manifest would surface as a DevTools console
+      warning, which this check would have caught).
 - [ ] **Open Graph / Twitter Card meta tags for shareable links.** The app
       already has real shareable permalinks (`#mode=…&lat=…&lng=…` and
       `#cmp=…`, see the "Shareable permalink"/"Share the pinned Compare list"
