@@ -2428,6 +2428,72 @@ Ground rules for each run:
       — a live spot-check is a good human follow-up, same as every prior
       county.
 
+## Now (high value) — newly added
+- [ ] **Installable PWA (web app manifest + icons).** `web/explore.html` and
+      `web/index.html` have only an inline-SVG-data-URI `<link rel="icon">`
+      (no manifest, no `theme-color`, no apple-touch-icon), so the app can't
+      be "Add to Home Screen"/installed on mobile or desktop, and browser
+      chrome (tab bar on Android, iOS status bar) doesn't pick up the site's
+      dark green brand color. Add `web/manifest.json` (name "SIMyCity",
+      `short_name`, `start_url: "explore.html"`, `display: "standalone"`,
+      `theme_color`/`background_color` matching the existing dark palette,
+      and PNG icons rasterized from the existing inline favicon SVG — no new
+      art asset needed, since the "S" mark already exists as a data URI).
+      Link it from both pages (`<link rel="manifest">`), add a matching
+      `<meta name="theme-color">` and `<link rel="apple-touch-icon">` (iOS
+      ignores manifest icons and needs its own tag). Fully verifiable without
+      live network: `manifest.json` is valid JSON with all required fields,
+      the generated PNGs decode correctly, and both pages still load with
+      zero console/page errors in headless Chromium (a missing/malformed
+      manifest triggers a DevTools console warning, which the existing
+      zero-console-error check will already catch).
+- [ ] **Open Graph / Twitter Card meta tags for shareable links.** The app
+      already has real shareable permalinks (`#mode=…&lat=…&lng=…` and
+      `#cmp=…`, see the "Shareable permalink"/"Share the pinned Compare list"
+      items above) but neither `web/index.html` nor `web/explore.html` has
+      `og:title`/`og:description`/`og:image`/`twitter:card` meta tags, so a
+      pasted link into Slack/iMessage/Twitter/Discord unfurls with no
+      preview at all. Add static Open Graph + Twitter Card tags to both
+      pages' `<head>` (title, a one-line description matching the existing
+      tagline copy, and an image — reuse `web/hero.png`, already committed
+      for the landing page, as `og:image` with an absolute GitHub Pages URL).
+      Note the real limit here: since this is a client-side-only app with no
+      server, a shared permalink to a *specific* clicked site can't get a
+      dynamically-generated per-site preview (that would need a server-side
+      renderer) — this item is scoped to a solid *static* default preview for
+      the site as a whole, not per-permalink previews; document that scoping
+      note inline as a comment if it's not obvious from the code. Verify
+      `og:image`/`twitter:image` resolve to a real committed file path and
+      both pages still load with zero console/page errors.
+- [ ] **13th land use: Car Wash.** All 12 existing land uses are already
+      wired into the shared `standardUseVerdict` gate machinery (rooftop/
+      blended demand + optional site-size + optional AADT traffic-count +
+      optional farther-is-better competitor-distance + optional
+      nearer-is-better substation-distance) and the "Best fit here" ranking
+      now covers all 12 (`ALL_USE_KEYS`/`BEST_FIT_USES`, see "Best fit here
+      step 3, parts 1-4" above) — a car wash is a clean fit for that exact
+      shape with **zero new gate-shape work needed** in `web/logic.js`: it
+      wants nearby rooftop demand (a modest drive radius, denser than
+      warehouse_club's, similar to fast_casual's), a real AADT traffic-count
+      floor (reusing the `minAadt` gate warehouse_club already established —
+      a car wash lives and dies on drive-by visibility/volume even more than
+      a warehouse club does), a modest site-size floor (a wash tunnel + stacking
+      lanes, well under warehouse_club's 15 acres), and a farther-is-better
+      competitor-distance gate against existing car washes
+      (`shop=car_wash`/`amenity=car_wash` in OSM). Add the `car_wash` entry to
+      `data_sources/layers.yaml` (`requires.demand`/`requires.parcel`/
+      `requires.competition`/`requires.transportation` mirroring the shape
+      documented above), a `USE_DEMAND.car_wash` config + a `maybeRenderCWVerdict`
+      render function in `web/explore.html` (same wait-for-all-legs pattern
+      every other use follows), add `"car_wash"` to `ALL_USE_KEYS` and a
+      `BEST_FIT_USES` entry with `minAadt`/`minAcres`/`minCompetitorKm`
+      thresholds. Verify: `python -m pytest -q`, `simy validate` (should
+      report 13 land uses), `node --test tests/js/*.test.mjs`, and in headless
+      Chromium — both pages load clean, selecting `car_wash` renders a real
+      verdict panel, and `runBestFit()` ranks it alongside the other 12 with
+      zero console errors. Live Overpass/ArcGIS reachability isn't testable
+      from this sandbox, same caveat as every prior land-use/county item.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
