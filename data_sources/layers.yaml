@@ -467,6 +467,45 @@ land_uses:
       competitor-distance floor. OSM tags this unambiguously (`shop=
       supermarket`), so the live competitor/site query needs no OR-fallback.
 
+  car_wash:               # automated/tunnel or self-serve car wash
+    label: Car Wash
+    requires:
+      demand:      { min_households_drive_time: 7000, drive_time_min: 8 }
+      # A car wash lives and dies on drive-by visibility/volume even more than
+      # warehouse_club does — reuses the same `minAadt` gate mechanism
+      # (`standardUseVerdict`'s AADT leg, web/logic.js) warehouse_club/
+      # fast_casual/hotel already established, at a threshold between
+      # fast_casual's arterial bar (20000) and warehouse_club's highway bar
+      # (40000): a wash tunnel wants a busy arterial, not necessarily
+      # interstate frontage.
+      transportation: { near_arterial_aadt: 25000 }
+      parcel:      { min_buildable_acres: 1.0 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living/urgent_care/self_storage/
+      # child_care_center/hotel/grocery_store established: a second car wash
+      # a mile from an existing one is splitting an already-served pool of
+      # drivers, not opening up a new one.
+      competition: { min_distance_km_from_nearest: 1.5 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a wash tunnel/bays + stacking lanes, well under a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      A rooftop-headcount demand read like fast_casual, at a slightly
+      tighter radius (5 km) — a car wash draws a local/commute-route crowd,
+      not a citywide one. min_households_drive_time (7000),
+      min_buildable_acres (1.0, a wash tunnel + stacking lanes, well under
+      warehouse_club's 15-acre big-box pad), and near_arterial_aadt (25000)
+      are first-draft heuristics — refine freely, same as every other
+      threshold here. Wired up via `standardUseVerdict` directly (same
+      demand+site-size+AADT+competitor-distance shape grocery_store/hotel
+      already established), no new gate-shape work needed. OSM tags this
+      with two live tags — `shop=car_wash` and `amenity=car_wash` — both
+      queried with an OR-fallback for the live competitor/site read, same
+      messy-tagging caveat urgent_care/child_care_center already documented.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
