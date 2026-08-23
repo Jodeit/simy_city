@@ -2477,34 +2477,50 @@ Ground rules for each run:
       `python -m pytest -q` (15 passed), `simy validate` (OK, 12 land uses),
       and `node --test tests/js/*.test.mjs` (276 passed) all stayed green
       since this item touched only the two pages' `<head>`s.
-- [ ] **13th land use: Car Wash.** All 12 existing land uses are already
-      wired into the shared `standardUseVerdict` gate machinery (rooftop/
-      blended demand + optional site-size + optional AADT traffic-count +
-      optional farther-is-better competitor-distance + optional
-      nearer-is-better substation-distance) and the "Best fit here" ranking
-      now covers all 12 (`ALL_USE_KEYS`/`BEST_FIT_USES`, see "Best fit here
-      step 3, parts 1-4" above) — a car wash is a clean fit for that exact
-      shape with **zero new gate-shape work needed** in `web/logic.js`: it
-      wants nearby rooftop demand (a modest drive radius, denser than
-      warehouse_club's, similar to fast_casual's), a real AADT traffic-count
-      floor (reusing the `minAadt` gate warehouse_club already established —
-      a car wash lives and dies on drive-by visibility/volume even more than
-      a warehouse club does), a modest site-size floor (a wash tunnel + stacking
-      lanes, well under warehouse_club's 15 acres), and a farther-is-better
-      competitor-distance gate against existing car washes
-      (`shop=car_wash`/`amenity=car_wash` in OSM). Add the `car_wash` entry to
-      `data_sources/layers.yaml` (`requires.demand`/`requires.parcel`/
-      `requires.competition`/`requires.transportation` mirroring the shape
-      documented above), a `USE_DEMAND.car_wash` config + a `maybeRenderCWVerdict`
-      render function in `web/explore.html` (same wait-for-all-legs pattern
-      every other use follows), add `"car_wash"` to `ALL_USE_KEYS` and a
-      `BEST_FIT_USES` entry with `minAadt`/`minAcres`/`minCompetitorKm`
-      thresholds. Verify: `python -m pytest -q`, `simy validate` (should
-      report 13 land uses), `node --test tests/js/*.test.mjs`, and in headless
-      Chromium — both pages load clean, selecting `car_wash` renders a real
-      verdict panel, and `runBestFit()` ranks it alongside the other 12 with
-      zero console errors. Live Overpass/ArcGIS reachability isn't testable
-      from this sandbox, same caveat as every prior land-use/county item.
+- [x] **13th land use: Car Wash.** Added `car_wash` (`data_sources/layers.yaml`)
+      — a clean fit for the shared `standardUseVerdict` gate shape (web/
+      logic.js) with zero new gate-shape work needed: rooftop demand at a
+      4 km drive-by radius (denser than warehouse_club's 15 km, close to
+      fast_casual's 6 km), a real AADT traffic-count floor
+      (`transportation.near_arterial_aadt: 25000`, reusing the same
+      `AADT_SOURCE`/`minAadt` gate warehouse_club/fast_casual/hotel already
+      established — a car wash lives and dies on drive-by visibility even
+      more than those do), a site-size floor (`parcel.min_buildable_acres:
+      1.2` — a wash tunnel + stacking lanes, well under warehouse_club's
+      15 acres), and the same farther-is-better competition read every use
+      since food_truck_court has established, against existing car washes
+      (OSM tags this across two live tags — `shop=car_wash` and
+      `amenity=car_wash` — queried with the same OR-fallback urgent_care's
+      messy tagging already established). Wired into `web/explore.html`:
+      `USE_DEMAND.car_wash`, `CW_MIN_ACRES`/`CW_AADT_MIN`/
+      `CW_MIN_COMPETITOR_KM` + `cwState`, a `maybeRenderCWVerdict` render
+      function that waits for all four legs (rooftops, AADT, acreage,
+      competitor distance) before rendering once via `standardUseVerdict`
+      (same wiring grocery_store established, extended with the `minAadt`
+      gate warehouse_club/fast_casual/hotel's own inline traffic leg
+      already uses), `"car_wash"` added to `ALL_USE_KEYS` (the use-selector
+      chip is fully data-driven off this + `MODEL.land_uses`, so it needed
+      no separate UI wiring) and to `BEST_FIT_USES` with
+      `minAadt`/`minAcres`/`minCompetitorKm` thresholds — `bestFitLeg`'s AADT
+      leg was already fully generic (driven by `u.minAadt`), so "Best fit
+      here" picked it up with no changes there either. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 13 land uses),
+      `node --test tests/js/*.test.mjs` (276 passed, unchanged — this item
+      touched no pure `web/logic.js` functions, only `explore.html` wiring +
+      the YAML model), and in headless Chromium: both pages load with zero
+      console/page errors; switching to Test-a-use mode and selecting
+      `car_wash` then simulating a real map click rendered the full result
+      panel (with a live `demandVerdict` block) end to end with zero throws;
+      driving `maybeRenderCWVerdict` directly through PASS / SHORT-on-demand
+      / SHORT-on-site-size / SHORT-on-AADT / SHORT-on-competitor-too-close /
+      no-AADT-route-in-range / acreage-unavailable / no-rooftop-read /
+      wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws; and running `runBestFit()` at a point with
+      mocked `overpassRaw`/`arcgisNearQuery` responses produced a ranked
+      result row for `car_wash` alongside the other 12 uses. Live
+      Overpass/ArcGIS reachability isn't testable from this sandbox, same
+      caveat as every prior land-use/county item — a live spot-check on the
+      real site is a good human follow-up.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
