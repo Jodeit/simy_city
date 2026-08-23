@@ -467,6 +467,46 @@ land_uses:
       competitor-distance floor. OSM tags this unambiguously (`shop=
       supermarket`), so the live competitor/site query needs no OR-fallback.
 
+  car_wash:               # self-serve or tunnel car wash
+    label: Car Wash
+    requires:
+      demand:      { min_households_drive_time: 9000, drive_time_min: 8 }
+      # A car wash lives and dies on drive-by visibility/volume even more
+      # than warehouse_club does — reuses the same real AADT traffic-count
+      # gate (`transportation.near_highway_aadt`/`near_arterial_aadt`,
+      # `AADT_SOURCE` in web/explore.html) warehouse_club/fast_casual/hotel
+      # already established, at a threshold between fast_casual's arterial
+      # bar (20000) and warehouse_club's highway bar (40000): a wash wants a
+      # busy commuter road, not necessarily an interstate.
+      transportation: { near_arterial_aadt: 25000 }
+      # A wash tunnel + stacking lanes + vacuum bays, well under
+      # warehouse_club's 15-acre big-box pad but bigger than a single-clinic
+      # lot (urgent_care's 1.0 acre).
+      parcel:      { min_buildable_acres: 1.2 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court has established: a second car wash a few blocks from
+      # an existing one is splitting an already-served pool of drivers, not
+      # opening up a new one.
+      competition: { min_distance_km_from_nearest: 1.5 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: medium      # a building/tunnel + a full stacking-lane and parking field
+      carbon: low
+      traffic: low
+    notes: >
+      The 13th land use — a clean fit for the shared demand+site-size+AADT+
+      competitor-distance gate shape `standardUseVerdict` (web/logic.js)
+      already models, reusing exactly the fields warehouse_club (AADT) and
+      grocery_store (standardUseVerdict wiring) established rather than
+      inventing new gate shapes. min_households_drive_time (9000) and
+      near_arterial_aadt (25000) are first-draft heuristics — refine freely,
+      same as every other threshold here. OSM tags this fairly unambiguously
+      across two live tags — `shop=car_wash` and `amenity=car_wash` — both
+      queried independently for the live competitor/site read, same
+      OR-fallback pattern urgent_care's/child_care_center's messy tagging
+      already established (car washes show up under either tag in practice).
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

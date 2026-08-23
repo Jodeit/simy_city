@@ -902,6 +902,32 @@ window.SIMY_MODEL = {
         "traffic": "medium"
       },
       "notes": "A rooftop-headcount demand read like warehouse_club/fast_casual, at a radius (8 km) between the two \u2014 a supermarket's trade area is wider than a fast-casual restaurant's walk-up/short-drive crowd but far tighter than a warehouse club's citywide draw. min_households_drive_time (12000) and min_buildable_acres (5.0, a mid-box anchor + parking field, smaller than warehouse_club's 15-acre big-box pad) are first-draft heuristics \u2014 refine freely, same as every other threshold here. This is the first new land use to be wired up using `standardUseVerdict` (web/ logic.js, \"Best fit here\" step 1's shared demand+site-size+competitor- distance core) directly instead of duplicating that three-gate math inline, since its requires shape is exactly what that helper models: a rooftop-need ratio, an acreage floor, and a farther-is-better competitor-distance floor. OSM tags this unambiguously (`shop= supermarket`), so the live competitor/site query needs no OR-fallback.\n"
+    },
+    "car_wash": {
+      "label": "Car Wash",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 9000,
+          "drive_time_min": 8
+        },
+        "transportation": {
+          "near_arterial_aadt": 25000
+        },
+        "parcel": {
+          "min_buildable_acres": 1.2
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.5
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "medium",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "The 13th land use \u2014 a clean fit for the shared demand+site-size+AADT+ competitor-distance gate shape `standardUseVerdict` (web/logic.js) already models, reusing exactly the fields warehouse_club (AADT) and grocery_store (standardUseVerdict wiring) established rather than inventing new gate shapes. min_households_drive_time (9000) and near_arterial_aadt (25000) are first-draft heuristics \u2014 refine freely, same as every other threshold here. OSM tags this fairly unambiguously across two live tags \u2014 `shop=car_wash` and `amenity=car_wash` \u2014 both queried independently for the live competitor/site read, same OR-fallback pattern urgent_care's/child_care_center's messy tagging already established (car washes show up under either tag in practice).\n"
     }
   },
   "actor_uses": {
