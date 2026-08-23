@@ -2451,24 +2451,32 @@ Ground rules for each run:
       both pages load with zero console/page errors in headless Chromium
       (a missing/malformed manifest would surface as a DevTools console
       warning, which this check would have caught).
-- [ ] **Open Graph / Twitter Card meta tags for shareable links.** The app
-      already has real shareable permalinks (`#mode=…&lat=…&lng=…` and
-      `#cmp=…`, see the "Shareable permalink"/"Share the pinned Compare list"
-      items above) but neither `web/index.html` nor `web/explore.html` has
-      `og:title`/`og:description`/`og:image`/`twitter:card` meta tags, so a
-      pasted link into Slack/iMessage/Twitter/Discord unfurls with no
-      preview at all. Add static Open Graph + Twitter Card tags to both
-      pages' `<head>` (title, a one-line description matching the existing
-      tagline copy, and an image — reuse `web/hero.png`, already committed
-      for the landing page, as `og:image` with an absolute GitHub Pages URL).
-      Note the real limit here: since this is a client-side-only app with no
-      server, a shared permalink to a *specific* clicked site can't get a
-      dynamically-generated per-site preview (that would need a server-side
-      renderer) — this item is scoped to a solid *static* default preview for
-      the site as a whole, not per-permalink previews; document that scoping
-      note inline as a comment if it's not obvious from the code. Verify
-      `og:image`/`twitter:image` resolve to a real committed file path and
-      both pages still load with zero console/page errors.
+- [x] **Open Graph / Twitter Card meta tags for shareable links.** Added
+      static `og:type`/`og:url`/`og:title`/`og:description`/`og:image` and
+      `twitter:card`/`twitter:title`/`twitter:description`/`twitter:image`
+      tags to both `web/index.html` and `web/explore.html` `<head>`s, right
+      after the existing manifest/theme-color/apple-touch-icon tags — each
+      page gets its own title/description matching its existing tagline
+      copy, both pointing `og:image`/`twitter:image` at the already-committed
+      `web/hero.png` via its absolute GitHub Pages URL
+      (`https://jodeit.github.io/simy_city/hero.png`) and `twitter:card` set
+      to `summary_large_image`. Documented inline (as an HTML comment above
+      the tags on both pages) the real scoping limit: this is a
+      client-side-only app with no server, so a shared permalink to a
+      *specific* pinned site (`#mode=…&lat=…&lng=…`/`#cmp=…`) can't get a
+      dynamically-generated per-site preview — only a solid static default
+      preview for the site as a whole, not per-permalink previews. Verified:
+      `hero.png` is a real committed 243,999-byte file (not a placeholder);
+      a headless-Chromium `file://` load of both pages confirms the new meta
+      tags are present with the exact expected `content` values via
+      `document.querySelector`; and both pages still load with zero genuine
+      page/console errors (the sandbox's expected
+      `net::ERR_TUNNEL_CONNECTION_FAILED`/"Failed to load resource" noise
+      from unreachable external tile/Overpass hosts is filtered out of that
+      check, same caveat as every prior item touching these pages —
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 12 land uses),
+      and `node --test tests/js/*.test.mjs` (276 passed) all stayed green
+      since this item touched only the two pages' `<head>`s.
 - [ ] **13th land use: Car Wash.** All 12 existing land uses are already
       wired into the shared `standardUseVerdict` gate machinery (rooftop/
       blended demand + optional site-size + optional AADT traffic-count +

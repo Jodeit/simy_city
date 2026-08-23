@@ -20,6 +20,20 @@
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#16201f"/>
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
+<!-- Static previews only: this is a client-side-only app with no server, so a
+     shared permalink to a specific pinned site (#mode=…&lat=…&lng=… or
+     #cmp=…) can't get a dynamically-generated per-site image — that would
+     need a server-side renderer. These tags give every link the same solid
+     default preview for the site as a whole. -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://jodeit.github.io/simy_city/explore.html"/>
+<meta property="og:title" content="SIMyCity Explorer — drop a development, see what it needs"/>
+<meta property="og:description" content="Open-source, public-data simulation of real parcels and their infrastructure dependencies. Click a spot on the map and see the demand, site, traffic, and competition reads for real land uses."/>
+<meta property="og:image" content="https://jodeit.github.io/simy_city/hero.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="SIMyCity Explorer — drop a development, see what it needs"/>
+<meta name="twitter:description" content="Open-source, public-data simulation of real parcels and their infrastructure dependencies. Click a spot on the map and see the demand, site, traffic, and competition reads for real land uses."/>
+<meta name="twitter:image" content="https://jodeit.github.io/simy_city/hero.png"/>
 <link rel="stylesheet" href="vendor/leaflet/leaflet.css"/>
 <style>
   :root{--garden:#2f9e44;--garden-deep:#1f7a33;--leaf:#74c476;--amber:#d9a441;--water:#3a8fb7;

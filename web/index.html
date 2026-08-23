@@ -23,6 +23,20 @@
 <link rel="manifest" href="manifest.json"/>
 <meta name="theme-color" content="#16201f"/>
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
+<!-- Static previews only: this is a client-side-only app with no server, so a
+     shared permalink to a specific pinned site (#mode=…&lat=…&lng=… or
+     #cmp=…) can't get a dynamically-generated per-site image — that would
+     need a server-side renderer. These tags give every link the same solid
+     default preview for the site as a whole. -->
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://jodeit.github.io/simy_city/index.html"/>
+<meta property="og:title" content="SIMyCity — a SimCity for the real world"/>
+<meta property="og:description" content="Open-source, public-data simulation of real parcels and their infrastructure dependencies. Why isn't there a Costco near me? Would a data center succeed here? Should it be built at all?"/>
+<meta property="og:image" content="https://jodeit.github.io/simy_city/hero.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="SIMyCity — a SimCity for the real world"/>
+<meta name="twitter:description" content="Open-source, public-data simulation of real parcels and their infrastructure dependencies. Why isn't there a Costco near me? Would a data center succeed here? Should it be built at all?"/>
+<meta name="twitter:image" content="https://jodeit.github.io/simy_city/hero.png"/>
 <style>
   :root{
     --soil:#1c2526; --ink:#16201f; --paper:#f6f4ec; --card:#fffdf7;
