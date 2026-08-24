@@ -506,6 +506,45 @@ land_uses:
       queried with an OR-fallback for the live competitor/site read, same
       messy-tagging caveat urgent_care/child_care_center already documented.
 
+  pharmacy:               # pharmacy / drugstore (CVS/Walgreens-type)
+    label: Pharmacy / Drugstore
+    requires:
+      demand:      { min_households_drive_time: 8000, drive_time_min: 8 }
+      # A drugstore wants visible arterial frontage even more than a car wash
+      # does — same `minAadt` gate mechanism (`standardUseVerdict`'s AADT
+      # leg, web/logic.js) car_wash/warehouse_club/fast_casual/hotel already
+      # established, at car_wash's own threshold: a busy arterial, not
+      # necessarily interstate frontage.
+      transportation: { near_arterial_aadt: 25000 }
+      parcel:      { min_buildable_acres: 1.5 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living/urgent_care/self_storage/
+      # child_care_center/hotel/grocery_store/car_wash established: a second
+      # drugstore a kilometer from an existing one (the CVS-across-from-
+      # Walgreens saturation pattern) is splitting an already-served pool of
+      # customers, not opening up a new one.
+      competition: { min_distance_km_from_nearest: 1.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a small pad site + parking, well under a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      A rooftop-headcount demand read like car_wash, at a slightly wider
+      radius (6 km) — a drugstore draws a bit more of a citywide/commute-route
+      crowd than a car wash's purely local base. min_households_drive_time
+      (8000), min_buildable_acres (1.5, a small pad site, not a big-box lot),
+      near_arterial_aadt (25000), and min_distance_km_from_nearest (1.0) are
+      first-draft heuristics — refine freely, same as every other threshold
+      here. Wired up via `standardUseVerdict` directly (same demand+site-
+      size+AADT+competitor-distance shape car_wash/grocery_store already
+      established), no new gate-shape work needed. OSM tags this with three
+      live tags — `shop=chemist`, `amenity=pharmacy`, and `healthcare=
+      pharmacy` — all queried with an OR-fallback for the live competitor/
+      site read, same messy-tagging caveat urgent_care/child_care_center/
+      car_wash already documented.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

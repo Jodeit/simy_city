@@ -926,6 +926,32 @@
         "traffic": "low"
       },
       "notes": "A rooftop-headcount demand read like fast_casual, at a slightly tighter radius (5 km) \u2014 a car wash draws a local/commute-route crowd, not a citywide one. min_households_drive_time (7000), min_buildable_acres (1.0, a wash tunnel + stacking lanes, well under warehouse_club's 15-acre big-box pad), and near_arterial_aadt (25000) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site-size+AADT+competitor-distance shape grocery_store/hotel already established), no new gate-shape work needed. OSM tags this with two live tags \u2014 `shop=car_wash` and `amenity=car_wash` \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat urgent_care/child_care_center already documented.\n"
+    },
+    "pharmacy": {
+      "label": "Pharmacy / Drugstore",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 8000,
+          "drive_time_min": 8
+        },
+        "transportation": {
+          "near_arterial_aadt": 25000
+        },
+        "parcel": {
+          "min_buildable_acres": 1.5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "A rooftop-headcount demand read like car_wash, at a slightly wider radius (6 km) \u2014 a drugstore draws a bit more of a citywide/commute-route crowd than a car wash's purely local base. min_households_drive_time (8000), min_buildable_acres (1.5, a small pad site, not a big-box lot), near_arterial_aadt (25000), and min_distance_km_from_nearest (1.0) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+AADT+competitor-distance shape car_wash/grocery_store already established), no new gate-shape work needed. OSM tags this with three live tags \u2014 `shop=chemist`, `amenity=pharmacy`, and `healthcare= pharmacy` \u2014 all queried with an OR-fallback for the live competitor/ site read, same messy-tagging caveat urgent_care/child_care_center/ car_wash already documented.\n"
     }
   },
   "actor_uses": {

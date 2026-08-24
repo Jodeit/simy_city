@@ -2517,22 +2517,47 @@ Ground rules for each run:
       `BEST_FIT_USES`. Live Overpass/ArcGIS reachability isn't testable from
       this sandbox, same caveat as every prior land-use/county item — a
       human spot-check on the live site is worthwhile.
-- [ ] **14th land use: Pharmacy / Drugstore.** Add `pharmacy` to
+- [x] **14th land use: Pharmacy / Drugstore.** Added `pharmacy` to
       `data_sources/layers.yaml` with the same standard gate shape car_wash/
-      grocery_store already use — `requires.demand` (nearby-rooftop drive-time
-      read), `requires.transportation.near_arterial_aadt` (drugstores want
-      visible arterial frontage), `requires.parcel.min_buildable_acres`
-      (~1.5 ac — a small pad site, not a big-box lot), and
-      `requires.competition.min_distance_km_from_nearest` (~1 km, avoiding
-      the CVS-across-from-Walgreens saturation pattern). Should need **zero**
-      new gate-shape work in `web/logic.js` — `standardUseVerdict` already
-      covers this exact demand+AADT+acreage+competitor-distance combination
-      (car_wash proved it). Wire `web/explore.html` the same way car_wash was
-      wired: `ALL_USE_KEYS`, a `USE_DEMAND.pharmacy` entry (`compQ` should OR
-      `shop=chemist`/`amenity=pharmacy`/`healthcare=pharmacy` — OSM tags this
-      inconsistently, same messy-tag OR-fallback urgent_care/car_wash needed),
-      a `maybeRenderPharmacyVerdict` calling `standardUseVerdict` directly,
-      and a `BEST_FIT_USES` entry so "Best fit here" picks it up for free.
+      grocery_store already use: `requires.demand`
+      (`min_households_drive_time: 8000, drive_time_min: 8`),
+      `requires.transportation.near_arterial_aadt: 25000` (same threshold
+      car_wash's arterial-frontage gate uses), `requires.parcel.
+      min_buildable_acres: 1.5` (a small pad site, not a big-box lot), and
+      `requires.competition.min_distance_km_from_nearest: 1.0` (avoiding the
+      CVS-across-from-Walgreens saturation pattern). Needed **zero** new
+      gate-shape work in `web/logic.js` — `standardUseVerdict` already
+      covered this exact demand+AADT+acreage+competitor-distance combination
+      (car_wash proved it), confirmed by `node --test tests/js/*.test.mjs`
+      staying at 276 passed, unchanged. Wired `web/explore.html` the same way
+      car_wash was wired: `ALL_USE_KEYS`, a `USE_DEMAND.pharmacy` entry
+      (`compQ` ORs `shop=chemist`/`amenity=pharmacy`/`healthcare=pharmacy` —
+      OSM tags this inconsistently, same messy-tag OR-fallback urgent_care/
+      car_wash needed), `PH_MIN_ACRES`/`PH_AADT_MIN`/`PH_MIN_COMPETITOR_KM`
+      constants and a `phState` fan-out slot wired into `analyze()`'s
+      per-use state init/reset, `runDemand()`'s rooftop/AADT/competitor legs
+      (added `pharmacy` to the shared AADT-leg condition car_wash/
+      warehouse_club/fast_casual/hotel already used), and `showParcel`'s
+      acreage leg; a `maybeRenderPHVerdict` render function that calls
+      `standardUseVerdict` directly (same non-duplicating shape car_wash's
+      `maybeRenderCWVerdict` established); and a `BEST_FIT_USES` entry
+      (`minAcres`/`minAadt`/`minCompetitorKm`) so "Best fit here" ranks it
+      alongside the other 13 for free, no `bestFitLeg` changes needed (it's
+      already fully data-driven off `USE_DEMAND`/`BEST_FIT_USES`). Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 14 land uses),
+      `node --test tests/js/*.test.mjs` (276 passed, unchanged). In headless
+      Chromium: both pages load with zero console/page errors; selecting
+      `pharmacy` and driving `maybeRenderPHVerdict` directly through PASS /
+      SHORT-on-demand / SHORT-on-site-size / SHORT-on-AADT /
+      SHORT-on-competitor-too-close / acreage-unavailable / no-AADT-route /
+      AADT-lookup-error / competitor-scan-error / no-rooftop-read /
+      wrong-use-selected all produced correct verdict text and CSS classes
+      with zero throws; a real simulated map click with `pharmacy` selected
+      rendered the full result panel end to end without throwing; and
+      `pharmacy` is confirmed present in `ALL_USE_KEYS`, `USE_DEMAND`, and
+      `BEST_FIT_USES`. Live Overpass/ArcGIS reachability isn't testable from
+      this sandbox, same caveat as every prior land-use item — a human
+      spot-check on the live site is worthwhile.
 - [ ] **18th parcel county: Clark County, NV (Las Vegas).** Add to
       `PARCEL_SOURCES` in `web/explore.html`, same pattern as the prior 17 —
       find the county assessor's public ArcGIS MapServer via WebSearch (this
