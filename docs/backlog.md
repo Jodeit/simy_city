@@ -2517,6 +2517,48 @@ Ground rules for each run:
       `BEST_FIT_USES`. Live Overpass/ArcGIS reachability isn't testable from
       this sandbox, same caveat as every prior land-use/county item — a
       human spot-check on the live site is worthwhile.
+- [ ] **14th land use: Pharmacy / Drugstore.** Add `pharmacy` to
+      `data_sources/layers.yaml` with the same standard gate shape car_wash/
+      grocery_store already use — `requires.demand` (nearby-rooftop drive-time
+      read), `requires.transportation.near_arterial_aadt` (drugstores want
+      visible arterial frontage), `requires.parcel.min_buildable_acres`
+      (~1.5 ac — a small pad site, not a big-box lot), and
+      `requires.competition.min_distance_km_from_nearest` (~1 km, avoiding
+      the CVS-across-from-Walgreens saturation pattern). Should need **zero**
+      new gate-shape work in `web/logic.js` — `standardUseVerdict` already
+      covers this exact demand+AADT+acreage+competitor-distance combination
+      (car_wash proved it). Wire `web/explore.html` the same way car_wash was
+      wired: `ALL_USE_KEYS`, a `USE_DEMAND.pharmacy` entry (`compQ` should OR
+      `shop=chemist`/`amenity=pharmacy`/`healthcare=pharmacy` — OSM tags this
+      inconsistently, same messy-tag OR-fallback urgent_care/car_wash needed),
+      a `maybeRenderPharmacyVerdict` calling `standardUseVerdict` directly,
+      and a `BEST_FIT_USES` entry so "Best fit here" picks it up for free.
+- [ ] **18th parcel county: Clark County, NV (Las Vegas).** Add to
+      `PARCEL_SOURCES` in `web/explore.html`, same pattern as the prior 17 —
+      find the county assessor's public ArcGIS MapServer via WebSearch (this
+      sandbox can't introspect ArcGIS REST endpoints directly), confirm the
+      parcel-id/owner/acreage/value field names from search-indexed docs, add
+      any new field names to the shared `pick()` candidate lists, and add a
+      `zoning_note`/`county_state` entry (Nevada counties do zone
+      unincorporated land, unlike the TX counties already covered — don't
+      reuse the "TX counties don't zone" copy). If no confirmed per-parcel
+      deep-link URL scheme turns up, fall back to linking the assessor's
+      search page rather than guessing a link shape that might 404, same call
+      made for Harris/Bexar/LA/King. Verify `inBbox` routes a Las-Vegas point
+      to the new source and still finds no source for an out-of-coverage
+      point, and drive `showParcel`/`record()` with a mocked ArcGIS payload.
+- [ ] **CSV export for reverse-search candidate results.** The "🔍 Find
+      candidate sites" area-search panel (reverse search step 3) renders
+      ranked candidates as map markers + list rows but has no export, unlike
+      the Compare-parcels modal's existing "⬇️ Download CSV" button. Add a
+      matching CSV export to the reverse-search results panel, reusing the
+      already-tested `toCsv`/`toCsvRow`/`toCsvField` helpers in
+      `web/logic.js` (RFC-4180 quoting already handles commas in the "why"
+      text) — one row per candidate: rank, lat, lng, score, and the "why"
+      string already shown in its popup/list row. Same client-side-only
+      `Blob` + anchor-click download, no network call. Add unit tests for the
+      candidate-rows-to-CSV shaping if any new pure helper is needed beyond
+      the existing `toCsv` (likely just a thin row-mapper).
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
