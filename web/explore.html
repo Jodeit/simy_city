@@ -981,6 +981,36 @@ const PARCEL_SOURCES=[
     // zoning office for virtually any parcel here.
     zoning_note:"unlike TX, MN counties do zone unincorporated land, but Hennepin County has almost none left — check the city's zoning office for virtually any parcel here",
   },
+  {
+    name:"Clark County Assessor (Clark County, NV)",
+    // GISMO/AssessorMap MapServer: layer 0 is Lotlines, 1 is Parcels, 2 is
+    // Easements (confirmed via the service's own layer listing — this
+    // sandbox 403s/blocks direct ArcGIS REST introspection like every prior
+    // county here, so this came from search-indexed docs, not a live probe).
+    urls:["https://maps.clarkcountynv.gov/arcgis/rest/services/GISMO/AssessorMap/MapServer/1"],
+    bbox:[-115.90,35.00,-114.04,36.85],
+    // Confirmed fields on the Parcels layer (via search-indexed docs): APN
+    // (already in the shared id list), CALC_ACRES/ASSR_ACRES (acreage),
+    // PARCELTYPE (a coarse land-use code). Owner name, situs address, and
+    // appraised value weren't independently confirmed on this specific
+    // public boundary layer (they typically live in the separate non-GIS
+    // Assessor roll), so — same graceful partial-field-coverage as
+    // King/Cook/Salt Lake/Franklin here — left unmapped rather than guessed.
+    // No confirmed per-APN deep-link URL scheme for the Assessor's Real
+    // Property Records search, so — same cautious call as Harris/Bexar/LA/
+    // King/Miami-Dade/San Diego/Dallas/Allegheny/Fulton/Salt Lake/Franklin —
+    // send people to the search page with the APN already visible in the panel.
+    record:()=>"https://www.clarkcountynv.gov/government/assessor/property_search/real-property-records",
+    source_label:"Clark County Assessor",
+    county_state:"Clark County, NV",
+    // Clark County has an unusually large unincorporated area for zoning
+    // purposes — the Las Vegas Strip itself sits in unincorporated Paradise,
+    // NV, not the City of Las Vegas — so unlike TX, NV counties (including
+    // this one) do zone unincorporated land; check the county zoning
+    // ordinance, or the city's (Las Vegas, Henderson, North Las Vegas,
+    // Boulder City) if the parcel is inside a city instead.
+    zoning_note:"unlike TX, NV counties do zone unincorporated land — Clark County's unincorporated area includes the Las Vegas Strip itself (in unincorporated Paradise, NV) — check the county zoning ordinance, or the city's (Las Vegas, Henderson, North Las Vegas, Boulder City) if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -2773,8 +2803,8 @@ function showParcel(geo,src,seq){
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS"]);
-  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL"]);
   let rows="";
   const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};

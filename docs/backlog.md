@@ -2558,20 +2558,37 @@ Ground rules for each run:
       `BEST_FIT_USES`. Live Overpass/ArcGIS reachability isn't testable from
       this sandbox, same caveat as every prior land-use item — a human
       spot-check on the live site is worthwhile.
-- [ ] **18th parcel county: Clark County, NV (Las Vegas).** Add to
-      `PARCEL_SOURCES` in `web/explore.html`, same pattern as the prior 17 —
-      find the county assessor's public ArcGIS MapServer via WebSearch (this
-      sandbox can't introspect ArcGIS REST endpoints directly), confirm the
-      parcel-id/owner/acreage/value field names from search-indexed docs, add
-      any new field names to the shared `pick()` candidate lists, and add a
-      `zoning_note`/`county_state` entry (Nevada counties do zone
-      unincorporated land, unlike the TX counties already covered — don't
-      reuse the "TX counties don't zone" copy). If no confirmed per-parcel
-      deep-link URL scheme turns up, fall back to linking the assessor's
-      search page rather than guessing a link shape that might 404, same call
-      made for Harris/Bexar/LA/King. Verify `inBbox` routes a Las-Vegas point
-      to the new source and still finds no source for an out-of-coverage
-      point, and drive `showParcel`/`record()` with a mocked ArcGIS payload.
+- [x] **18th parcel county: Clark County, NV (Las Vegas).** Added a
+      `PARCEL_SOURCES` entry for the Clark County Assessor's `GISMO/
+      AssessorMap` MapServer (layer 1, "Parcels" — layer 0 is Lotlines, 2 is
+      Easements; found via WebSearch since this sandbox can't introspect
+      ArcGIS REST endpoints directly). Confirmed fields from search-indexed
+      docs: `APN` (already in the shared id candidate list), `CALC_ACRES`/
+      `ASSR_ACRES` (newly added to the acreage list), and `PARCELTYPE` (newly
+      added to the land-use list) — owner name, situs address, and appraised
+      value weren't independently confirmed on this public boundary layer, so
+      left unmapped rather than guessed, same graceful partial-field-coverage
+      as King/Cook/Salt Lake/Franklin. No confirmed per-APN deep-link URL
+      scheme for the Assessor's Real Property Records search turned up, so —
+      same cautious call as Harris/Bexar/LA/King/etc. — `record()` links to
+      the search page instead. Nevada counties do zone unincorporated land
+      (unlike TX), and Clark County's unincorporated area notably includes
+      the Las Vegas Strip itself (in unincorporated Paradise, NV) — captured
+      in a new `zoning_note` rather than reusing the TX/other-state copy.
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK, 32
+      sources unchanged — this only touches `web/explore.html`), `node --test
+      tests/js/*.test.mjs` (276 passed, unchanged — no new pure helpers were
+      needed here). In headless Chromium: both pages load with zero console/
+      page errors; `inBbox` correctly routes a Las-Vegas-Strip point to the
+      new Clark County source and still finds no source for an
+      out-of-coverage point (Denver); and a real simulated map click
+      (`analyze()`) with `fetch` mocked to return a Clark-County-shaped
+      ArcGIS payload (`APN`/`CALC_ACRES`/`PARCELTYPE`) rendered the full
+      result panel end to end — correct Parcel ID, Land use, Acreage,
+      zoning-note text, and record link — with zero console/page errors.
+      Live ArcGIS endpoint reachability (exact layer index, real APN format)
+      couldn't be confirmed from this sandbox — a live spot-check is a good
+      human follow-up, same as every prior county.
 - [ ] **CSV export for reverse-search candidate results.** The "🔍 Find
       candidate sites" area-search panel (reverse search step 3) renders
       ranked candidates as map markers + list rows but has no export, unlike
