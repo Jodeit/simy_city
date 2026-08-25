@@ -2589,18 +2589,63 @@ Ground rules for each run:
       Live ArcGIS endpoint reachability (exact layer index, real APN format)
       couldn't be confirmed from this sandbox — a live spot-check is a good
       human follow-up, same as every prior county.
-- [ ] **CSV export for reverse-search candidate results.** The "🔍 Find
-      candidate sites" area-search panel (reverse search step 3) renders
-      ranked candidates as map markers + list rows but has no export, unlike
-      the Compare-parcels modal's existing "⬇️ Download CSV" button. Add a
-      matching CSV export to the reverse-search results panel, reusing the
-      already-tested `toCsv`/`toCsvRow`/`toCsvField` helpers in
-      `web/logic.js` (RFC-4180 quoting already handles commas in the "why"
-      text) — one row per candidate: rank, lat, lng, score, and the "why"
-      string already shown in its popup/list row. Same client-side-only
-      `Blob` + anchor-click download, no network call. Add unit tests for the
-      candidate-rows-to-CSV shaping if any new pure helper is needed beyond
-      the existing `toCsv` (likely just a thin row-mapper).
+- [x] **CSV export for reverse-search candidate results.** Duplicate of the
+      item already shipped and checked off above (line ~1133): the
+      reverse-search results panel already has a "⬇️ Download CSV" button
+      (`downloadCandidatesCsv()` in `web/explore.html`, backed by
+      `candidatesToCsvRows()`/`toCsv()` in `web/logic.js`, with unit tests in
+      `tests/js/model-logic.test.mjs`), plus PDF and GeoJSON exports added
+      alongside it in later runs. This copy was a stale re-add — closing it
+      out rather than re-implementing an existing feature. No code change
+      this run; verified the existing implementation still works: `pytest`
+      (15 passed), `simy validate` (OK, 32 sources/14 land uses), `node
+      --test tests/js/*.test.mjs` (276 passed), and headless Chromium
+      confirms both `web/explore.html` and `web/index.html` still load with
+      zero genuine console/page errors.
+
+## Now (high value) — newly added (3)
+- [ ] **15th land use: Urgent Care Clinic.** Add `urgent_care` to
+      `data_sources/layers.yaml` — a real, common site-selection use not yet
+      covered by the 14 existing land uses. Suggested requirements:
+      `requires.demand` on nearby rooftops at a mid-size radius (smaller than
+      fast_casual's 6 km, since urgent care draws a neighborhood/short-drive
+      crowd — maybe 3 km), a modest `requires.parcel.min_buildable_acres`
+      (~1 ac, enough for a small building + parking, not a big-box pad), and
+      a `requires.competition` gate against existing
+      `amenity=clinic|hospital|doctors` so two urgent-care chains don't sit
+      on top of each other (a `min_distance_km_from_nearest` in the 1–2 km
+      range, same shape as food_truck_court's inverted competition read from
+      the reverse-search work). Wire up a real PASS/SHORT verdict in
+      `web/explore.html` (`maybeRenderUCVerdict`-style, same wait-for-all-legs
+      pattern as the other five land-use verdicts) rather than leaving it
+      demand-only. Add unit tests for any new pure logic and verify per the
+      ground rules above.
+- [ ] **One more parcel county: Fulton County, GA (Atlanta).** Extend
+      `PARCEL_SOURCES` in `web/explore.html` with Fulton County's public GIS
+      parcel layer (search for the live ArcGIS MapServer endpoint, same
+      research approach every prior county entry used, since this sandbox
+      can't introspect ArcGIS REST hosts directly). Confirm real field names
+      from search-indexed docs before adding them to the shared `pick()`
+      candidate lists rather than guessing; if owner/address/value aren't
+      confirmed on the public layer, leave them unmapped (same graceful
+      partial-coverage precedent as King/Cook/Salt Lake/Franklin/Clark).
+      Georgia counties zone unincorporated land, so this needs its own
+      `zoning_note` (not the TX-counties-don't-zone copy). Add a record-link
+      URL only if a stable per-parcel deep-link scheme is confirmed;
+      otherwise link to the county's own parcel-search page.
+- [ ] **Acres/hectares/sq ft unit toggle for parcel size.** Every parcel
+      acreage figure across the app (parcel summary, Compare modal, CSV/PDF/
+      GeoJSON exports, the residential_subdivision/warehouse_club/data_center
+      site-size checks) is hardcoded to acres — awkward for anyone outside
+      the US. Add a small unit-preference toggle (persisted to
+      `localStorage`, same pattern as `simy_theme`) and a pure
+      `formatArea(acres, unit)` helper in `web/logic.js` (acres → hectares:
+      ×0.404686; acres → sq ft: ×43,560) with unit tests covering the
+      conversions and rounding. Scope this to *display formatting only* —
+      the underlying `min_buildable_acres` gates in `layers.yaml` and all
+      internal math stay in acres; only the rendered text changes. Verify
+      both pages still load clean and that toggling the unit updates every
+      acreage display consistently.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
