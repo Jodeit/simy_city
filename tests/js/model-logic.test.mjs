@@ -24,6 +24,7 @@ const {
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
   standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
+  convertArea, formatArea,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -1893,6 +1894,56 @@ test("buildCompareReportText: missing/malformed fields render '—' instead of '
   assert.match(t, /Land use: —/);
   assert.match(t, /County: —/);
   assert.match(t, /2\. \?, \?/);
+});
+
+test("buildCompareReportText: an explicit 'ha'/'sqft' unit converts the Acreage line, default/'ac' behavior is unchanged", () => {
+  const pins = [{ label: "Lot", owner: "—", acres: 2.5, value: 100000, land: "Vacant", county: "Travis" }];
+  assert.match(buildCompareReportText(pins), /Acreage: 2\.50 ac/);
+  assert.match(buildCompareReportText(pins, "ac"), /Acreage: 2\.50 ac/);
+  assert.match(buildCompareReportText(pins, "ha"), /Acreage: 1\.01 ha/);
+  assert.match(buildCompareReportText(pins, "sqft"), /Acreage: 108,900 sq ft/);
+});
+
+// ---- convertArea / formatArea (acres/hectares/sq ft display-unit toggle) ----
+
+test("convertArea: 'ac' (default/unrecognized unit) passes the value through unchanged", () => {
+  assert.equal(convertArea(10, "ac"), 10);
+  assert.equal(convertArea(10, "bogus"), 10);
+  assert.equal(convertArea(10, undefined), 10);
+});
+
+test("convertArea: 'ha' multiplies by the acre-to-hectare factor, 'sqft' by acre-to-sq-ft", () => {
+  assert.equal(convertArea(1, "ha"), 0.404686);
+  assert.equal(convertArea(10, "sqft"), 435600);
+});
+
+test("convertArea: null/undefined/NaN/non-number input returns null, not NaN", () => {
+  assert.equal(convertArea(null, "ac"), null);
+  assert.equal(convertArea(undefined, "ha"), null);
+  assert.equal(convertArea(NaN, "sqft"), null);
+  assert.equal(convertArea("10", "ac"), null);
+});
+
+test("formatArea: appends the right unit label and respects a decimals override", () => {
+  assert.equal(formatArea(2.5, "ac"), "2.50 ac");
+  assert.equal(formatArea(2.5, "ac", 1), "2.5 ac");
+  assert.equal(formatArea(2.5, "ha"), "1.01 ha");
+  assert.equal(formatArea(2.5, "sqft"), "108,900 sq ft");
+});
+
+test("formatArea: 'sqft' always rounds to a whole number (decimals is ignored, sub-sq-ft precision is meaningless) and comma-groups via toLocaleString", () => {
+  assert.equal(formatArea(0.25, "sqft"), "10,890 sq ft");
+  assert.equal(formatArea(0.25, "sqft", 3), "10,890 sq ft");
+});
+
+test("formatArea: null/undefined/NaN input returns null so callers can render their own placeholder text", () => {
+  assert.equal(formatArea(null, "ac"), null);
+  assert.equal(formatArea(undefined, "ha"), null);
+  assert.equal(formatArea(NaN, "sqft"), null);
+});
+
+test("formatArea: an unrecognized unit falls back to acres (same default convertArea uses)", () => {
+  assert.equal(formatArea(2, "bogus"), "2.00 ac");
 });
 
 // ---- minimal hand-rolled PDF writer ("make the case" PDF export) ----
