@@ -889,13 +889,47 @@ function buildCandidatesReportText(useLabel,center,radiusM,results,sig,cfg){
   return t;
 }
 
+/* ---- area-unit display formatting ----
+   Every parcel-acreage figure the app renders (verdict text, the parcel
+   summary, the "what could go here" fit list, the Compare modal/CSV/PDF)
+   is computed in acres internally (`layers.yaml`'s `min_buildable_acres`
+   gates, `showParcel`'s parsed county attribute, every verdict's own
+   `*_MIN_ACRES` threshold) — acres is the one unit every data source
+   already agrees on. `formatArea`/`convertArea` are the *display-only*
+   conversion: the underlying numbers and gates never change unit, only
+   the rendered string does, driven by a small persisted preference
+   (`explore.html`'s `areaUnit`/`simy_unit`). Hectares round to 2 decimals
+   (a fraction of a hectare is meaningful at parcel scale — 15 ac is only
+   ~6.07 ha); square feet round to the nearest whole number with thousands
+   separators, since a fractional sq ft is never meaningful. A null/non-
+   finite input (unlisted acreage) returns null rather than "NaN ac", same
+   contract as every other formatter here. */
+const AREA_UNITS={
+  ac:{factor:1,label:"ac",decimals:2},
+  ha:{factor:0.404686,label:"ha",decimals:2},
+  sqft:{factor:43560,label:"sq ft",decimals:0},
+};
+function areaUnitLabel(unit){return (AREA_UNITS[unit]||AREA_UNITS.ac).label;}
+function convertArea(acres,unit){
+  if(acres==null||!isFinite(acres))return null;
+  return acres*(AREA_UNITS[unit]||AREA_UNITS.ac).factor;
+}
+function formatArea(acres,unit){
+  const val=convertArea(acres,unit);
+  if(val==null)return null;
+  const u=AREA_UNITS[unit]||AREA_UNITS.ac;
+  return `${val.toLocaleString(undefined,{minimumFractionDigits:u.decimals,maximumFractionDigits:u.decimals})} ${u.label}`;
+}
+
 // Builds the text for a printable/exportable report summarizing the pinned
 // Compare list (same fields renderCompare()'s table shows, one pin per
 // section) — mirrors buildCandidatesReportText's role for the reverse-search
 // PDF, just fed the Compare list's pins instead of a ranked candidate list.
 // A pin missing a field (or the whole pins list being empty/null) renders
-// "—"/"0 parcels pinned" rather than throwing or emitting "undefined".
-function buildCompareReportText(pins){
+// "—"/"0 parcels pinned" rather than throwing or emitting "undefined". `unit`
+// (default "ac") drives the same display-only conversion formatArea uses
+// everywhere else — see the comment there.
+function buildCompareReportText(pins,unit){
   pins=pins||[];
   let t=`SIMyCity — parcel comparison\n`;
   t+=`${pins.length} parcel${pins.length===1?"":"s"} pinned\n\n`;
@@ -904,7 +938,7 @@ function buildCompareReportText(pins){
     const site=p.label||((typeof p.lat==="number"&&typeof p.lng==="number")?`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`:"?, ?");
     t+=`  ${i+1}. ${site}\n`;
     t+=`     Owner: ${p.owner||"—"}\n`;
-    t+=`     Acreage: ${typeof p.acres==="number"?p.acres.toFixed(2)+" ac":"—"}\n`;
+    t+=`     Acreage: ${typeof p.acres==="number"?formatArea(p.acres,unit):"—"}\n`;
     t+=`     Appraised value: ${typeof p.value==="number"?"$"+p.value.toLocaleString():"—"}\n`;
     t+=`     Land use: ${p.land||"—"}\n`;
     t+=`     County: ${p.county||"—"}\n`;
@@ -1005,5 +1039,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }

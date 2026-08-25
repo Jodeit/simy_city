@@ -24,6 +24,7 @@ const {
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
   standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
+  areaUnitLabel, convertArea, formatArea,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -2021,4 +2022,62 @@ test("maxAadtWithinRadius: carries the route name through on the winning point",
   const center = { lat: 30.0, lng: -97.0 };
   const hit = { lat: 30.001, lng: -97.0, aadt: 40000, route: "I-35" };
   assert.equal(maxAadtWithinRadius([hit], center, 1000).route, "I-35");
+});
+
+// ---- area-unit display formatting (formatArea/convertArea/areaUnitLabel) ----
+
+test("areaUnitLabel: returns the right label per unit, defaulting to acres for an unknown unit", () => {
+  assert.equal(areaUnitLabel("ac"), "ac");
+  assert.equal(areaUnitLabel("ha"), "ha");
+  assert.equal(areaUnitLabel("sqft"), "sq ft");
+  assert.equal(areaUnitLabel("bogus"), "ac");
+  assert.equal(areaUnitLabel(undefined), "ac");
+});
+
+test("convertArea: acres is a pass-through (factor 1)", () => {
+  assert.equal(convertArea(15, "ac"), 15);
+});
+
+test("convertArea: converts acres to hectares", () => {
+  assert.ok(Math.abs(convertArea(15, "ha") - 6.07029) < 1e-3);
+});
+
+test("convertArea: converts acres to square feet", () => {
+  assert.equal(convertArea(1, "sqft"), 43560);
+});
+
+test("convertArea: returns null for null/undefined/non-finite input", () => {
+  assert.equal(convertArea(null, "ac"), null);
+  assert.equal(convertArea(undefined, "ha"), null);
+  assert.equal(convertArea(NaN, "sqft"), null);
+});
+
+test("convertArea: an unrecognized unit falls back to acres", () => {
+  assert.equal(convertArea(10, "furlongs"), 10);
+});
+
+test("formatArea: formats acres to 2 decimals with unit suffix", () => {
+  assert.equal(formatArea(15, "ac"), "15.00 ac");
+});
+
+test("formatArea: formats hectares to 2 decimals", () => {
+  assert.equal(formatArea(15, "ha"), "6.07 ha");
+});
+
+test("formatArea: formats square feet as a rounded whole number with thousands separators", () => {
+  assert.equal(formatArea(1, "sqft"), "43,560 sq ft");
+});
+
+test("formatArea: rounds to the nearest sq ft rather than truncating", () => {
+  assert.equal(formatArea(0.3 / 43560, "sqft"), "0 sq ft"); // 0.3 sq ft rounds down
+  assert.equal(formatArea(0.7 / 43560, "sqft"), "1 sq ft"); // 0.7 sq ft rounds up
+});
+
+test("formatArea: returns null for null/non-finite acres (caller decides the fallback text)", () => {
+  assert.equal(formatArea(null, "ac"), null);
+  assert.equal(formatArea(NaN, "ha"), null);
+});
+
+test("formatArea: defaults to acres when no unit is given", () => {
+  assert.equal(formatArea(1), "1.00 ac");
 });

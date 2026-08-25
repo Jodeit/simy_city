@@ -280,6 +280,7 @@
     <span class="hint"><a href="#" id="compareOpen">⚖️ Compare (<span id="compareCount">0</span>)</a> ·
       <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
     <button class="themebtn" id="helpOpen" type="button" title="Keyboard shortcuts (?)">❓</button>
+    <button class="themebtn" id="unitToggle" type="button" title="Change area units">ac</button>
     <button class="themebtn" id="themeToggle" type="button" aria-pressed="false" title="Toggle dark mode">🌙</button>
   </header>
   <div id="mapwrap"><div id="map"></div>
@@ -1059,6 +1060,18 @@ let searchReqSeq=0; // bumped each reverse-search run; independent of reqSeq so 
 // the pin button refuse a stale snapshot left over from a superseded click.
 let lastParcelSummary=null;
 
+// Display-only area-unit preference (acres/hectares/sq ft) — persisted like
+// simy_theme, defaulting to acres. Every acreage figure in the app is
+// computed in acres internally (layers.yaml's min_buildable_acres gates,
+// showParcel's parsed county attribute); `fmtAc` (formatArea, web/logic.js)
+// is the one place that converts a raw acres number to display text, so
+// toggling `areaUnit` and re-rendering is the only thing a unit change does
+// — no internal math changes unit. See wireUnits()/refreshAreaDisplays()
+// near the bottom of this file.
+const AREA_UNIT_KEY="simy_unit";
+let areaUnit=(function(){try{return localStorage.getItem(AREA_UNIT_KEY);}catch(e){return null;}})()||"ac";
+function fmtAc(acres){return formatArea(acres,areaUnit)??"—";}
+
 // model.js sets window.SIMY_MODEL (works on file:// and Pages); fall back to fetch.
 if(window.SIMY_MODEL){MODEL=window.SIMY_MODEL;boot();}
 else{fetch("model.json").then(r=>r.json()).then(m=>{MODEL=m;boot();});}
@@ -1738,9 +1751,9 @@ function maybeRenderDCVerdict(seq){
       : s.subErr?`? substation distance unavailable`
       : s.subKm==null?`✗ no substation within ${(USE_DEMAND.data_center.radius/1000)} km`
       : `✗ nearest substation ${s.subKm.toFixed(1)} km away (need ≤${DC_SUB_KM} km)`,
-    acresOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${DC_MIN_ACRES} ac)`
+    acresOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(DC_MIN_ACRES)})`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${DC_MIN_ACRES} ac)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(DC_MIN_ACRES)})`,
     mudOk?`✓ inside a mapped water district — utility water/sewer available`
       : s.mud===false?`✗ no water district here — would need a private well or a long utility extension`
       : `? water-district coverage unknown for this area`,
@@ -1813,9 +1826,9 @@ function maybeRenderWCVerdict(seq){
   const legs=[
     demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${WC_MIN_ACRES} ac for store + parking)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(WC_MIN_ACRES)} for store + parking)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${WC_MIN_ACRES} ac for store + parking)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(WC_MIN_ACRES)} for store + parking)`,
     traffic.text,
   ];
   el.style.display="block";
@@ -1843,9 +1856,9 @@ function maybeRenderFTCVerdict(seq){
   const legs=[
     demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${FTC_MIN_ACRES} ac for a paved lot)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(FTC_MIN_ACRES)} for a paved lot)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${FTC_MIN_ACRES} ac for a paved lot)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(FTC_MIN_ACRES)} for a paved lot)`,
     s.compErr?`? nearest food vendor distance unavailable`
       : !s.nearestComp?`✓ no existing food vendor within ${(cfg.radius/1000)} km — wide open`
       : farOk?`✓ nearest food vendor <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${FTC_MIN_COMPETITOR_KM} km)`
@@ -1914,9 +1927,9 @@ function maybeRenderSLVerdict(seq){
   const legs=[
     demand.pass?`✓ trade-area median age ${demand.medianAge.toFixed(1)} clears the ≥${SL_AGE_THRESHOLD}-yr older-skewing bar`
       : `✗ trade-area median age ${demand.medianAge.toFixed(1)} vs the ≥${SL_AGE_THRESHOLD}-yr older-skewing bar (${Math.round(demand.ratio*100)}%)`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${SL_MIN_ACRES} ac)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(SL_MIN_ACRES)})`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${SL_MIN_ACRES} ac)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(SL_MIN_ACRES)})`,
     s.compErr?`? nearest assisted-living/nursing facility distance unavailable`
       : !s.nearestComp?`✓ no existing assisted-living/nursing facility within ${(USE_DEMAND.senior_living.radius/1000)} km — wide open`
       : farOk?`✓ nearest facility <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${SL_MIN_COMPETITOR_KM} km)`
@@ -1945,9 +1958,9 @@ function maybeRenderUCVerdict(seq){
   const legs=[
     demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${UC_MIN_ACRES} ac for a clinic + small lot)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(UC_MIN_ACRES)} for a clinic + small lot)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${UC_MIN_ACRES} ac for a clinic + small lot)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(UC_MIN_ACRES)} for a clinic + small lot)`,
     s.compErr?`? nearest urgent-care/walk-in clinic distance unavailable`
       : !s.nearestComp?`✓ no existing urgent-care/walk-in clinic within ${(cfg.radius/1000)} km — wide open`
       : farOk?`✓ nearest clinic <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${UC_MIN_COMPETITOR_KM} km)`
@@ -1977,9 +1990,9 @@ function maybeRenderSSVerdict(seq){
   const legs=[
     demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${SS_MIN_ACRES} ac for a multi-building storage campus)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(SS_MIN_ACRES)} for a multi-building storage campus)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${SS_MIN_ACRES} ac for a multi-building storage campus)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(SS_MIN_ACRES)} for a multi-building storage campus)`,
     s.compErr?`? nearest self-storage facility distance unavailable`
       : !s.nearestComp?`✓ no existing self-storage facility within ${(cfg.radius/1000)} km — wide open`
       : farOk?`✓ nearest facility <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${SS_MIN_COMPETITOR_KM} km)`
@@ -2009,9 +2022,9 @@ function maybeRenderCCVerdict(seq){
   const legs=[
     demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${CC_MIN_ACRES} ac for a building + fenced play yard)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(CC_MIN_ACRES)} for a building + fenced play yard)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${CC_MIN_ACRES} ac for a building + fenced play yard)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(CC_MIN_ACRES)} for a building + fenced play yard)`,
     s.compErr?`? nearest child care center distance unavailable`
       : !s.nearestComp?`✓ no existing child care center within ${(cfg.radius/1000)} km — wide open`
       : farOk?`✓ nearest center <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${CC_MIN_COMPETITOR_KM} km)`
@@ -2051,9 +2064,9 @@ function maybeRenderHLVerdict(seq){
     s.generatorsErr?`? nearby demand-generator count unavailable`
       : demandOk?`✓ ~${s.generators.toLocaleString()} nearby demand generators (≥${HL_MIN_GENERATORS})`
       : `✗ ~${(s.generators||0).toLocaleString()} nearby demand generators (need ≥${HL_MIN_GENERATORS})`,
-    siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${HL_MIN_ACRES} ac for a hotel + parking)`
+    siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(HL_MIN_ACRES)} for a hotel + parking)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${HL_MIN_ACRES} ac for a hotel + parking)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(HL_MIN_ACRES)} for a hotel + parking)`,
     traffic.text,
     s.compErr?`? nearest hotel/motel distance unavailable`
       : !s.nearestComp?`✓ no existing hotel/motel within ${(USE_DEMAND.hotel.radius/1000)} km — wide open`
@@ -2085,9 +2098,9 @@ function maybeRenderGSVerdict(seq){
   const legs=[
     v.demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    v.siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${GS_MIN_ACRES} ac for a mid-box store + parking)`
+    v.siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(GS_MIN_ACRES)} for a mid-box store + parking)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${GS_MIN_ACRES} ac for a mid-box store + parking)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(GS_MIN_ACRES)} for a mid-box store + parking)`,
     s.compErr?`? nearest supermarket distance unavailable`
       : !s.nearestComp?`✓ no existing supermarket within ${(cfg.radius/1000)} km — wide open`
       : v.farOk?`✓ nearest supermarket <b>${esc(s.nearestComp.name)}</b> ${s.nearestComp.km.toFixed(1)} km away (≥${GS_MIN_COMPETITOR_KM} km)`
@@ -2121,9 +2134,9 @@ function maybeRenderCWVerdict(seq){
   const legs=[
     v.demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    v.siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${CW_MIN_ACRES} ac for a wash tunnel + stacking lanes)`
+    v.siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(CW_MIN_ACRES)} for a wash tunnel + stacking lanes)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${CW_MIN_ACRES} ac for a wash tunnel + stacking lanes)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(CW_MIN_ACRES)} for a wash tunnel + stacking lanes)`,
     s.aadtErr?"? traffic-count lookup unavailable"
       : !s.aadtHit?`✗ no National Highway System route within range (need ≥${CW_AADT_MIN.toLocaleString()} AADT)`
       : v.aadtOk?`✓ nearby highway carries ~${Math.round(s.aadtHit.aadt).toLocaleString()} AADT (≥${CW_AADT_MIN.toLocaleString()})`
@@ -2158,9 +2171,9 @@ function maybeRenderPHVerdict(seq){
   const legs=[
     v.demandOk?`✓ ~${s.roofs.toLocaleString()} rooftops clears ${esc(cfg.needLabel)}`
       : `✗ ~${s.roofs.toLocaleString()} rooftops vs the ~${cfg.roofNeed.toLocaleString()} for ${esc(cfg.needLabel)} (${Math.round(s.roofs/cfg.roofNeed*100)}%)`,
-    v.siteOk?`✓ parcel ${s.acres.toFixed(1)} ac (≥${PH_MIN_ACRES} ac for a pad site)`
+    v.siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(PH_MIN_ACRES)} for a pad site)`
       : s.acres==null?`? parcel acreage unlisted`
-      : `✗ parcel only ${s.acres.toFixed(1)} ac (need ≥${PH_MIN_ACRES} ac for a pad site)`,
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(PH_MIN_ACRES)} for a pad site)`,
     s.aadtErr?"? traffic-count lookup unavailable"
       : !s.aadtHit?`✗ no National Highway System route within range (need ≥${PH_AADT_MIN.toLocaleString()} AADT)`
       : v.aadtOk?`✓ nearby highway carries ~${Math.round(s.aadtHit.aadt).toLocaleString()} AADT (≥${PH_AADT_MIN.toLocaleString()})`
@@ -2208,6 +2221,10 @@ function maybeRenderPHVerdict(seq){
    from the shared acreage parameter and the generic competitor-scan leg's
    count (residential_subdivision's own `compQ` is a school count). */
 let bfSeq=0;
+// Last-rendered "Best fit here" results, so an area-unit toggle (which
+// changes bestFitReasonText's ${fmtAc(...)} output) can re-render the panel
+// in place without re-running the whole scored-every-use fetch fan-out.
+let lastBestFitRanked=null, lastBestFitNoRead=null;
 function bestFitLeg(u,lat,lng,acres){
   const cfg=USE_DEMAND[u.key];
   const roofQ=`[out:json][timeout:25];(way["building"](around:${cfg.radius},${lat},${lng});relation["building"](around:${cfg.radius},${lat},${lng}););out count;`;
@@ -2313,9 +2330,9 @@ function bestFitReasonText(e){
       : `✗ demand only ${Math.round(e.ratio*100)}% of need`,
   ];
   if(e.minAcres!=null)parts.push(
-    e.siteOk?`✓ site ${e.acres.toFixed(1)} ac`
+    e.siteOk?`✓ site ${fmtAc(e.acres)}`
       : e.acres==null?"? site size unlisted"
-      : `✗ site only ${e.acres.toFixed(1)} ac (need ≥${e.minAcres})`
+      : `✗ site only ${fmtAc(e.acres)} (need ≥${fmtAc(e.minAcres)})`
   );
   if(e.minAadt!=null)parts.push(
     e.aadtErr?"? traffic-count unavailable"
@@ -2392,7 +2409,8 @@ function runBestFit(){
           subKm:r.subKm, subErr:r.subErr, maxSubstationKm:u.maxSubstationKm,
           mud:r.mud, requireDistrict:u.requireDistrict}, v));
       });
-      renderBestFit(rankLandUseVerdicts(scored), noRead);
+      lastBestFitRanked=rankLandUseVerdicts(scored); lastBestFitNoRead=noRead;
+      renderBestFit(lastBestFitRanked, lastBestFitNoRead);
     });
 }
 function renderBestFit(ranked,noRead){
@@ -2807,12 +2825,12 @@ function showParcel(geo,src,seq){
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL"]);
   let rows="";
-  const row=(k,v)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b>${esc(v)}</b></div>`;};
+  const row=(k,v,id)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b${id?` id="${id}"`:""}>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
   row("Owner",owner);
   row("Address",situs);
   row("Land use",land);
-  row("Acreage",acres!=null&&!isNaN(+acres)?(+acres).toFixed(2)+" ac":acres);
+  row("Acreage",acres!=null&&!isNaN(+acres)?fmtAc(+acres):acres,"parcelAcreageVal");
   row("Appraised value",value!=null&&!isNaN(+value)?"$"+Number(value).toLocaleString():value);
   if(!rows){Object.keys(a).slice(0,6).forEach(k=>row(k,a[k]));}
 
@@ -2878,9 +2896,9 @@ function fillFit(acres){
     const u=MODEL.land_uses[id];
     const need=(u.requires&&u.requires.parcel&&u.requires.parcel.min_buildable_acres)||0;
     let ok=null,reason;
-    if(acres==null){reason=`needs ~${need} ac; this parcel's size is unlisted`;}
-    else if(acres>=need){ok=true; reason=`fits — ${acres.toFixed(2)} ac ≥ ${need} ac minimum`;}
-    else{ok=false; reason=`too small — needs ${need} ac (has ${acres.toFixed(2)})`;}
+    if(acres==null){reason=`needs ~${fmtAc(need)}; this parcel's size is unlisted`;}
+    else if(acres>=need){ok=true; reason=`fits — ${fmtAc(acres)} ≥ ${fmtAc(need)} minimum`;}
+    else{ok=false; reason=`too small — needs ${fmtAc(need)} (has ${fmtAc(acres)})`;}
     return {id,label:u.label.replace(/\s*\(.*\)/,""),ok,need,reason};
   }).sort((a,b)=> a.ok===b.ok ? a.need-b.need : (a.ok?-1:1));
   setHTML("fitVal", rows.map(r=>{
@@ -3249,7 +3267,7 @@ function renderCompare(){
   const el=document.getElementById("compareBody"); if(!el)return;
   if(!pins.length){el.innerHTML=`<p class="cmpEmpty">No pins yet. Analyze a parcel, then click 📌 <b>Pin to compare</b> in its toolbar.</p>`;return;}
   const sorted=cmpSort.key?sortPins(pins,cmpSort.key,cmpSort.dir):pins;
-  const fmtAcres=a=>a!=null?a.toFixed(2)+" ac":"—";
+  const fmtAcres=a=>a!=null?fmtAc(a):"—";
   const fmtVal=v=>v!=null?"$"+v.toLocaleString():"—";
   const lbl=(text)=>{
     const key=CMP_SORT_KEYS[text];
@@ -3288,8 +3306,8 @@ function renderCompare(){
 // no network call. toCsvRow/toCsv (web/logic.js) handle the RFC-4180
 // quoting (owner names/addresses routinely contain commas).
 function downloadCompareCsv(){
-  const fmtAcres=a=>a!=null?a.toFixed(2):"";
-  const rows=[["Site","Owner","Acreage (ac)","Appraised value ($)","Land use","County","Testing","Verdict"]];
+  const fmtAcres=a=>{const c=convertArea(a,areaUnit); return c!=null?c.toFixed(areaUnit==="sqft"?0:2):"";};
+  const rows=[["Site","Owner",`Acreage (${areaUnitLabel(areaUnit)})`,"Appraised value ($)","Land use","County","Testing","Verdict"]];
   pins.forEach(p=>rows.push([
     p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`,
     p.owner||"", fmtAcres(p.acres), p.value!=null?p.value:"",
@@ -3307,7 +3325,7 @@ function downloadCompareCsv(){
 // itself renders a valid "0 parcels pinned" report for an empty list, so
 // this doesn't need to guard on pins.length either.
 function downloadComparePdf(){
-  const text=buildCompareReportText(pins);
+  const text=buildCompareReportText(pins,areaUnit);
   const margin=54, fontSize=10, charWidth=fontSize*0.6; // Courier: 0.6em per glyph
   const maxChars=Math.floor((612-2*margin)/charWidth);
   const lines=wrapText(text,maxChars,s=>s.length);
@@ -3455,6 +3473,54 @@ function wireHelp(){
   });
 }
 
+// Re-renders every currently-visible acreage display after an area-unit
+// toggle — no network calls, since every leg it reads (`dcState.acres`,
+// `lastParcelSummary.acres`, pinned Compare rows, the last "Best fit here"
+// ranking) is already-resolved state; this just recomputes text with the new
+// `areaUnit` and re-sets innerHTML/textContent in place.
+const VERDICT_REFRESH={
+  data_center:()=>dcState&&maybeRenderDCVerdict(dcState.seq),
+  fast_casual:()=>fcState&&maybeRenderFCVerdict(fcState.seq),
+  residential_subdivision:()=>resState&&maybeRenderResVerdict(resState.seq),
+  warehouse_club:()=>wcState&&maybeRenderWCVerdict(wcState.seq),
+  food_truck_court:()=>ftcState&&maybeRenderFTCVerdict(ftcState.seq),
+  ev_charging_hub:()=>evState&&maybeRenderEVVerdict(evState.seq),
+  senior_living:()=>slState&&maybeRenderSLVerdict(slState.seq),
+  urgent_care:()=>ucState&&maybeRenderUCVerdict(ucState.seq),
+  self_storage:()=>ssState&&maybeRenderSSVerdict(ssState.seq),
+  child_care_center:()=>ccState&&maybeRenderCCVerdict(ccState.seq),
+  hotel:()=>hlState&&maybeRenderHLVerdict(hlState.seq),
+  grocery_store:()=>gsState&&maybeRenderGSVerdict(gsState.seq),
+  car_wash:()=>cwState&&maybeRenderCWVerdict(cwState.seq),
+  pharmacy:()=>phState&&maybeRenderPHVerdict(phState.seq),
+};
+function refreshAreaDisplays(){
+  if(mode==="build"&&VERDICT_REFRESH[current])VERDICT_REFRESH[current]();
+  const acB=document.getElementById("parcelAcreageVal");
+  if(acB&&lastParcelSummary&&lastParcelSummary.acres!=null)acB.textContent=fmtAc(lastParcelSummary.acres);
+  if(mode==="explore"&&lastParcelSummary)fillFit(lastParcelSummary.acres);
+  const bfPanel=document.getElementById("bestFitPanel");
+  if(bfPanel&&bfPanel.style.display!=="none"&&lastBestFitRanked)renderBestFit(lastBestFitRanked,lastBestFitNoRead);
+  const cm=document.getElementById("compareModal");
+  if(cm&&cm.classList.contains("open"))renderCompare();
+}
+function wireUnits(){
+  const btn=document.getElementById('unitToggle');
+  if(!btn)return;
+  const CYCLE=["ac","ha","sqft"], TITLES={ac:"acres",ha:"hectares",sqft:"square feet"};
+  const paint=()=>{
+    btn.textContent=areaUnitLabel(areaUnit);
+    btn.title=`Area units: ${TITLES[areaUnit]} (click to change)`;
+  };
+  paint();
+  btn.onclick=()=>{
+    areaUnit=CYCLE[(CYCLE.indexOf(areaUnit)+1)%CYCLE.length];
+    try{ localStorage.setItem(AREA_UNIT_KEY, areaUnit); }catch(e){}
+    paint();
+    refreshAreaDisplays();
+  };
+}
+
 function wireTheme(){
   const btn=document.getElementById('themeToggle');
   if(!btn) return;
@@ -3472,7 +3538,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireTheme(); wireHelp(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireTheme(); wireUnits(); wireHelp(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses
