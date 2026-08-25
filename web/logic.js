@@ -561,6 +561,31 @@ function parseCoordPair(q){
   return {lat,lng};
 }
 
+/* ---- parcel-size unit conversion (acres/hectares/sq ft display toggle) ----
+   Every acreage figure the app computes/stores stays in acres — the
+   `min_buildable_acres` gates in layers.yaml, the density/capacity math in
+   schoolLoadDemandRead, GeoJSON export properties — this is *display
+   formatting only*, applied at the last step before a number becomes text a
+   person reads. `convertArea` returns the raw converted number (for a CSV
+   cell, say, where the column header already carries the unit);
+   `formatArea` appends the unit label too. Both return `null` for a
+   missing/non-finite input so callers render their own "—"/"unlisted" text,
+   matching every other pure formatter here (toCsvField, pick, etc.). */
+const ACRE_TO_HECTARE=0.404686, ACRE_TO_SQFT=43560;
+function convertArea(acres,unit){
+  if(typeof acres!=="number"||!isFinite(acres))return null;
+  if(unit==="ha")return acres*ACRE_TO_HECTARE;
+  if(unit==="sqft")return acres*ACRE_TO_SQFT;
+  return acres;
+}
+function formatArea(acres,unit,decimals){
+  const v=convertArea(acres,unit);
+  if(v==null)return null;
+  if(unit==="ha")return v.toFixed(decimals==null?2:decimals)+" ha";
+  if(unit==="sqft")return Math.round(v).toLocaleString()+" sq ft";
+  return v.toFixed(decimals==null?2:decimals)+" ac";
+}
+
 /* ---- CSV export for the Compare list ----
    `toCsvRow` quotes a single field per RFC 4180: wrapped in double quotes
    whenever it contains a comma, a double quote (itself doubled), or a
@@ -895,8 +920,8 @@ function buildCandidatesReportText(useLabel,center,radiusM,results,sig,cfg){
 // PDF, just fed the Compare list's pins instead of a ranked candidate list.
 // A pin missing a field (or the whole pins list being empty/null) renders
 // "—"/"0 parcels pinned" rather than throwing or emitting "undefined".
-function buildCompareReportText(pins){
-  pins=pins||[];
+function buildCompareReportText(pins,unit){
+  pins=pins||[]; unit=unit||"ac";
   let t=`SIMyCity — parcel comparison\n`;
   t+=`${pins.length} parcel${pins.length===1?"":"s"} pinned\n\n`;
   pins.forEach((raw,i)=>{
@@ -904,7 +929,7 @@ function buildCompareReportText(pins){
     const site=p.label||((typeof p.lat==="number"&&typeof p.lng==="number")?`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`:"?, ?");
     t+=`  ${i+1}. ${site}\n`;
     t+=`     Owner: ${p.owner||"—"}\n`;
-    t+=`     Acreage: ${typeof p.acres==="number"?p.acres.toFixed(2)+" ac":"—"}\n`;
+    t+=`     Acreage: ${formatArea(p.acres,unit,2)||"—"}\n`;
     t+=`     Appraised value: ${typeof p.value==="number"?"$"+p.value.toLocaleString():"—"}\n`;
     t+=`     Land use: ${p.land||"—"}\n`;
     t+=`     County: ${p.county||"—"}\n`;
@@ -1005,5 +1030,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,convertArea,formatArea};
 }

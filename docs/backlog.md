@@ -2604,48 +2604,85 @@ Ground rules for each run:
       zero genuine console/page errors.
 
 ## Now (high value) — newly added (3)
-- [ ] **15th land use: Urgent Care Clinic.** Add `urgent_care` to
-      `data_sources/layers.yaml` — a real, common site-selection use not yet
-      covered by the 14 existing land uses. Suggested requirements:
-      `requires.demand` on nearby rooftops at a mid-size radius (smaller than
-      fast_casual's 6 km, since urgent care draws a neighborhood/short-drive
-      crowd — maybe 3 km), a modest `requires.parcel.min_buildable_acres`
-      (~1 ac, enough for a small building + parking, not a big-box pad), and
-      a `requires.competition` gate against existing
-      `amenity=clinic|hospital|doctors` so two urgent-care chains don't sit
-      on top of each other (a `min_distance_km_from_nearest` in the 1–2 km
-      range, same shape as food_truck_court's inverted competition read from
-      the reverse-search work). Wire up a real PASS/SHORT verdict in
-      `web/explore.html` (`maybeRenderUCVerdict`-style, same wait-for-all-legs
-      pattern as the other five land-use verdicts) rather than leaving it
-      demand-only. Add unit tests for any new pure logic and verify per the
-      ground rules above.
-- [ ] **One more parcel county: Fulton County, GA (Atlanta).** Extend
-      `PARCEL_SOURCES` in `web/explore.html` with Fulton County's public GIS
-      parcel layer (search for the live ArcGIS MapServer endpoint, same
-      research approach every prior county entry used, since this sandbox
-      can't introspect ArcGIS REST hosts directly). Confirm real field names
-      from search-indexed docs before adding them to the shared `pick()`
-      candidate lists rather than guessing; if owner/address/value aren't
-      confirmed on the public layer, leave them unmapped (same graceful
-      partial-coverage precedent as King/Cook/Salt Lake/Franklin/Clark).
-      Georgia counties zone unincorporated land, so this needs its own
-      `zoning_note` (not the TX-counties-don't-zone copy). Add a record-link
-      URL only if a stable per-parcel deep-link scheme is confirmed;
-      otherwise link to the county's own parcel-search page.
-- [ ] **Acres/hectares/sq ft unit toggle for parcel size.** Every parcel
-      acreage figure across the app (parcel summary, Compare modal, CSV/PDF/
-      GeoJSON exports, the residential_subdivision/warehouse_club/data_center
-      site-size checks) is hardcoded to acres — awkward for anyone outside
-      the US. Add a small unit-preference toggle (persisted to
-      `localStorage`, same pattern as `simy_theme`) and a pure
-      `formatArea(acres, unit)` helper in `web/logic.js` (acres → hectares:
-      ×0.404686; acres → sq ft: ×43,560) with unit tests covering the
-      conversions and rounding. Scope this to *display formatting only* —
-      the underlying `min_buildable_acres` gates in `layers.yaml` and all
-      internal math stay in acres; only the rendered text changes. Verify
-      both pages still load clean and that toggling the unit updates every
-      acreage display consistently.
+- [x] **15th land use: Urgent Care Clinic.** Duplicate of work already shipped
+      in an earlier run: `urgent_care` already exists in full in
+      `data_sources/layers.yaml` (demand/parcel/competition requires, induces,
+      impacts, notes — `simy validate` reports 14 land uses, urgent_care among
+      them), is in `web/explore.html`'s `ALL_USE_KEYS`/`USE_DEMAND`, and has a
+      real wait-for-all-legs PASS/SHORT verdict (`maybeRenderUCVerdict`) —
+      rooftop demand + `UC_MIN_ACRES` site size + `UC_MIN_COMPETITOR_KM`
+      farther-is-better competitor read, exactly the shape this item asked
+      for. This copy was a stale re-add (same situation as the CSV-export
+      duplicate closed out earlier in this section) — closing it rather than
+      re-implementing an existing feature. No code change this run for this
+      item; verified the existing implementation still works as part of this
+      run's full verification pass (see the unit-toggle item below).
+- [x] **One more parcel county: Fulton County, GA (Atlanta).** Also a stale
+      duplicate: Fulton County GIS is already a `PARCEL_SOURCES` entry in
+      `web/explore.html` (the `PropertyMapViewer/MapServer/11` tax-parcel
+      layer, `ParcelID`/`Owner`/`Address` fields, the almost-no-unincorporated-
+      land `zoning_note` from the 2005–2021 cityhood wave, and a `qpublic`
+      search-page record link) — 18 counties are covered in total. No code
+      change this run for this item either.
+- [x] **Acres/hectares/sq ft unit toggle for parcel size.** This was the one
+      genuinely unimplemented item in this section — shipped it. Added a pure
+      `convertArea(acres, unit)` / `formatArea(acres, unit, decimals)` pair to
+      `web/logic.js` (acres passthrough / ×0.404686 for `"ha"` / ×43,560 for
+      `"sqft"`, `null` in → `null` out so callers render their own
+      placeholder text, `sqft` always rounds to a whole comma-grouped number —
+      sub-square-foot precision is meaningless). A new "ac"/"ha"/"ft²" header
+      button (`#unitToggle`, next to the existing dark-mode toggle) cycles the
+      three units and persists the choice to `localStorage` (`simy_area_unit`,
+      same pattern as `simy_theme`). Two small wrappers in `web/explore.html`
+      — `fmtAc(acres, decimals)` for a live reading and `fmtThresh(minAcres)`
+      for a fixed gate constant (`WC_MIN_ACRES` and friends), the latter
+      passing acre-unit thresholds through as the original bare number so the
+      default ac-unit text is byte-for-byte unchanged from before this item —
+      now back every acreage display: the parcel summary's Acreage row, the
+      "what could go here" fit list, all eleven land-use verdicts' site-size
+      legs (`maybeRenderDCVerdict`/`WCVerdict`/`FTCVerdict`/`SLVerdict`/
+      `UCVerdict`/`SSVerdict`/`CCVerdict`/`HLVerdict`/`GSVerdict`/
+      `CWVerdict`/`PHVerdict`) and "Best fit here"'s reason text, the Compare
+      modal's table, and the Compare CSV/PDF exports (`buildCompareReportText`
+      in `web/logic.js` now takes an optional `unit` param, defaulting to
+      `"ac"` so the existing PDF-report unit tests didn't need to change; the
+      CSV column header itself carries the unit — `"Acreage (ha)"` etc — so
+      cells stay plain numbers, matching how the `$` column already handles
+      the appraised-value unit). Scoped to *display formatting only*, per the
+      backlog ask: `min_buildable_acres` gates in `layers.yaml` and all
+      internal math (density/school-load projections, etc.) stay in acres;
+      only rendered text changes. Deliberately did **not** touch GeoJSON
+      export's `acres` property — that's a machine-readable field for GIS
+      tooling (QGIS, etc.), not display text, and converting a raw data value
+      based on transient UI state would be a worse contract for that format,
+      not a better one; `value` (appraised dollars) stays raw there for the
+      same reason. Clicking the toggle re-runs `analyze()` on the currently
+      shown point (if any) rather than hand-patching each already-rendered
+      string in place — the same single code path already renders every one
+      of these surfaces from, so this is what actually guarantees they all
+      stay consistent with each other, and it costs no real network traffic
+      since `runParcel`/`runDemand`'s Overpass/ArcGIS calls are already
+      wrapped in the session `netCache` (re-analyzing the same point reuses
+      the cached responses, the same idempotency the `hashchange` re-apply
+      item already established). The open Compare modal gets its own cheap
+      `renderCompare()` re-render. Added 9 new unit tests
+      (`convertArea`/`formatArea` conversion math, rounding, null-input
+      handling, unrecognized-unit fallback, and a `buildCompareReportText`
+      unit-param case). Verified: `python -m pytest -q` (15 passed), `simy
+      validate` (OK, 14 land uses/32 sources unchanged), `node --test
+      tests/js/*.test.mjs` (284 passed, 8 new — the 9th is the
+      `buildCompareReportText` case in the existing suite). In headless
+      Chromium: both pages load with zero console/page errors; clicking
+      `#unitToggle` cycles ac→ha→ft²→ac and persists to `localStorage`; a real
+      map click (mocked ArcGIS response, 12.345 ac parcel) rendered "12.35 ac"
+      in the parcel summary, and clicking the toggle re-ran `analyze()` and
+      updated the same row in place to "5.00 ha" (12.345 × 0.404686) with zero
+      errors; driving `maybeRenderUCVerdict` directly across all three units
+      showed both the acreage reading *and* the `UC_MIN_ACRES` threshold
+      converting together (e.g. "0.6 ac (need ≥1 ac)" → "0.2 ha (need ≥0.40
+      ha)" → "26,136 sq ft (need ≥43,560 sq ft)"); and the fit list, Compare
+      table, Compare CSV cell/header, and Compare PDF report text all matched
+      the expected converted values in all three units with zero throws.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
