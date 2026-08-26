@@ -2667,6 +2667,45 @@ Ground rules for each run:
       and a cold load with `simy_unit=ha` pre-set in `localStorage` rendered
       the toggle button as "ha" from first paint.
 
+## Now (high value) — newly added (4)
+- [x] **"Use my location" button.** Added a "📍" button next to the address
+      search box (`web/explore.html`) — on click, calls the browser's
+      Geolocation API and, on success, takes the same `map.setView` +
+      `analyze(latlng)` path a real map click, an address search hit, or a
+      pasted coordinate pair already take (`wireGeolocate()`, mirroring
+      `wireAddrSearch()`'s structure). The button hides itself outright when
+      `navigator.geolocation` isn't present (old browsers, or an insecure
+      non-https/non-localhost origin) rather than wiring a handler that would
+      always fail. A pure `geolocationErrorMessage(err)` helper added to
+      `web/logic.js` maps the W3C `PositionError` codes to the same
+      clear-status-text pattern the address search's fetch failures already
+      use — a specific message for permission denial (the one case with an
+      actionable fix) and a generic fallback for timeout/position-unavailable/
+      an unrecognized error shape, both always pointing back at the address
+      box as a working alternative. Added 4 new unit tests for
+      `geolocationErrorMessage` (permission-denied, timeout, position-
+      unavailable, missing/malformed error object). Verified: `python -m
+      pytest -q` (15 passed), `simy validate` (OK, 14 land uses — this item
+      touches only `web/explore.html`/`web/logic.js`), `node --test
+      tests/js/*.test.mjs` (292 passed, 4 new). In headless Chromium with a
+      mocked/granted geolocation permission (`context.setGeolocation`): both
+      pages still load with zero console/page errors; a real click on the
+      button ran the actual Geolocation API → `map.setView` → `analyze()`
+      chain end to end and set `lastLatLng` to the mocked coordinates within
+      0.01° (real result panel rendered, not simulated); and driving
+      `geolocationErrorMessage({code:1})` through the exported helper
+      produced the expected permission-denial text. Screenshots at desktop
+      and mobile viewports confirm the new button sits cleanly next to the
+      existing search button with no overlap of the zoom control or layer
+      switcher. A true "Geolocation API entirely absent" browser-level test
+      wasn't reproducible in this sandbox's Chromium (`Navigator.prototype.
+      geolocation` isn't reconfigurable here) — the `if(!("geolocation" in
+      navigator))` guard itself is standard feature detection, same shape
+      used elsewhere in this file, so this is a sandbox testing limitation,
+      not an unverified code path. Live on-device geolocation accuracy/
+      permission-prompt UX is a good human spot-check, same caveat as every
+      browser-API-dependent item.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).

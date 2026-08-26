@@ -16,7 +16,7 @@ const {
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
-  nominatimUrl, parseNominatimResult, parseCoordPair, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
@@ -1066,6 +1066,29 @@ test("parseCoordPair: empty, non-string, or malformed input is null", () => {
   assert.equal(parseCoordPair(undefined), null);
   assert.equal(parseCoordPair("30.2672"), null);
   assert.equal(parseCoordPair("30.2672, -97.7431, 5"), null);
+});
+
+// ---- geolocationErrorMessage ("Use my location" button error text) ----
+test("geolocationErrorMessage: permission denied (code 1) names the fix", () => {
+  const msg = geolocationErrorMessage({ code: 1 });
+  assert.match(msg, /denied/i);
+  assert.match(msg, /address instead/i);
+});
+
+test("geolocationErrorMessage: timeout (code 3) suggests retrying", () => {
+  const msg = geolocationErrorMessage({ code: 3 });
+  assert.match(msg, /timed out/i);
+});
+
+test("geolocationErrorMessage: position unavailable (code 2) falls back to the generic message", () => {
+  assert.equal(geolocationErrorMessage({ code: 2 }), "Couldn't get your location — try searching an address instead.");
+});
+
+test("geolocationErrorMessage: missing/malformed error object falls back to the generic message", () => {
+  const generic = "Couldn't get your location — try searching an address instead.";
+  assert.equal(geolocationErrorMessage(null), generic);
+  assert.equal(geolocationErrorMessage(undefined), generic);
+  assert.equal(geolocationErrorMessage({}), generic);
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----

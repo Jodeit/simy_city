@@ -287,6 +287,7 @@
     <form id="addrForm" class="addrsearch" autocomplete="off">
       <input id="addrInput" type="text" placeholder="Search an address…" aria-label="Search an address"/>
       <button type="submit" aria-label="Search">🔍</button>
+      <button type="button" id="geoBtn" aria-label="Use my location" title="Use my location">📍</button>
     </form>
     <div class="addrstatus" id="addrStatus" style="display:none" role="status" aria-live="polite"></div>
     <div class="legend" id="legend"></div>
@@ -3445,6 +3446,32 @@ function wireAddrSearch(){
   };
 }
 
+// "📍 Use my location" — same "land on a point and run analyze()" path the
+// address search and a pasted coordinate pair already take. Geolocation
+// needs a secure context (https/localhost) and isn't available over plain
+// file://, so the button hides itself outright when the API isn't there
+// rather than wiring a click handler that would always fail.
+function wireGeolocate(){
+  const btn=document.getElementById("geoBtn");
+  const status=document.getElementById("addrStatus");
+  if(!btn)return;
+  if(!("geolocation" in navigator)){btn.style.display="none";return;}
+  btn.onclick=()=>{
+    status.style.display="block"; status.className="addrstatus";
+    status.textContent="Locating…";
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        status.style.display="none";
+        const latlng=L.latLng(pos.coords.latitude,pos.coords.longitude);
+        map.setView(latlng,17);
+        analyze(latlng);
+      },
+      err=>{status.className="addrstatus err";status.textContent=geolocationErrorMessage(err);},
+      {enableHighAccuracy:false,timeout:10000,maximumAge:60000}
+    );
+  };
+}
+
 function wireCTA(){
   const b=document.getElementById('ctaTry');
   if(!b) return;
@@ -3538,7 +3565,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireTheme(); wireUnits(); wireHelp(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses
