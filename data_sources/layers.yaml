@@ -545,6 +545,47 @@ land_uses:
       site read, same messy-tagging caveat urgent_care/child_care_center/
       car_wash already documented.
 
+  gas_station:            # convenience store / gas station (fuel + pad-site retail)
+    label: Convenience Store / Gas Station
+    requires:
+      demand:      { min_households_drive_time: 5000, drive_time_min: 6 }
+      # The single most AADT-sensitive use in the model — fuel margins live and
+      # die on drive-by traffic even more than car_wash/pharmacy do. Same
+      # `minAadt` gate mechanism (`standardUseVerdict`'s AADT leg, web/logic.js)
+      # warehouse_club/fast_casual/hotel/car_wash/pharmacy already established,
+      # at the highest arterial threshold of the group.
+      transportation: { near_arterial_aadt: 30000 }
+      parcel:      { min_buildable_acres: 1.2 }
+      # Same inverted "farther is better" competition read food_truck_court/
+      # ev_charging_hub/senior_living/urgent_care/self_storage/
+      # child_care_center/hotel/grocery_store/car_wash/pharmacy established: a
+      # second gas station/convenience store a short distance from an existing
+      # one is splitting an already-served pool of drivers, not opening up a
+      # new one.
+      competition: { min_distance_km_from_nearest: 1.2 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a small pad site + fuel canopy, well under a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      A rooftop-headcount demand read at a tight local radius (5 km) — a
+      corner gas station/convenience store draws pass-by and short-trip
+      traffic, not a citywide crowd. min_households_drive_time (5000),
+      min_buildable_acres (1.2, a pad site + fuel canopy, smaller than
+      pharmacy's 1.5), near_arterial_aadt (30000, the highest of the
+      AADT-gated uses so far), and min_distance_km_from_nearest (1.2) are
+      first-draft heuristics — refine freely, same as every other threshold
+      here. Wired up via `standardUseVerdict` directly (same demand+site-
+      size+AADT+competitor-distance shape car_wash/pharmacy already
+      established), no new gate-shape work needed. OSM tags this
+      inconsistently across three live tags — `amenity=fuel`, `shop=
+      convenience`, and `shop=kiosk` (a pump-island kiosk) — all queried with
+      an OR-fallback for the live competitor/site read, same messy-tagging
+      caveat urgent_care/child_care_center/car_wash/pharmacy already
+      documented.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

@@ -2667,6 +2667,69 @@ Ground rules for each run:
       and a cold load with `simy_unit=ha` pre-set in `localStorage` rendered
       the toggle button as "ha" from first paint.
 
+## Now (high value) — newly added (4)
+- [x] **15th land use: Convenience Store / Gas Station.** Added `gas_station`
+      (label "Convenience Store / Gas Station") to `data_sources/layers.yaml`,
+      the same `standardUseVerdict` shape car_wash/pharmacy already
+      established: rooftop demand within a tight 5 km pass-by/short-trip
+      radius (`min_households_drive_time: 5000`), `transportation.
+      near_arterial_aadt: 30000` — the highest AADT threshold of any use so
+      far, since fuel margins live and die on drive-by traffic even more than
+      a car wash or drugstore — a `parcel.min_buildable_acres: 1.2` pad-site
+      gate, and a `competition.min_distance_km_from_nearest: 1.2` "farther is
+      better" read against existing fuel/convenience competitors. Wired into
+      `web/explore.html` the same way car_wash/pharmacy were: `ALL_USE_KEYS`,
+      a `USE_DEMAND` entry with an OR'd `compQ` (OSM tags this inconsistently
+      across `amenity=fuel`, `shop=convenience`, and `shop=kiosk` at the pump
+      island), the AADT-leg use list, `maybeRenderGSTVerdict` calling
+      `standardUseVerdict` directly (zero new `web/logic.js` gate-shape code
+      needed), and a `BEST_FIT_USES` entry so "Best fit here" picks it up for
+      free. Verified: `python -m pytest -q` (15 passed), `simy validate` (OK,
+      15 land uses), `node --test tests/js/*.mjs` (288 passed, including the
+      integration check against the real compiled `model.json`), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` load
+      with zero genuine console/page errors; selecting `gas_station` and
+      driving `maybeRenderGSTVerdict` directly through PASS / SHORT-on-demand
+      / SHORT-on-site-size / SHORT-on-AADT / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws, and a simulated real map click with
+      `gas_station` selected rendered the full result panel end-to-end.
+      Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
+      live end-to-end rooftop/AADT/competitor fetch on the real site is a
+      good human spot-check.
+- [ ] **19th parcel county.** Every major-metro `PARCEL_SOURCES` entry so far
+      was found via WebSearch since this sandbox can't introspect ArcGIS
+      REST endpoints directly — same approach needed here. Good candidates
+      not yet covered: Wayne County, MI (Detroit), Philadelphia County, PA,
+      Denver County, CO, or Multnomah County, OR (Portland) — pick whichever
+      has a confirmable public ArcGIS MapServer parcel layer. Follow the
+      established graceful-partial-field-coverage pattern: only add field
+      names to the shared `pick()` candidate lists that are actually
+      confirmed (owner/address are legally withheld or simply unconfirmable
+      in several prior counties — that's fine, leave them unmapped rather
+      than guessing), write a state-appropriate `zoning_note`, and link
+      `record()` to the assessor's search page instead of a guessed per-APN
+      URL when no stable deep-link scheme is documented.
+- [ ] **Service worker for offline app-shell caching.** The installable-PWA
+      item (manifest + icons, already shipped) makes the app installable
+      but there's no `web/sw.js` yet, so a launch with no connectivity still
+      fails to load the shell at all. Add a small service worker that
+      precaches the static app shell — `explore.html`, `index.html`,
+      `logic.js`, `model.js`, the vendored Leaflet JS/CSS in `web/vendor/`,
+      and the manifest/icons — with a cache-first strategy for those exact
+      files and network-passthrough (no caching) for everything else, since
+      every live data read (Overpass/ArcGIS/Census/FEMA/USGS/Nominatim) must
+      keep hitting the network for fresh results, not a stale cache. Bump a
+      cache-version constant in the worker on future app-shell changes so
+      stale precached files get evicted rather than sticking around forever.
+      Register it from both pages (`navigator.serviceWorker.register`,
+      feature-detected so it no-ops gracefully in browsers/contexts without
+      SW support, e.g. this sandbox's `file://` pages). Verify a cold
+      `file://` load still shows zero console errors (registration must not
+      throw when SW isn't available under `file://`), and that the worker
+      script itself parses/lints cleanly.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
