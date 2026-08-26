@@ -2668,23 +2668,36 @@ Ground rules for each run:
       the toggle button as "ha" from first paint.
 
 ## Now (high value) — newly added (4)
-- [ ] **15th land use: Convenience Store / Gas Station.** `data_sources/layers.yaml`
-      has no fuel/convenience use yet despite it being one of the most
-      common "what could go here" answers for a corner lot. Should be a
-      clean fit for the existing `standardUseVerdict` shape car_wash/pharmacy
-      already established (rooftop demand within a short drive radius,
-      `requires.transportation.near_arterial_aadt` — arguably the single
-      most AADT-sensitive use in the model, since fuel margins live and die
-      on drive-by traffic — a small `min_buildable_acres` pad-site gate, and
-      a `min_distance_km_from_nearest` competition read against
-      `shop=convenience`/`amenity=fuel`). Wire it into `web/explore.html`
-      the same way car_wash/pharmacy were: `ALL_USE_KEYS`, a `USE_DEMAND`
-      entry with an OR'd `compQ` (OSM tags fuel stations inconsistently
-      across `amenity=fuel`, `shop=convenience`, and sometimes
-      `shop=kiosk` at the pump island), the AADT-leg use list, a
-      `maybeRenderXXVerdict` calling `standardUseVerdict` directly (zero new
-      `web/logic.js` gate-shape code needed, same as car_wash/pharmacy), and
-      a `BEST_FIT_USES` entry so "Best fit here" picks it up for free.
+- [x] **15th land use: Convenience Store / Gas Station.** Added `gas_station`
+      (label "Convenience Store / Gas Station") to `data_sources/layers.yaml`,
+      the same `standardUseVerdict` shape car_wash/pharmacy already
+      established: rooftop demand within a tight 5 km pass-by/short-trip
+      radius (`min_households_drive_time: 5000`), `transportation.
+      near_arterial_aadt: 30000` — the highest AADT threshold of any use so
+      far, since fuel margins live and die on drive-by traffic even more than
+      a car wash or drugstore — a `parcel.min_buildable_acres: 1.2` pad-site
+      gate, and a `competition.min_distance_km_from_nearest: 1.2` "farther is
+      better" read against existing fuel/convenience competitors. Wired into
+      `web/explore.html` the same way car_wash/pharmacy were: `ALL_USE_KEYS`,
+      a `USE_DEMAND` entry with an OR'd `compQ` (OSM tags this inconsistently
+      across `amenity=fuel`, `shop=convenience`, and `shop=kiosk` at the pump
+      island), the AADT-leg use list, `maybeRenderGSTVerdict` calling
+      `standardUseVerdict` directly (zero new `web/logic.js` gate-shape code
+      needed), and a `BEST_FIT_USES` entry so "Best fit here" picks it up for
+      free. Verified: `python -m pytest -q` (15 passed), `simy validate` (OK,
+      15 land uses), `node --test tests/js/*.mjs` (288 passed, including the
+      integration check against the real compiled `model.json`), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` load
+      with zero genuine console/page errors; selecting `gas_station` and
+      driving `maybeRenderGSTVerdict` directly through PASS / SHORT-on-demand
+      / SHORT-on-site-size / SHORT-on-AADT / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws, and a simulated real map click with
+      `gas_station` selected rendered the full result panel end-to-end.
+      Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
+      live end-to-end rooftop/AADT/competitor fetch on the real site is a
+      good human spot-check.
 - [ ] **19th parcel county.** Every major-metro `PARCEL_SOURCES` entry so far
       was found via WebSearch since this sandbox can't introspect ArcGIS
       REST endpoints directly — same approach needed here. Good candidates

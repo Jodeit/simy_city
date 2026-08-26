@@ -954,6 +954,32 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "A rooftop-headcount demand read like car_wash, at a slightly wider radius (6 km) \u2014 a drugstore draws a bit more of a citywide/commute-route crowd than a car wash's purely local base. min_households_drive_time (8000), min_buildable_acres (1.5, a small pad site, not a big-box lot), near_arterial_aadt (25000), and min_distance_km_from_nearest (1.0) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+AADT+competitor-distance shape car_wash/grocery_store already established), no new gate-shape work needed. OSM tags this with three live tags \u2014 `shop=chemist`, `amenity=pharmacy`, and `healthcare= pharmacy` \u2014 all queried with an OR-fallback for the live competitor/ site read, same messy-tagging caveat urgent_care/child_care_center/ car_wash already documented.\n"
+    },
+    "gas_station": {
+      "label": "Convenience Store / Gas Station",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 5000,
+          "drive_time_min": 6
+        },
+        "transportation": {
+          "near_arterial_aadt": 30000
+        },
+        "parcel": {
+          "min_buildable_acres": 1.2
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.2
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "A rooftop-headcount demand read at a tight local radius (5 km) \u2014 a corner gas station/convenience store draws pass-by and short-trip traffic, not a citywide crowd. min_households_drive_time (5000), min_buildable_acres (1.2, a pad site + fuel canopy, smaller than pharmacy's 1.5), near_arterial_aadt (30000, the highest of the AADT-gated uses so far), and min_distance_km_from_nearest (1.2) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+AADT+competitor-distance shape car_wash/pharmacy already established), no new gate-shape work needed. OSM tags this inconsistently across three live tags \u2014 `amenity=fuel`, `shop= convenience`, and `shop=kiosk` (a pump-island kiosk) \u2014 all queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy already documented.\n"
     }
   },
   "actor_uses": {
