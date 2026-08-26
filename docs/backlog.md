@@ -2667,6 +2667,56 @@ Ground rules for each run:
       and a cold load with `simy_unit=ha` pre-set in `localStorage` rendered
       the toggle button as "ha" from first paint.
 
+## Now (high value) — newly added (4)
+- [ ] **15th land use: Convenience Store / Gas Station.** `data_sources/layers.yaml`
+      has no fuel/convenience use yet despite it being one of the most
+      common "what could go here" answers for a corner lot. Should be a
+      clean fit for the existing `standardUseVerdict` shape car_wash/pharmacy
+      already established (rooftop demand within a short drive radius,
+      `requires.transportation.near_arterial_aadt` — arguably the single
+      most AADT-sensitive use in the model, since fuel margins live and die
+      on drive-by traffic — a small `min_buildable_acres` pad-site gate, and
+      a `min_distance_km_from_nearest` competition read against
+      `shop=convenience`/`amenity=fuel`). Wire it into `web/explore.html`
+      the same way car_wash/pharmacy were: `ALL_USE_KEYS`, a `USE_DEMAND`
+      entry with an OR'd `compQ` (OSM tags fuel stations inconsistently
+      across `amenity=fuel`, `shop=convenience`, and sometimes
+      `shop=kiosk` at the pump island), the AADT-leg use list, a
+      `maybeRenderXXVerdict` calling `standardUseVerdict` directly (zero new
+      `web/logic.js` gate-shape code needed, same as car_wash/pharmacy), and
+      a `BEST_FIT_USES` entry so "Best fit here" picks it up for free.
+- [ ] **19th parcel county.** Every major-metro `PARCEL_SOURCES` entry so far
+      was found via WebSearch since this sandbox can't introspect ArcGIS
+      REST endpoints directly — same approach needed here. Good candidates
+      not yet covered: Wayne County, MI (Detroit), Philadelphia County, PA,
+      Denver County, CO, or Multnomah County, OR (Portland) — pick whichever
+      has a confirmable public ArcGIS MapServer parcel layer. Follow the
+      established graceful-partial-field-coverage pattern: only add field
+      names to the shared `pick()` candidate lists that are actually
+      confirmed (owner/address are legally withheld or simply unconfirmable
+      in several prior counties — that's fine, leave them unmapped rather
+      than guessing), write a state-appropriate `zoning_note`, and link
+      `record()` to the assessor's search page instead of a guessed per-APN
+      URL when no stable deep-link scheme is documented.
+- [ ] **Service worker for offline app-shell caching.** The installable-PWA
+      item (manifest + icons, already shipped) makes the app installable
+      but there's no `web/sw.js` yet, so a launch with no connectivity still
+      fails to load the shell at all. Add a small service worker that
+      precaches the static app shell — `explore.html`, `index.html`,
+      `logic.js`, `model.js`, the vendored Leaflet JS/CSS in `web/vendor/`,
+      and the manifest/icons — with a cache-first strategy for those exact
+      files and network-passthrough (no caching) for everything else, since
+      every live data read (Overpass/ArcGIS/Census/FEMA/USGS/Nominatim) must
+      keep hitting the network for fresh results, not a stale cache. Bump a
+      cache-version constant in the worker on future app-shell changes so
+      stale precached files get evicted rather than sticking around forever.
+      Register it from both pages (`navigator.serviceWorker.register`,
+      feature-detected so it no-ops gracefully in browsers/contexts without
+      SW support, e.g. this sandbox's `file://` pages). Verify a cold
+      `file://` load still shows zero console errors (registration must not
+      throw when SW isn't available under `file://`), and that the worker
+      script itself parses/lints cleanly.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
