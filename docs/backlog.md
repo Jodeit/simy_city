@@ -2706,6 +2706,49 @@ Ground rules for each run:
       permission-prompt UX is a good human spot-check, same caveat as every
       browser-API-dependent item.
 
+## Now (high value) — newly added (5)
+- [ ] **16th land use: Convenience Store / Gas Station.** Add `convenience_store`
+      to `data_sources/layers.yaml` — rooftop demand at a tight radius (~3 km,
+      a walk/short-drive crowd, similar to car_wash/pharmacy), a
+      `transportation.near_arterial_aadt` gate (visibility matters a lot for
+      fuel margin — reuse the existing AADT leg mechanism), a
+      `parcel.min_buildable_acres` around 0.5–1.0 (a small pad site, not a
+      big-box lot), and the by-now-standard inverted
+      `competition.min_distance_km_from_nearest` gate against
+      `shop=convenience` OR `amenity=fuel` (two separate but often-colocated
+      OSM tags — OR-fallback query, same pattern car_wash/pharmacy already
+      established). Wire via `standardUseVerdict` directly (same
+      demand+site-size+AADT+competitor-distance shape as car_wash/
+      grocery_store/pharmacy) — no new gate mechanism needed. Add the usual
+      unit tests plus headless-Chromium verification (page loads clean,
+      PASS/SHORT/edge-case verdict states render correctly).
+- [ ] **19th parcel county: Denver, CO (City and County of Denver).** Add to
+      `PARCEL_SOURCES` in `web/explore.html` — find Denver's GIS ArcGIS
+      MapServer parcel layer via web search (this sandbox can't introspect
+      ArcGIS hosts directly, same constraint every prior county hit).
+      Colorado, like AZ/CA/WA, zones unincorporated land — but Denver is a
+      consolidated city-county, so its `zoning_note` should say that
+      explicitly rather than reusing another state's boilerplate note
+      verbatim. Leave unconfirmed attribute fields unmapped rather than
+      guessing a name that isn't there, same graceful partial-coverage
+      precedent every prior county (Harris, Bexar, King, Fulton, ...) already
+      set. Verify `inBbox` routes a downtown-Denver point to the new source
+      and still finds no source for an out-of-coverage point.
+- [ ] **Backup/restore all local app state as a JSON file.** The app now
+      persists a growing pile of `localStorage` state per browser (Compare
+      pins, recently-viewed sites, dark-mode choice, unit-toggle preference)
+      with no way to move it to a new browser/device or recover it after
+      clearing site data. Add a "⬇️ Export data" / "⬆️ Import data" pair
+      (e.g. in a small settings/about area) that serializes the known
+      `simy_*` localStorage keys into one downloadable JSON file and, on
+      import, validates its shape before writing anything back — same
+      client-side-only, no-network pattern as the existing CSV/PNG exports.
+      Needs care on validation so a malformed or hand-edited file can't
+      corrupt app state: fall back silently to the current state on any
+      parse/shape mismatch, same defensive pattern the rest of the app
+      already applies to untrusted external data (URL hashes, pasted
+      coordinates, mocked fetch responses in tests).
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
