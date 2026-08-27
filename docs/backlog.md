@@ -2707,21 +2707,43 @@ Ground rules for each run:
       browser-API-dependent item.
 
 ## Now (high value) — newly added (5)
-- [ ] **16th land use: Convenience Store / Gas Station.** Add `convenience_store`
-      to `data_sources/layers.yaml` — rooftop demand at a tight radius (~3 km,
-      a walk/short-drive crowd, similar to car_wash/pharmacy), a
-      `transportation.near_arterial_aadt` gate (visibility matters a lot for
-      fuel margin — reuse the existing AADT leg mechanism), a
-      `parcel.min_buildable_acres` around 0.5–1.0 (a small pad site, not a
-      big-box lot), and the by-now-standard inverted
-      `competition.min_distance_km_from_nearest` gate against
+- [x] **16th land use: Convenience Store / Gas Station.** Added
+      `convenience_store` to `data_sources/layers.yaml` — rooftop demand at a
+      tight 3 km radius (a purely local walk/short-drive crowd, tighter than
+      car_wash's 5 km or pharmacy's 6 km), the same
+      `transportation.near_arterial_aadt: 25000` gate car_wash/pharmacy use
+      (visibility matters a lot for fuel margin), `parcel.
+      min_buildable_acres: 0.75` (a small pad site + fuel canopy, smaller
+      than car_wash's 1.0-acre wash tunnel), and the by-now-standard inverted
+      `competition.min_distance_km_from_nearest: 1.0` gate against
       `shop=convenience` OR `amenity=fuel` (two separate but often-colocated
       OSM tags — OR-fallback query, same pattern car_wash/pharmacy already
-      established). Wire via `standardUseVerdict` directly (same
-      demand+site-size+AADT+competitor-distance shape as car_wash/
-      grocery_store/pharmacy) — no new gate mechanism needed. Add the usual
-      unit tests plus headless-Chromium verification (page loads clean,
-      PASS/SHORT/edge-case verdict states render correctly).
+      established). Wired via `standardUseVerdict` directly in
+      `web/explore.html` (same demand+site-size+AADT+competitor-distance
+      shape as car_wash/grocery_store/pharmacy) — no new gate mechanism
+      needed; added `convenience_store` to `ALL_USE_KEYS`, `USE_DEMAND`,
+      `BEST_FIT_USES`, the per-use state var (`csState`), the
+      `maybeRenderCSVerdict` render function, and every one of the roofs/
+      AADT/competitor/acreage fetch-dispatch and `VERDICT_REFRESH` wiring
+      points car_wash/pharmacy already have — confirmed via a full grep sweep
+      that every `car_wash`/`pharmacy` reference in `explore.html` has a
+      matching `convenience_store` counterpart. `simy validate` now reports
+      15 land uses (was 14). Verified: `python -m pytest -q` (15 passed),
+      `simy validate` (OK), `node --test tests/js/*.test.mjs` (292 passed,
+      unchanged — this land use reuses fully-tested shared logic, no new pure
+      helpers needed). In headless Chromium: both pages load with zero
+      console/page errors; confirmed `convenience_store` is present in
+      `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`/`MODEL.land_uses`; a real
+      simulated map click with `convenience_store` selected switched mode,
+      set `current`, and rendered the result panel end-to-end without
+      throwing; and driving `maybeRenderCSVerdict` directly through PASS /
+      SHORT-on-demand / SHORT-on-site-size / SHORT-on-AADT /
+      SHORT-on-competitor-too-close / no-competitor-in-range (passes) /
+      acreage-unavailable / no-rooftop-read / wrong-use-selected states all
+      produced correct verdict text and CSS classes with zero throws.
+      Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
+      live end-to-end rooftop/AADT/competitor fetch on the real site is a
+      good human spot-check, same caveat as every prior land use.
 - [ ] **19th parcel county: Denver, CO (City and County of Denver).** Add to
       `PARCEL_SOURCES` in `web/explore.html` — find Denver's GIS ArcGIS
       MapServer parcel layer via web search (this sandbox can't introspect
