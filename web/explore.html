@@ -1026,6 +1026,38 @@ const PARCEL_SOURCES=[
     // Boulder City) if the parcel is inside a city instead.
     zoning_note:"unlike TX, NV counties do zone unincorporated land — Clark County's unincorporated area includes the Las Vegas Strip itself (in unincorporated Paradise, NV) — check the county zoning ordinance, or the city's (Las Vegas, Henderson, North Las Vegas, Boulder City) if incorporated",
   },
+  {
+    name:"Colorado Public Parcels — Denver (City and County of Denver, CO)",
+    // Denver doesn't publish its own single-layer parcel FeatureServer the way
+    // most other counties here do — its open-data "Parcels" layer lives behind
+    // an ArcGIS Hub item id, not a directly documented REST URL (this sandbox's
+    // egress proxy blocks opendata-geospatialdenver.hub.arcgis.com, so that
+    // couldn't be introspected live). Used the state GIO's statewide aggregate
+    // instead: the Colorado Public Parcels FeatureServer rolls every county's
+    // assessor parcels (Denver's included) into one schema with a `countyName`
+    // field — bbox-restricted to Denver here exactly like every other county
+    // entry, the same way this file already leans on a broader keyless source
+    // (BTS/FHWA's national NHS AADT layer) rather than a per-jurisdiction one
+    // when a good statewide/national one exists.
+    urls:["https://gis.colorado.gov/public/rest/services/Address_and_Parcel/Colorado_Public_Parcels/FeatureServer/0"],
+    bbox:[-105.11,39.61,-104.60,39.92],
+    // Confirmed fields (via multiple independent search-indexed sources — this
+    // sandbox blocks direct ArcGIS REST introspection like every prior county
+    // here): parcel_id, situsAdd (address), owner, landAcres, landUseDsc
+    // (land-use description), apprValTot (total appraised value) — added to
+    // the shared pick() candidate lists below since their camelCase spelling
+    // (no underscores) doesn't case-insensitively match any existing key.
+    record:()=>"https://property.spatialest.com/co/denver/",
+    source_label:"Colorado Public Parcels (statewide, Denver-restricted)",
+    county_state:"City and County of Denver, CO",
+    // Denver is one of Colorado's few consolidated city-county governments (no
+    // separate unincorporated area at all — the city and county are the same
+    // government and the same boundary), unlike every other CO-adjacent-style
+    // county here where an incorporated-vs-unincorporated split exists — so its
+    // note can't reuse another state's "check the county, or the city if
+    // incorporated" boilerplate verbatim.
+    zoning_note:"Denver is a consolidated city-county — there's no separate unincorporated area, so Denver's own zoning code (not a distinct county authority) applies everywhere in the boundary",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -2886,12 +2918,12 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE"]);
-  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);
   let rows="";
   const row=(k,v,id)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b${id?` id="${id}"`:""}>${esc(v)}</b></div>`;};
   row("Parcel ID",id);

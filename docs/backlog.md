@@ -2744,18 +2744,54 @@ Ground rules for each run:
       Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
       live end-to-end rooftop/AADT/competitor fetch on the real site is a
       good human spot-check, same caveat as every prior land use.
-- [ ] **19th parcel county: Denver, CO (City and County of Denver).** Add to
-      `PARCEL_SOURCES` in `web/explore.html` — find Denver's GIS ArcGIS
-      MapServer parcel layer via web search (this sandbox can't introspect
-      ArcGIS hosts directly, same constraint every prior county hit).
-      Colorado, like AZ/CA/WA, zones unincorporated land — but Denver is a
-      consolidated city-county, so its `zoning_note` should say that
-      explicitly rather than reusing another state's boilerplate note
-      verbatim. Leave unconfirmed attribute fields unmapped rather than
-      guessing a name that isn't there, same graceful partial-coverage
-      precedent every prior county (Harris, Bexar, King, Fulton, ...) already
-      set. Verify `inBbox` routes a downtown-Denver point to the new source
-      and still finds no source for an out-of-coverage point.
+- [x] **19th parcel county: Denver, CO (City and County of Denver).** Added a
+      19th `PARCEL_SOURCES` entry to `web/explore.html`. Denver doesn't
+      publish its own single-layer parcel FeatureServer with a directly
+      documented REST URL the way most other counties here do — its
+      open-data "Parcels" layer lives behind an ArcGIS Hub item id at
+      `opendata-geospatialdenver.hub.arcgis.com`, which this sandbox's egress
+      proxy blocks outright (couldn't even attempt introspection, unlike the
+      403-on-introspection experience every prior county hit). Used Colorado's
+      state GIO statewide aggregate instead — the "Colorado Public Parcels"
+      FeatureServer (`gis.colorado.gov/public/rest/services/Address_and_Parcel/
+      Colorado_Public_Parcels/FeatureServer/0`) rolls every county's assessor
+      parcels, Denver's included, into one schema with a `countyName` field —
+      bbox-restricted to Denver here exactly like every other county entry,
+      the same "lean on a good broader keyless source when one exists" call
+      this file already made for the national NHS AADT layer. Confirmed (via
+      multiple independent search-indexed sources, same sourcing constraint
+      every prior county faced) field names: `parcel_id`, `situsAdd`, `owner`,
+      `landAcres`, `landUseDsc`, `apprValTot` — added the four camelCase ones
+      that don't case-insensitively collide with any existing `pick()`
+      candidate (`owner` already matched the existing `"OWNER"` key
+      case-insensitively) to the shared id/situs/land/acres/value candidate
+      lists in `showParcel`. Denver is one of Colorado's few consolidated
+      city-county governments — no separate unincorporated area at all — so
+      its `zoning_note` says that explicitly rather than reusing another
+      state's "check the county, or the city if incorporated" boilerplate.
+      No documented per-parcel deep-link URL scheme for Denver's
+      `property.spatialest.com/co/denver` search portal either, so — same
+      cautious call as Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/
+      Allegheny/Fulton/Salt Lake/Franklin/Clark — `record()` links to the
+      portal's own search page. Verified: `python -m pytest -q` (15 passed),
+      `simy validate` (OK, 32 sources/16 layers/15 land uses, unchanged —
+      this item touches no `data_sources/*.yaml`), `node --test tests/js/*.test.mjs`
+      (292 passed, unchanged — no new pure helpers needed). In headless
+      Chromium: both pages load with zero console/page errors; `inBbox`
+      correctly routes both downtown Denver and DIA (Denver International
+      Airport, far northeast of downtown but still inside the consolidated
+      city-county) to the new source via the real `PARCEL_SOURCES.find(...)`
+      routing `runParcel` uses, and still finds no source for an
+      out-of-coverage point; and driving `showParcel` directly (after a real
+      simulated map click built the result-panel shell `#parcelVal` lives in)
+      with a mocked Colorado-Public-Parcels-shaped attribute payload rendered
+      the parcel ID, owner, address, land use, correctly-formatted acreage
+      ("2.50 ac") and appraised value ("$450,000"), the new Denver zoning
+      note, and the search-page record link — all with zero throws. Live
+      endpoint reachability and exact field spelling on the real
+      `gis.colorado.gov` service couldn't be confirmed from this sandbox — a
+      live spot-check is a good human follow-up, same caveat as every prior
+      county.
 - [ ] **Backup/restore all local app state as a JSON file.** The app now
       persists a growing pile of `localStorage` state per browser (Compare
       pins, recently-viewed sites, dark-mode choice, unit-toggle preference)
