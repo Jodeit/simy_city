@@ -280,6 +280,7 @@
     <span class="hint"><a href="#" id="compareOpen">⚖️ Compare (<span id="compareCount">0</span>)</a> ·
       <a href="#" id="byoOpen">＋ your data</a> · <a href="index.html">about</a></span>
     <button class="themebtn" id="helpOpen" type="button" title="Keyboard shortcuts (?)">❓</button>
+    <button class="themebtn" id="dataOpen" type="button" title="Backup or restore your data">💾</button>
     <button class="themebtn" id="unitToggle" type="button" title="Change area units">ac</button>
     <button class="themebtn" id="themeToggle" type="button" aria-pressed="false" title="Toggle dark mode">🌙</button>
   </header>
@@ -395,11 +396,30 @@
     <ul class="kbdList">
       <li><kbd>Tab</kbd> move between path cards, mode/use toggles, and buttons</li>
       <li><kbd>Enter</kbd> / <kbd>Space</kbd> activate the focused path card or toggle</li>
-      <li><kbd>Esc</kbd> close the open dialog (this one, Compare, or your data)</li>
+      <li><kbd>Esc</kbd> close the open dialog (this one, Compare, your data, or backup/restore)</li>
       <li><kbd>?</kbd> open this help</li>
     </ul>
     <div class="actions">
       <button class="btng" id="helpCancel">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="dataModal">
+  <div class="box" role="dialog" aria-modal="true" aria-labelledby="dataModalTitle" tabindex="-1">
+    <h3 id="dataModalTitle">Backup &amp; restore your data</h3>
+    <p>Export everything this browser has saved for SIMyCity — Compare pins, recently-viewed sites,
+      your data pins, saved searches, dark-mode choice, and unit preference — as one JSON file. Import
+      restores it later, e.g. after clearing site data or on a new browser.</p>
+    <div class="actions" style="justify-content:flex-start">
+      <button class="btng" id="dataExport">⬇️ Export data</button>
+      <label class="btng" for="dataImportFile" style="cursor:pointer">⬆️ Import data</label>
+      <input type="file" id="dataImportFile" accept="application/json" style="display:none"/>
+    </div>
+    <p class="ok" id="dataMsg" role="status" aria-live="polite" style="min-height:1.2em"></p>
+    <div class="privacy">🔒 Stays in your browser. Export downloads a file to your device; import only reads a file you pick — nothing is uploaded.</div>
+    <div class="actions">
+      <button class="btng" id="dataCancel">Close</button>
     </div>
   </div>
 </div>
@@ -3600,6 +3620,46 @@ function wireHelp(){
   });
 }
 
+// Backup/restore all known simy_* localStorage state as one JSON file —
+// same reuse of openModal()/closeModal() as every other modal here, and the
+// same client-side-only Blob+anchor pattern the CSV/PNG exports already use
+// for export. Import reads a picked file (never uploaded anywhere), and
+// only writes to localStorage once parseAppStateImport (web/logic.js) has
+// validated its shape; on success this reloads the page so every already-
+// initialized subsystem (theme, unit, pins, recent sites, saved searches,
+// bring-your-own-data) picks up the restored values through its normal
+// startup path instead of duplicating each one's live-update logic here.
+function wireData(){
+  const modal=document.getElementById("dataModal"), msg=document.getElementById("dataMsg"), fileInput=document.getElementById("dataImportFile");
+  document.getElementById("dataOpen").onclick=e=>{e.preventDefault();msg.textContent="";openModal(modal);};
+  document.getElementById("dataCancel").onclick=()=>closeModal(modal);
+  modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
+  document.getElementById("dataExport").onclick=()=>{
+    const payload=buildAppStateExport(localStorage);
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;a.download="simycity-data.json";a.click();
+    URL.revokeObjectURL(url);
+    msg.textContent="Exported.";
+  };
+  fileInput.onchange=()=>{
+    const f=fileInput.files&&fileInput.files[0];
+    fileInput.value="";
+    if(!f)return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const data=parseAppStateImport(String(reader.result||""));
+      if(!data){ msg.textContent="That file doesn't look like a SIMyCity export — nothing changed."; return; }
+      Object.keys(data).forEach(k=>{ try{localStorage.setItem(k,data[k]);}catch(e){} });
+      msg.textContent="Restored — reloading…";
+      setTimeout(()=>location.reload(),600);
+    };
+    reader.onerror=()=>{ msg.textContent="Couldn't read that file — nothing changed."; };
+    reader.readAsText(f);
+  };
+}
+
 // Re-renders every currently-visible acreage display after an area-unit
 // toggle — no network calls, since every leg it reads (`dcState.acres`,
 // `lastParcelSummary.acres`, pinned Compare rows, the last "Best fit here"
@@ -3666,7 +3726,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); wireData(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses

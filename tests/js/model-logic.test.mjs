@@ -25,6 +25,7 @@ const {
   parseAadtFeatures, maxAadtWithinRadius,
   standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
   areaUnitLabel, convertArea, formatArea,
+  APP_STATE_KEYS, buildAppStateExport, parseAppStateImport,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -2103,4 +2104,69 @@ test("formatArea: returns null for null/non-finite acres (caller decides the fal
 
 test("formatArea: defaults to acres when no unit is given", () => {
   assert.equal(formatArea(1), "1.00 ac");
+});
+
+// ---- backup/restore all local app state (buildAppStateExport/parseAppStateImport) ----
+
+function mockStorage(map) {
+  return { getItem: (k) => (Object.prototype.hasOwnProperty.call(map, k) ? map[k] : null) };
+}
+
+test("buildAppStateExport: includes every present simy_* key and stamps app/version/exportedAt", () => {
+  const storage = mockStorage({ simy_theme: "dark", simy_unit: "ha", simy_pins_v1: "[]" });
+  const out = buildAppStateExport(storage, "2026-08-28T00:00:00.000Z");
+  assert.equal(out.app, "simycity");
+  assert.equal(out.version, 1);
+  assert.equal(out.exportedAt, "2026-08-28T00:00:00.000Z");
+  assert.deepEqual(out.data, { simy_theme: "dark", simy_unit: "ha", simy_pins_v1: "[]" });
+});
+
+test("buildAppStateExport: omits keys that aren't present, doesn't invent them", () => {
+  const out = buildAppStateExport(mockStorage({ simy_theme: "light" }));
+  assert.deepEqual(Object.keys(out.data), ["simy_theme"]);
+});
+
+test("buildAppStateExport: defaults exportedAt to now when not given", () => {
+  const out = buildAppStateExport(mockStorage({}));
+  assert.ok(!Number.isNaN(Date.parse(out.exportedAt)));
+});
+
+test("buildAppStateExport: tolerates a missing/malformed storage argument", () => {
+  assert.deepEqual(buildAppStateExport(null).data, {});
+  assert.deepEqual(buildAppStateExport(undefined).data, {});
+  assert.deepEqual(buildAppStateExport({}).data, {});
+});
+
+test("buildAppStateExport/parseAppStateImport: round-trips every known key", () => {
+  const original = {};
+  APP_STATE_KEYS.forEach((k, i) => { original[k] = `v${i}`; });
+  const exported = buildAppStateExport(mockStorage(original));
+  const imported = parseAppStateImport(JSON.stringify(exported));
+  assert.deepEqual(imported, original);
+});
+
+test("parseAppStateImport: returns null for unparseable JSON", () => {
+  assert.equal(parseAppStateImport("not json"), null);
+  assert.equal(parseAppStateImport(""), null);
+});
+
+test("parseAppStateImport: returns null when the app/data shape doesn't match", () => {
+  assert.equal(parseAppStateImport(JSON.stringify({ app: "someone_else", data: {} })), null);
+  assert.equal(parseAppStateImport(JSON.stringify({ app: "simycity" })), null); // missing data
+  assert.equal(parseAppStateImport(JSON.stringify({ app: "simycity", data: null })), null);
+  assert.equal(parseAppStateImport(JSON.stringify({ app: "simycity", data: "nope" })), null);
+  assert.equal(parseAppStateImport("null"), null);
+  assert.equal(parseAppStateImport("42"), null);
+});
+
+test("parseAppStateImport: drops unknown keys and non-string values rather than importing them", () => {
+  const imported = parseAppStateImport(JSON.stringify({
+    app: "simycity",
+    data: { simy_theme: "dark", not_a_real_key: "x", simy_unit: 123, simy_pins_v1: "[]" },
+  }));
+  assert.deepEqual(imported, { simy_theme: "dark", simy_pins_v1: "[]" });
+});
+
+test("parseAppStateImport: an all-unknown/all-invalid data object parses to an empty (not null) result", () => {
+  assert.deepEqual(parseAppStateImport(JSON.stringify({ app: "simycity", data: { junk: "x" } })), {});
 });

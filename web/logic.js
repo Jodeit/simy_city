@@ -590,6 +590,37 @@ function toCsvField(v){
 function toCsvRow(fields){ return (fields||[]).map(toCsvField).join(","); }
 function toCsv(rows){ return (rows||[]).map(toCsvRow).join("\r\n"); }
 
+/* ---- backup/restore all local app state as one JSON file ----
+   Every known simy_* localStorage key (Compare pins, recently-viewed sites,
+   bring-your-own-data pins, saved reverse searches, dark-mode choice, unit
+   preference) so a visitor can move it to a new browser/device or recover
+   it after clearing site data. `buildAppStateExport` takes a `storage`-like
+   object (anything with `.getItem`, so the real `localStorage` and a plain
+   test mock both work) rather than reading `localStorage` directly, keeping
+   this pure/testable. `parseAppStateImport` is the untrusted-input half —
+   same defensive stance the URL-hash/pasted-coordinate parsers already
+   take: any parse failure or shape mismatch returns null rather than a
+   partial/best-effort object, so a malformed or hand-edited file can't
+   corrupt app state; unknown keys in the file are silently dropped rather
+   than imported. */
+const APP_STATE_KEYS=["simy_theme","simy_unit","simy_saved_searches_v1","simy_byo_v1","simy_recent_v1","simy_pins_v1"];
+function buildAppStateExport(storage,nowIso){
+  const data={};
+  APP_STATE_KEYS.forEach(k=>{
+    const v=storage&&typeof storage.getItem==="function"?storage.getItem(k):undefined;
+    if(typeof v==="string")data[k]=v;
+  });
+  return {app:"simycity",version:1,exportedAt:nowIso||new Date().toISOString(),data};
+}
+function parseAppStateImport(text){
+  let obj;
+  try{ obj=JSON.parse(text); }catch(e){ return null; }
+  if(!obj||typeof obj!=="object"||obj.app!=="simycity"||typeof obj.data!=="object"||obj.data===null) return null;
+  const data={};
+  APP_STATE_KEYS.forEach(k=>{ if(typeof obj.data[k]==="string") data[k]=obj.data[k]; });
+  return data;
+}
+
 /* ---- recently-viewed sites (session history, local only) ----
    Distinct from the explicit "📌 Pin to compare" list: an automatic MRU
    (most-recently-used) trail of every point analyze() resolved, kept so a
@@ -1053,5 +1084,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }

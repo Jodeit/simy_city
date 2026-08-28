@@ -2792,20 +2792,43 @@ Ground rules for each run:
       `gis.colorado.gov` service couldn't be confirmed from this sandbox — a
       live spot-check is a good human follow-up, same caveat as every prior
       county.
-- [ ] **Backup/restore all local app state as a JSON file.** The app now
-      persists a growing pile of `localStorage` state per browser (Compare
-      pins, recently-viewed sites, dark-mode choice, unit-toggle preference)
-      with no way to move it to a new browser/device or recover it after
-      clearing site data. Add a "⬇️ Export data" / "⬆️ Import data" pair
-      (e.g. in a small settings/about area) that serializes the known
-      `simy_*` localStorage keys into one downloadable JSON file and, on
-      import, validates its shape before writing anything back — same
-      client-side-only, no-network pattern as the existing CSV/PNG exports.
-      Needs care on validation so a malformed or hand-edited file can't
-      corrupt app state: fall back silently to the current state on any
-      parse/shape mismatch, same defensive pattern the rest of the app
-      already applies to untrusted external data (URL hashes, pasted
-      coordinates, mocked fetch responses in tests).
+- [x] **Backup/restore all local app state as a JSON file.** Added a "💾"
+      header button opening a new `dataModal` (same `openModal()`/
+      `closeModal()` focus-trap pair every other modal already uses) with
+      "⬇️ Export data" / "⬆️ Import data" controls. Added pure
+      `buildAppStateExport(storage, nowIso)` / `parseAppStateImport(text)`
+      to `web/logic.js` — `buildAppStateExport` reads every known
+      `simy_*` key (`APP_STATE_KEYS`: theme, unit, saved searches,
+      bring-your-own-data, recently-viewed, Compare pins) via a
+      `storage.getItem` duck-typed argument (so the real `localStorage`
+      and a plain test mock both work) into one `{app,version,exportedAt,
+      data}` payload; `parseAppStateImport` is the untrusted-input half —
+      same defensive stance as the URL-hash/pasted-coordinate parsers —
+      returning `null` outright on unparseable JSON or an `app`/`data`
+      shape mismatch, and silently dropping any unknown key or non-string
+      value from `data` rather than importing it, so a malformed or
+      hand-edited file can't corrupt app state. Export downloads
+      `simycity-data.json` via the same client-side-only Blob+anchor
+      pattern as the existing CSV/PNG exports (no network call). Import
+      reads a picked file via `FileReader` (never uploaded), validates it,
+      writes the recovered keys to `localStorage`, then reloads the page
+      so every already-initialized subsystem (theme, unit, pins, recent
+      sites, saved searches, bring-your-own-data) picks the restored
+      values back up through its normal startup path instead of
+      duplicating each one's live-update logic in the import handler.
+      Added 10 new unit tests (every-key round trip, missing/malformed
+      storage, unparseable JSON, wrong `app`/missing or non-object `data`,
+      unknown-key and non-string-value stripping, all-invalid-data →
+      empty-not-null). Verified in headless Chromium: both pages load with
+      zero console/page errors; clicking the real "💾" button opens the
+      modal with focus moved inside; a real button click through the
+      export path (Blob+anchor) throws nothing and shows "Exported."; Esc
+      closes the modal and returns focus to the opener button; feeding a
+      real `File` (via `DataTransfer`) into the actual `<input
+      type=file>` change handler round-trips a valid export end-to-end
+      (shows "Restored — reloading…") and correctly rejects a malformed
+      file with a "doesn't look like a SIMyCity export" message instead of
+      touching `localStorage`.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
