@@ -2830,6 +2830,65 @@ Ground rules for each run:
       file with a "doesn't look like a SIMyCity export" message instead of
       touching `localStorage`.
 
+## Now (high value) — newly added (6)
+- [ ] **16th land use: Multifamily / Apartment Complex (renter-housing
+      developer lens).** All 15 existing land uses cover retail/service
+      formats (fast_casual, grocery_store, pharmacy, …) or *for-sale*
+      single-family housing (`residential_subdivision`, 3 units/ac). Add
+      `multifamily` to `data_sources/layers.yaml` as a distinct rental-housing
+      lens: a much higher assumed density than `residential_subdivision`
+      (e.g. 25-40 units/ac for a garden-style/mid-rise complex — a real,
+      documented assumption the same way `residential_subdivision`
+      documents its 3 units/ac), `requires.parcel.min_buildable_acres`
+      sized for that density (a few acres, not the 15 a warehouse_club
+      needs), and reuse of the same school-capacity-proxy chain
+      `residential_subdivision` already established (units → est. residents
+      → school-age kids → nearby-school-seat-capacity via Overpass) rather
+      than inventing a new demand read — the two verdicts should read as
+      siblings that differ mainly in density assumption and units-per-acre,
+      not in mechanism. Wire a real `maybeRenderMFVerdict` in
+      `web/explore.html` (same wait-for-legs pattern as
+      `maybeRenderResVerdict`), add it to `ALL_USE_KEYS`/`USE_DEMAND`/
+      `BEST_FIT_USES`, and add unit tests for any new pure math (unit count
+      from acreage, resident/student projection at the new density). Verify
+      per the ground rules above; `simy validate` should report 16 land uses.
+- [ ] **20th parcel county: Suffolk County, MA (Boston).** Every parcel
+      county added so far is South, Midwest, Mountain West, or West Coast —
+      New England has zero coverage. Extend `PARCEL_SOURCES` in
+      `web/explore.html` with Boston/Suffolk County's public GIS parcel
+      layer (search for the live ArcGIS MapServer/FeatureServer endpoint,
+      same research approach every prior county entry used, since this
+      sandbox can't introspect ArcGIS REST hosts directly — Boston's own
+      open-data portal or MassGIS's statewide parcel layer are both worth
+      checking, same "lean on a good statewide aggregate when the county
+      doesn't publish its own" call the Colorado/Denver entry already made).
+      Confirm real field names from search-indexed docs before adding them
+      to the shared `pick()` candidate lists rather than guessing; if owner/
+      address/value aren't confirmed on the public layer, leave them
+      unmapped (same graceful partial-coverage precedent as King/Cook/Salt
+      Lake/Franklin/Clark/Denver). Massachusetts municipalities zone their
+      own land (unlike the TX counties already covered), so this needs its
+      own `zoning_note`. Add a record-link URL only if a stable per-parcel
+      deep-link scheme is confirmed; otherwise link to the city/county's own
+      parcel-search page. `simy validate`'s source count should go from 32
+      to 33.
+- [ ] **Undo for removing a pin from Compare.** The Compare modal's
+      per-row "✕" button (`removePin(i)` in `web/explore.html`) deletes a
+      pinned parcel from `pins`/`localStorage` immediately with no
+      confirmation or recovery — the same gap "clear all recently-viewed"
+      had before its undo affordance was added. Mirror that established
+      pattern exactly: snapshot the removed pin (and its index) before
+      splicing it out, show an inline "Removed — Undo" affordance in place
+      of that row for a few seconds (reuse the existing `undoClear`-style
+      windowed-expiry math in `web/logic.js`, generalized or duplicated for
+      a single-item restore rather than a whole-list restore), and re-insert
+      the pin at its original index on Undo so pin order isn't scrambled by
+      a remove-then-undo round trip. Add unit tests for the restore-within-
+      window / past-the-window / boundary cases, same coverage
+      `clearRecentSites`/`undoClear` already have. Verify both pages still
+      load clean and that a real remove→undo click round trip in headless
+      Chromium restores the exact pin without throwing.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
