@@ -490,6 +490,29 @@ test("schoolLoadDemandRead: zero induced kids has no meaningful ratio (null, not
   assert.equal(v.pass, true); // capacity (>=0) always covers zero induced kids
 });
 
+test("schoolLoadDemandRead: multifamily's own density constants (30 units/ac, 0.3 students/home) project a much higher unit count and a different kid count than residential_subdivision's on the same acreage — same mechanism, different density assumption", () => {
+  // 2 ac * 30 units/ac = 60 units; 60 * 0.3 students/home = 18 kids (vs.
+  // residential_subdivision's 3 units/ac -> 6 units -> 3 kids on the same 2 ac).
+  const mf = schoolLoadDemandRead(2, 1, 30, 0.3, 750);
+  assert.equal(mf.units, 60);
+  assert.equal(mf.kids, 18);
+  assert.equal(mf.capacity, 750);
+  assert.equal(mf.pass, true);
+  const res = schoolLoadDemandRead(2, 1, 3, 0.5, 750);
+  assert.equal(res.units, 6);
+  assert.equal(res.kids, 3);
+  assert.notEqual(mf.units, res.units);
+  assert.notEqual(mf.kids, res.kids);
+});
+
+test("schoolLoadDemandRead: multifamily density can still fail the capacity gate on a large enough parcel with no nearby schools", () => {
+  // 100 ac * 30 units/ac = 3000 units; 3000 * 0.3 = 900 kids vs. 0 schools -> 0 capacity
+  const v = schoolLoadDemandRead(100, 0, 30, 0.3, 750);
+  assert.equal(v.units, 3000);
+  assert.equal(v.kids, 900);
+  assert.equal(v.pass, false);
+});
+
 test("rankLandUseVerdicts: passing uses sort before short uses", () => {
   const ranked = rankLandUseVerdicts([
     { id: "a", pass: false, ratio: 0.9 },
@@ -611,6 +634,14 @@ test("real model.json: evaluate() runs for every land use without throwing", () 
       assert.ok(["favorable", "opposed", "mixed"].includes(v.leaning), `${key}/${v.stakeholder} bad leaning`);
     }
   }
+});
+
+test("real model.json: multifamily is registered as residential_subdivision's rental-housing sibling", () => {
+  const model = require(path.join(__dirname, "..", "..", "web", "model.json"));
+  const mf = model.land_uses.multifamily;
+  assert.ok(mf, "multifamily land use missing from compiled model.json");
+  assert.ok(mf.requires.parcel.min_buildable_acres < model.land_uses.residential_subdivision.requires.parcel.min_buildable_acres);
+  assert.ok(mf.demand_signals.amenities.prefer_school_within_km != null);
 });
 
 test("real model.json: findStandoffs() returns well-formed cycles", () => {

@@ -588,6 +588,62 @@ land_uses:
       site — a gas station with an attached convenience store — but not
       always, so both are counted rather than picking one).
 
+  multifamily:            # garden-style/mid-rise apartment complex (renter-housing lens)
+    label: Multifamily / Apartment Complex
+    # residential_subdivision's rental-housing sibling: every land use above is
+    # a retail/service format, and residential_subdivision itself only models
+    # *for-sale* single-family housing (3 units/ac). This reuses the exact same
+    # requires/demand_signals/induces shape and the exact same units -> est.
+    # residents -> school-age-kids -> nearby-school-seat-capacity mechanism
+    # (`schoolLoadDemandRead` in web/logic.js, shared verbatim — no new demand
+    # read invented), just at a much higher density: 25-40 units/ac for a
+    # garden-style/mid-rise complex (30 used as the representative figure
+    # below), vs. 3 units/ac for a for-sale subdivision on the same acreage.
+    requires:
+      water:        { min_MGD_per_1000_homes: 0.3 }
+      power:        { distribution_capacity: true }
+      transportation: { road_access: true }
+      # A few acres, not the 15 a warehouse_club needs and well under
+      # residential_subdivision's 5 — at 30 units/ac even a 2-acre lot houses
+      # ~60 units, plenty to make a garden-style complex pencil out.
+      parcel:       { min_buildable_acres: 2, prefer_flood_zone: none }
+      entitlement:  { zoning_allows_multifamily: true }
+    demand_signals:
+      absorption: { max_years_of_supply: 2.0, note: "hot rental market: units lease up fast" }
+      jobs:       { layer: demand, signal: nearby_job_growth }
+      # Same prefer_school_within_km numeric gate residential_subdivision
+      # documents — reverseSearchSignals (web/logic.js) reads it the same way
+      # for this use too, no new JS wiring needed since that function is
+      # already driven entirely off `requires`/`demand_signals` shape, not a
+      # hardcoded use id.
+      amenities:  { signal: "retail / schools / services already present nearby", prefer_school_within_km: 3 }
+      price:      { signal: "achievable rent > land + infra + construction cost" }
+    induces:
+      # Apartment households run fewer school-age kids per unit than for-sale
+      # single-family homes (a well-documented planning pattern — smaller
+      # average household size, more single/couple renters) — 0.3 students/home
+      # here vs. residential_subdivision's 0.5, the one real density-adjacent
+      # constant this use tunes differently rather than just scaling acreage.
+      education: { trigger_per_homes: 1000, note: "~0.3 students/home (lower than for-sale single-family); flags school headroom" }
+      safety:    { trigger_per_homes: 5000, note: "may justify new fire/EMS station" }
+      health:    { trigger_per_homes: 20000, note: "supports an urgent-care / clinic" }
+      transportation: { note: "trip generation may require turn-lane/signal upgrades" }
+    impacts:
+      habitat: medium         # smaller footprint per unit than greenfield single-family sprawl at the same headcount
+      land_cover: medium
+      carbon: medium           # denser building form + shorter per-capita driving than single-family sprawl
+      water_stress: medium
+      traffic: medium
+    notes: >
+      The renter-housing counterpart to residential_subdivision's for-sale lens —
+      same mechanism, different density assumption (25-40 units/ac, 30 used here,
+      vs. 3 units/ac) and a lower students/home rate (0.3 vs. 0.5, apartment
+      households skew smaller). Wired to web/explore.html's `maybeRenderMFVerdict`
+      via the same wait-for-both-legs (parcel acreage + nearby-school count)
+      pattern `maybeRenderResVerdict` already established, and reuses
+      `schoolLoadDemandRead` in web/logic.js verbatim with its own density
+      constants rather than a new demand-read function.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
@@ -612,6 +668,14 @@ enabling_edges:
   - { from: broadband_buildout, to: residential_subdivision, via: "service availability unblocks development", breaker_cost: medium }
   - { from: broadband_buildout, to: data_center, via: "redundant fiber is a hard data-center gate", breaker_cost: medium }
   - { from: residential_subdivision, to: broadband_buildout, via: "rooftop density makes ISP buildout profitable", breaker_cost: medium }
+  - { from: multifamily, to: warehouse_club, via: "rooftops / household count in trade area", breaker_cost: high }
+  - { from: multifamily, to: fast_casual,    via: "resident + daytime demand", breaker_cost: high }
+  - { from: warehouse_club, to: multifamily, via: "retail amenity raises unit absorption & achievable rent", breaker_cost: medium }
+  - { from: fast_casual,    to: multifamily, via: "amenity raises unit absorption", breaker_cost: low }
+  - { from: employment_center, to: multifamily, via: "jobs create rental-housing demand (absorption)", breaker_cost: high }
+  - { from: multifamily, to: employment_center, via: "labor pool attracts employers", breaker_cost: high }
+  - { from: broadband_buildout, to: multifamily, via: "service availability unblocks development", breaker_cost: medium }
+  - { from: multifamily, to: broadband_buildout, via: "rooftop density makes ISP buildout profitable", breaker_cost: medium }
 
 # Lightweight "actor" uses referenced by enabling_edges that aren't full
 # drop-on-a-parcel developments but matter for standoff reasoning. Kept minimal

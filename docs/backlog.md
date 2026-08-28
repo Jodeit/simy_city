@@ -2831,27 +2831,70 @@ Ground rules for each run:
       touching `localStorage`.
 
 ## Now (high value) — newly added (6)
-- [ ] **16th land use: Multifamily / Apartment Complex (renter-housing
-      developer lens).** All 15 existing land uses cover retail/service
-      formats (fast_casual, grocery_store, pharmacy, …) or *for-sale*
-      single-family housing (`residential_subdivision`, 3 units/ac). Add
-      `multifamily` to `data_sources/layers.yaml` as a distinct rental-housing
-      lens: a much higher assumed density than `residential_subdivision`
-      (e.g. 25-40 units/ac for a garden-style/mid-rise complex — a real,
-      documented assumption the same way `residential_subdivision`
-      documents its 3 units/ac), `requires.parcel.min_buildable_acres`
-      sized for that density (a few acres, not the 15 a warehouse_club
-      needs), and reuse of the same school-capacity-proxy chain
-      `residential_subdivision` already established (units → est. residents
-      → school-age kids → nearby-school-seat-capacity via Overpass) rather
-      than inventing a new demand read — the two verdicts should read as
-      siblings that differ mainly in density assumption and units-per-acre,
-      not in mechanism. Wire a real `maybeRenderMFVerdict` in
-      `web/explore.html` (same wait-for-legs pattern as
-      `maybeRenderResVerdict`), add it to `ALL_USE_KEYS`/`USE_DEMAND`/
-      `BEST_FIT_USES`, and add unit tests for any new pure math (unit count
-      from acreage, resident/student projection at the new density). Verify
-      per the ground rules above; `simy validate` should report 16 land uses.
+- [x] **16th land use: Multifamily / Apartment Complex (renter-housing
+      developer lens).** Added `multifamily` to `data_sources/layers.yaml` as
+      residential_subdivision's rental-housing sibling — same
+      requires/demand_signals/induces shape (water/power/road-access/
+      entitlement requirements, `absorption`/`jobs`/`amenities`/`price` demand
+      signals including the same `prefer_school_within_km: 3` numeric gate),
+      but at a much higher assumed density (30 units/ac, documented as a
+      25-40 units/ac garden-style/mid-rise range, vs. residential_subdivision's
+      3 units/ac) and `requires.parcel.min_buildable_acres: 2` (a few acres,
+      not the 15 a warehouse_club needs or even residential_subdivision's 5).
+      Also tuned `induces.education` to 0.3 students/home (vs.
+      residential_subdivision's 0.5) — apartment households run smaller than
+      for-sale single-family, a real planning pattern documented inline, not
+      just a density rescale. Reused the exact same
+      units→residents→school-age-kids→nearby-school-seat-capacity mechanism
+      verbatim: `schoolLoadDemandRead` (`web/logic.js`) already took its
+      unitsPerAcre/studentsPerHome/seatsPerSchool as parameters rather than
+      reading residential_subdivision's constants directly, so no changes to
+      that pure function were needed at all — just a new
+      `maybeRenderMFVerdict` in `web/explore.html` (byte-for-byte the same
+      wait-for-both-legs shape as `maybeRenderResVerdict`, new
+      `MF_UNITS_PER_ACRE`/`MF_STUDENTS_PER_HOME` constants and `mfState`), a
+      new `USE_DEMAND.multifamily` entry (same schools `compQ` as
+      residential_subdivision, at a tighter 3 km radius — a garden-style/
+      mid-rise complex draws from a more compact catchment than a whole
+      subdivision), and wiring into `ALL_USE_KEYS`, `BEST_FIT_USES`
+      (`demandKind:"schoolLoad"`, keyed to the right density constants by
+      `u.key` in `bestFitLeg`), `VERDICT_REFRESH`, and every per-use branch in
+      `analyze()`/`runDemand()`/`showParcel()` residential_subdivision already
+      had. `reverseSearchSignals` and the "What could go here?" fit list
+      needed zero code changes — both are already fully data-driven off a
+      land use's `requires`/`demand_signals`/`min_buildable_acres` shape, not
+      a hardcoded use id, so multifamily's reverse-search "closer to an
+      existing school is better" signal and its physical-fit-list row came
+      for free from the layers.yaml entry alone. Also mirrored
+      residential_subdivision's 4 `enabling_edges` pairs (warehouse_club/
+      fast_casual/employment_center/broadband_buildout) for multifamily.
+      Added 3 new unit tests: `schoolLoadDemandRead` driven with
+      multifamily's own density constants showing a materially different
+      unit/kid count than residential_subdivision's on identical acreage, a
+      large-parcel/no-nearby-schools capacity-fail case at the new density,
+      and a real-`model.json` check that multifamily is registered with a
+      smaller `min_buildable_acres` than residential_subdivision and carries
+      the `prefer_school_within_km` reverse-search signal. Verified: `python
+      -m pytest -q` (15 passed), `simy validate` (OK: 32 sources, 16 layers,
+      **16 land uses** validated), `node --test tests/js/*.test.mjs` (304
+      passed, 5 new), and headless Chromium: both pages load with zero
+      console/page errors; selecting `multifamily` and simulating a real map
+      click renders the full result panel end-to-end without throwing;
+      driving `maybeRenderMFVerdict` directly through PASS (5 ac → 150 units
+      → 45 kids vs. a 750-seat school) / SHORT (100 ac → 3,000 units → 900
+      kids vs. 0 schools) / capacity-unavailable / no-acreage /
+      wrong-use-selected states all produced correct verdict text and CSS
+      classes; the reverse-search "🔍 Find candidate sites" button is
+      correctly enabled (not disabled, as data_center/residential_subdivision
+      briefly were before their own signals landed) for multifamily; the
+      explore-mode "What could go here?" fit list includes a Multifamily row;
+      and driving `bestFitLeg` directly with a mocked `overpassRaw` for the
+      multifamily `BEST_FIT_USES` entry produced the exact expected
+      units/kids/capacity numbers (150/45/750) at 5 acres, confirming "Best
+      fit here" scores multifamily correctly too. Outbound network to
+      Overpass/ArcGIS is blocked from this sandbox, so a live end-to-end
+      rooftop/school fetch on the real site is a good human spot-check, same
+      as every prior real-verdict land use.
 - [ ] **20th parcel county: Suffolk County, MA (Boston).** Every parcel
       county added so far is South, Midwest, Mountain West, or West Coast —
       New England has zero coverage. Extend `PARCEL_SOURCES` in

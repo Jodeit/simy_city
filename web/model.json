@@ -978,6 +978,69 @@
         "traffic": "low"
       },
       "notes": "A rooftop-headcount demand read like car_wash, at a slightly tighter radius (3 km) \u2014 a convenience store/gas station draws a purely local walk/short-drive crowd, tighter than car_wash's 5 km or pharmacy's 6 km. min_households_drive_time (6000), min_buildable_acres (0.75, a small pad site + fuel canopy, smaller than car_wash's 1.0-acre wash tunnel + stacking lanes), near_arterial_aadt (25000, same threshold as car_wash/ pharmacy), and min_distance_km_from_nearest (1.0, same as pharmacy) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+AADT+competitor-distance shape car_wash/pharmacy/grocery_store already established), no new gate-shape work needed. OSM tags this with two live tags \u2014 `shop=convenience` and `amenity=fuel` \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy already documented (the two tags are often colocated on the same real site \u2014 a gas station with an attached convenience store \u2014 but not always, so both are counted rather than picking one).\n"
+    },
+    "multifamily": {
+      "label": "Multifamily / Apartment Complex",
+      "requires": {
+        "water": {
+          "min_MGD_per_1000_homes": 0.3
+        },
+        "power": {
+          "distribution_capacity": true
+        },
+        "transportation": {
+          "road_access": true
+        },
+        "parcel": {
+          "min_buildable_acres": 2,
+          "prefer_flood_zone": "none"
+        },
+        "entitlement": {
+          "zoning_allows_multifamily": true
+        }
+      },
+      "demand_signals": {
+        "absorption": {
+          "max_years_of_supply": 2.0,
+          "note": "hot rental market: units lease up fast"
+        },
+        "jobs": {
+          "layer": "demand",
+          "signal": "nearby_job_growth"
+        },
+        "amenities": {
+          "signal": "retail / schools / services already present nearby",
+          "prefer_school_within_km": 3
+        },
+        "price": {
+          "signal": "achievable rent > land + infra + construction cost"
+        }
+      },
+      "induces": {
+        "education": {
+          "trigger_per_homes": 1000,
+          "note": "~0.3 students/home (lower than for-sale single-family); flags school headroom"
+        },
+        "safety": {
+          "trigger_per_homes": 5000,
+          "note": "may justify new fire/EMS station"
+        },
+        "health": {
+          "trigger_per_homes": 20000,
+          "note": "supports an urgent-care / clinic"
+        },
+        "transportation": {
+          "note": "trip generation may require turn-lane/signal upgrades"
+        }
+      },
+      "impacts": {
+        "habitat": "medium",
+        "land_cover": "medium",
+        "carbon": "medium",
+        "water_stress": "medium",
+        "traffic": "medium"
+      },
+      "notes": "The renter-housing counterpart to residential_subdivision's for-sale lens \u2014 same mechanism, different density assumption (25-40 units/ac, 30 used here, vs. 3 units/ac) and a lower students/home rate (0.3 vs. 0.5, apartment households skew smaller). Wired to web/explore.html's `maybeRenderMFVerdict` via the same wait-for-both-legs (parcel acreage + nearby-school count) pattern `maybeRenderResVerdict` already established, and reuses `schoolLoadDemandRead` in web/logic.js verbatim with its own density constants rather than a new demand-read function.\n"
     }
   },
   "actor_uses": {
@@ -1041,6 +1104,54 @@
     },
     {
       "from": "residential_subdivision",
+      "to": "broadband_buildout",
+      "via": "rooftop density makes ISP buildout profitable",
+      "breaker_cost": "medium"
+    },
+    {
+      "from": "multifamily",
+      "to": "warehouse_club",
+      "via": "rooftops / household count in trade area",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "multifamily",
+      "to": "fast_casual",
+      "via": "resident + daytime demand",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "warehouse_club",
+      "to": "multifamily",
+      "via": "retail amenity raises unit absorption & achievable rent",
+      "breaker_cost": "medium"
+    },
+    {
+      "from": "fast_casual",
+      "to": "multifamily",
+      "via": "amenity raises unit absorption",
+      "breaker_cost": "low"
+    },
+    {
+      "from": "employment_center",
+      "to": "multifamily",
+      "via": "jobs create rental-housing demand (absorption)",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "multifamily",
+      "to": "employment_center",
+      "via": "labor pool attracts employers",
+      "breaker_cost": "high"
+    },
+    {
+      "from": "broadband_buildout",
+      "to": "multifamily",
+      "via": "service availability unblocks development",
+      "breaker_cost": "medium"
+    },
+    {
+      "from": "multifamily",
       "to": "broadband_buildout",
       "via": "rooftop density makes ISP buildout profitable",
       "breaker_cost": "medium"

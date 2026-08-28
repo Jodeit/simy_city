@@ -440,7 +440,7 @@ const LAYER_COLOR={power:"#e8843c",water:"#3a8fb7",broadband:"#2f9e44",transport
 // Canonical registered-land-use order, shared by the use-selector chips
 // (initUses) and "Best fit here" (BEST_FIT_USES/runBestFit below) so the two
 // can't silently drift apart on which uses actually exist.
-const ALL_USE_KEYS=["data_center","warehouse_club","fast_casual","residential_subdivision","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store","car_wash","pharmacy","convenience_store"];
+const ALL_USE_KEYS=["data_center","warehouse_club","fast_casual","residential_subdivision","multifamily","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store","car_wash","pharmacy","convenience_store"];
 // Per-use LIVE demand read from OpenStreetMap: a trade-area radius, the real
 // number a use needs (rooftops as a household proxy), and what to count as
 // competition/context. This is what turns "needs ~100k households" into a real,
@@ -455,6 +455,12 @@ const USE_DEMAND={
     // lunch drive) into the demand read instead of judging on rooftops alone.
     daytimeRadius:3000, daytimeQ:'nwr["office"];nwr["shop"];nwr["craft"]', daytimeLabel:"nearby offices/shops/workplaces" },
   residential_subdivision:{ radius:5000, roofNeed:0, needLabel:"",
+    compQ:'nwr["amenity"="school"]', compLabel:"schools" },
+  // multifamily reads the exact same signal as residential_subdivision (nearby
+  // schools, feeding schoolLoadDemandRead) at a tighter radius — a garden-style/
+  // mid-rise complex draws from a more compact, often more urban/suburban-infill
+  // catchment than a whole subdivision's 5 km.
+  multifamily:{ radius:3000, roofNeed:0, needLabel:"",
     compQ:'nwr["amenity"="school"]', compLabel:"schools" },
   data_center:{ radius:8000, roofNeed:0, needLabel:"",
     compQ:'nwr["power"="substation"]', compLabel:"power substations" },
@@ -519,6 +525,15 @@ let fcState=null;
 // from nearby schools — waits for both the acreage and school-count legs.
 const RES_UNITS_PER_ACRE=3, RES_STUDENTS_PER_HOME=0.5, RES_SEATS_PER_SCHOOL=750;
 let resState=null;
+// multifamily's induced-school-load verdict: the same acreage->homes->kids
+// mechanism as residential_subdivision (schoolLoadDemandRead, shared verbatim),
+// just tuned for apartment density (25-40 units/ac, documented in layers.yaml;
+// 30 used here) and a lower students/home rate (apartment households run
+// smaller than for-sale single-family, a real planning pattern, not just a
+// density rescale) — reuses RES_SEATS_PER_SCHOOL, since that capacity proxy
+// doesn't depend on which housing type is inducing the demand.
+const MF_UNITS_PER_ACRE=30, MF_STUDENTS_PER_HOME=0.3;
+let mfState=null;
 // warehouse_club's real verdict: rooftop trade-area demand (already fetched
 // by runDemand) blended with the site-size gate layers.yaml already documents
 // (`parcel.min_buildable_acres: 15` — a warehouse club needs a big flat pad
@@ -667,6 +682,7 @@ const BEST_FIT_USES=[
   {key:"warehouse_club", minAcres:WC_MIN_ACRES, minAadt:WC_AADT_MIN},
   {key:"fast_casual", demandKind:"blended", minAadt:FC_AADT_MIN},
   {key:"residential_subdivision", demandKind:"schoolLoad"},
+  {key:"multifamily", demandKind:"schoolLoad"},
   {key:"food_truck_court", minAcres:FTC_MIN_ACRES, minCompetitorKm:FTC_MIN_COMPETITOR_KM},
   {key:"ev_charging_hub", maxSubstationKm:EV_SUB_KM, minCompetitorKm:EV_MIN_COMPETITOR_KM},
   {key:"senior_living", demandKind:"senior", minAcres:SL_MIN_ACRES, minCompetitorKm:SL_MIN_COMPETITOR_KM},
@@ -1308,6 +1324,7 @@ function analyze(latlng){
     dcState = current==="data_center" ? {seq} : null;
     fcState = current==="fast_casual" ? {seq} : null;
     resState = current==="residential_subdivision" ? {seq} : null;
+    mfState = current==="multifamily" ? {seq} : null;
     wcState = current==="warehouse_club" ? {seq} : null;
     ftcState = current==="food_truck_court" ? {seq} : null;
     evState = current==="ev_charging_hub" ? {seq} : null;
@@ -1326,6 +1343,7 @@ function analyze(latlng){
     dcState=null;
     fcState=null;
     resState=null;
+    mfState=null;
     ftcState=null;
     evState=null;
     slState=null;
@@ -1495,8 +1513,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care", isSS=current==="self_storage", isCC=current==="child_care_center", isHL=current==="hotel", isGS=current==="grocery_store", isCW=current==="car_wash", isPH=current==="pharmacy", isCS=current==="convenience_store";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":isSS?"demand + site-size + distance-from-competitors check":isCC?"demand + site-size + distance-from-competitors check":isHL?"demand generators + traffic + site-size + distance-from-competitors check":isGS?"demand + site-size + distance-from-competitors check":isCW?"demand + traffic + site-size + distance-from-competitors check":isPH?"demand + traffic + site-size + distance-from-competitors check":isCS?"demand + traffic + site-size + distance-from-competitors check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isMF=current==="multifamily", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care", isSS=current==="self_storage", isCC=current==="child_care_center", isHL=current==="hotel", isGS=current==="grocery_store", isCW=current==="car_wash", isPH=current==="pharmacy", isCS=current==="convenience_store";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isMF?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":isSS?"demand + site-size + distance-from-competitors check":isCC?"demand + site-size + distance-from-competitors check":isHL?"demand generators + traffic + site-size + distance-from-competitors check":isGS?"demand + site-size + distance-from-competitors check":isCW?"demand + traffic + site-size + distance-from-competitors check":isPH?"demand + traffic + site-size + distance-from-competitors check":isCS?"demand + traffic + site-size + distance-from-competitors check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none"></div>
       <div class="live loading" id="roofVal">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -1504,6 +1522,7 @@ function renderBuild(use,latlng){
         ${isDC?"grid interconnect + parcel size + water district decide the verdict, not rooftops"
               :isFC?"rooftops + nearby offices/shops (daytime population) blend into the verdict"
               :isRes?"parcel acreage (est. homes) vs. nearby school capacity decide the verdict"
+              :isMF?"parcel acreage (est. units, apartment density) vs. nearby school capacity decide the verdict"
               :isWC?"rooftops in the trade area + parcel acreage (needs a big flat pad) decide the verdict"
               :isFTC?"nearby rooftops + parcel size + distance from the nearest existing food vendor (farther is better) decide the verdict"
               :isEV?"nearby rooftops + nearest substation distance + distance from the nearest existing charger (farther is better) decide the verdict"
@@ -1697,6 +1716,10 @@ function runDemand(latlng,seq){
       resState.schools = els.length;
       resState.nearestSchool = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderResVerdict(seq);
+    } else if(current==="multifamily"&&mfState&&mfState.seq===seq){
+      mfState.schools = els.length;
+      mfState.nearestSchool = els.length ? {name:els[0].name, km:els[0].km} : null;
+      maybeRenderMFVerdict(seq);
     } else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){
       // Farther-is-better: no competitor within radius is the best possible
       // read (like rankCandidates' preferFar in logic.js), not a data gap.
@@ -1762,6 +1785,7 @@ function runDemand(latlng,seq){
     setHTML("compVal",errHTML("competitor scan unavailable"));
     if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.subErr=true; maybeRenderDCVerdict(seq); }
     else if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.schools=null; resState.nearestSchool=null; maybeRenderResVerdict(seq); }
+    else if(current==="multifamily"&&mfState&&mfState.seq===seq){ mfState.schools=null; mfState.nearestSchool=null; maybeRenderMFVerdict(seq); }
     else if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.compErr=true; maybeRenderFTCVerdict(seq); }
     else if(current==="ev_charging_hub"&&evState&&evState.seq===seq){ evState.compErr=true; maybeRenderEVVerdict(seq); }
     else if(current==="senior_living"&&slState&&slState.seq===seq){ slState.compErr=true; maybeRenderSLVerdict(seq); }
@@ -1871,6 +1895,36 @@ function maybeRenderResVerdict(seq){
     ? `✓ ~${Math.round(kids)} induced school-age kids fit within the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}`
     : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
     +`<br><span style="font-weight:400;font-size:.85em">${units.toLocaleString()} est. homes @ ${RES_UNITS_PER_ACRE}/ac · ${RES_STUDENTS_PER_HOME} students/home</span>`;
+}
+// multifamily's induced-school-load verdict — identical shape to
+// maybeRenderResVerdict (same wait-for-both-legs pattern, same projection
+// math), just at MF_UNITS_PER_ACRE/MF_STUDENTS_PER_HOME's apartment-density
+// constants instead of RES_UNITS_PER_ACRE/RES_STUDENTS_PER_HOME. Kept as its
+// own function (not a parameterized shared one) to match every other
+// maybeRender*Verdict function's one-function-per-use shape in this file.
+function maybeRenderMFVerdict(seq){
+  if(current!=="multifamily"||mode!=="build"||!mfState||mfState.seq!==seq)return;
+  const s=mfState;
+  if(s.acres===undefined||s.schools===undefined)return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  if(s.acres==null){ el.style.display="none"; return; } // no parcel acreage — nothing to project from
+  const units=Math.round(s.acres*MF_UNITS_PER_ACRE);
+  const kids=units*MF_STUDENTS_PER_HOME;
+  el.style.display="block";
+  if(s.schools==null){
+    el.className="verdict contested";
+    el.innerHTML=`? ~${Math.round(kids)} induced school-age kids from an est. ${units.toLocaleString()} units — nearby school capacity unavailable`;
+    return;
+  }
+  const capacity=s.schools*RES_SEATS_PER_SCHOOL;
+  const pass=capacity>=kids;
+  el.className="verdict "+(pass?"aligned":"contested");
+  const nearest=s.nearestSchool
+    ? ` — nearest <b>${esc(s.nearestSchool.name)}</b> (${s.nearestSchool.km.toFixed(1)} km)` : "";
+  el.innerHTML=(pass
+    ? `✓ ~${Math.round(kids)} induced school-age kids fit within the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}`
+    : `✗ ~${Math.round(kids)} induced school-age kids vs the ~${capacity.toLocaleString()}-seat capacity of ${s.schools} nearby school(s)${nearest}<br><b>that gap is why schools/bond capacity become part of the ask</b>`)
+    +`<br><span style="font-weight:400;font-size:.85em">${units.toLocaleString()} est. units @ ${MF_UNITS_PER_ACRE}/ac · ${MF_STUDENTS_PER_HOME} students/home</span>`;
 }
 // Shared traffic-count (AADT) leg for warehouse_club/fast_casual — see
 // AADT_SOURCE and runDemand's 1d leg above. `s.trafficErr` (a query failure)
@@ -2392,7 +2446,14 @@ function bestFitLeg(u,lat,lng,acres){
     else if(u.demandKind==="generators")demand=countDemandRead(daytime,HL_MIN_GENERATORS);
     else if(u.demandKind==="senior")demand=seniorDemandRead(medianAge,SL_AGE_THRESHOLD);
     else if(u.demandKind==="trivial")demand={ratio:1,pass:true};
-    else if(u.demandKind==="schoolLoad")demand=schoolLoadDemandRead(acres,comp.count,RES_UNITS_PER_ACRE,RES_STUDENTS_PER_HOME,RES_SEATS_PER_SCHOOL);
+    // multifamily shares residential_subdivision's schoolLoad mechanism
+    // verbatim (schoolLoadDemandRead), just keyed to its own density constants
+    // — same "siblings that differ mainly in density assumption" relationship
+    // documented on the multifamily land use in layers.yaml.
+    else if(u.demandKind==="schoolLoad")demand=schoolLoadDemandRead(acres,comp.count,
+      u.key==="multifamily"?MF_UNITS_PER_ACRE:RES_UNITS_PER_ACRE,
+      u.key==="multifamily"?MF_STUDENTS_PER_HOME:RES_STUDENTS_PER_HOME,
+      RES_SEATS_PER_SCHOOL);
     // data_center's substation distance reuses the same compQ fetch above —
     // its USE_DEMAND entry's "competition" query *is* power substations, so
     // there's no separate powerQ leg for it (cfg.powerQ is undefined),
@@ -2992,6 +3053,7 @@ function showParcel(geo,src,seq){
   if(mode==="explore"){fillFit(acN);}
   if(current==="data_center"&&dcState&&dcState.seq===seq){ dcState.acres=acN; maybeRenderDCVerdict(seq); }
   if(current==="residential_subdivision"&&resState&&resState.seq===seq){ resState.acres=acN; maybeRenderResVerdict(seq); }
+  if(current==="multifamily"&&mfState&&mfState.seq===seq){ mfState.acres=acN; maybeRenderMFVerdict(seq); }
   if(current==="warehouse_club"&&wcState&&wcState.seq===seq){ wcState.acres=acN; maybeRenderWCVerdict(seq); }
   if(current==="food_truck_court"&&ftcState&&ftcState.seq===seq){ ftcState.acres=acN; maybeRenderFTCVerdict(seq); }
   if(current==="senior_living"&&slState&&slState.seq===seq){ slState.acres=acN; maybeRenderSLVerdict(seq); }
@@ -3669,6 +3731,7 @@ const VERDICT_REFRESH={
   data_center:()=>dcState&&maybeRenderDCVerdict(dcState.seq),
   fast_casual:()=>fcState&&maybeRenderFCVerdict(fcState.seq),
   residential_subdivision:()=>resState&&maybeRenderResVerdict(resState.seq),
+  multifamily:()=>mfState&&maybeRenderMFVerdict(mfState.seq),
   warehouse_club:()=>wcState&&maybeRenderWCVerdict(wcState.seq),
   food_truck_court:()=>ftcState&&maybeRenderFTCVerdict(ftcState.seq),
   ev_charging_hub:()=>evState&&maybeRenderEVVerdict(evState.seq),
