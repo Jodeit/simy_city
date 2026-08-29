@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, sampleGrid, rankCandidates,
+  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, restorePinAt, sortPins, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
@@ -1367,6 +1367,64 @@ test("removeSavedSearch: never mutates the existing list in place", () => {
   const existing = [{ label: "A" }, { label: "B" }];
   removeSavedSearch(existing, 0);
   assert.equal(existing.length, 2);
+});
+
+// ---- restorePinAt (Compare per-row remove undo) ----
+
+test("restorePinAt: re-inserts at the original index, shifting later entries back", () => {
+  const list = [{ label: "A" }, { label: "C" }];
+  const restored = restorePinAt(list, { label: "B" }, 1);
+  assert.deepEqual(restored.map(p => p.label), ["A", "B", "C"]);
+});
+
+test("restorePinAt: index 0 restores to the front", () => {
+  const list = [{ label: "B" }];
+  const restored = restorePinAt(list, { label: "A" }, 0);
+  assert.deepEqual(restored.map(p => p.label), ["A", "B"]);
+});
+
+test("restorePinAt: an index at the current length restores to the end", () => {
+  const list = [{ label: "A" }];
+  const restored = restorePinAt(list, { label: "B" }, 1);
+  assert.deepEqual(restored.map(p => p.label), ["A", "B"]);
+});
+
+test("restorePinAt: an index past the current length clamps to the end rather than throwing", () => {
+  const list = [{ label: "A" }];
+  const restored = restorePinAt(list, { label: "B" }, 99);
+  assert.deepEqual(restored.map(p => p.label), ["A", "B"]);
+});
+
+test("restorePinAt: a negative index clamps to the front rather than throwing", () => {
+  const list = [{ label: "A" }];
+  const restored = restorePinAt(list, { label: "B" }, -3);
+  assert.deepEqual(restored.map(p => p.label), ["B", "A"]);
+});
+
+test("restorePinAt: restoring into an empty list (everything else was removed too)", () => {
+  const restored = restorePinAt([], { label: "A" }, 0);
+  assert.deepEqual(restored.map(p => p.label), ["A"]);
+});
+
+test("restorePinAt: never mutates the existing list in place", () => {
+  const list = [{ label: "A" }];
+  restorePinAt(list, { label: "B" }, 0);
+  assert.equal(list.length, 1);
+});
+
+test("restorePinAt combined with undoClear: a remove-then-undo round trip within the window restores the exact pin at its original index", () => {
+  const removedAt = 1000;
+  const afterRemove = [{ label: "A" }, { label: "C" }]; // "B" was removed from index 1
+  const snapshot = { label: "B" };
+  const restoredSnapshot = undoClear([snapshot], removedAt, 1500, 8000);
+  assert.ok(restoredSnapshot);
+  const restored = restorePinAt(afterRemove, restoredSnapshot[0], 1);
+  assert.deepEqual(restored.map(p => p.label), ["A", "B", "C"]);
+});
+
+test("restorePinAt combined with undoClear: past the undo window, nothing is restorable", () => {
+  const snapshot = { label: "B" };
+  assert.equal(undoClear([snapshot], 1000, 9001, 8000), null);
 });
 
 // ---- sortPins (Compare-parcels table sort) ----

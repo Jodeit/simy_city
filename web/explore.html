@@ -360,6 +360,7 @@
     <p>Pin a parcel from its analysis (📌 in the toolbar) to line it up against others here — size,
       value, and (in <b>Test a use</b>) the verdict.</p>
     <div class="cmpScroll"><div id="compareBody"></div></div>
+    <span id="pinUndo" class="recentClear" style="display:none">Removed <span id="pinUndoLabel"></span> — <a href="#" id="pinUndoLink">Undo</a></span>
     <div class="privacy">🔒 Saved to local storage, never uploaded automatically. "Share list" puts these pins in a URL only when you copy it.</div>
     <div class="actions">
       <span class="ok" id="compareShareMsg" style="margin-right:auto"></span>
@@ -3417,7 +3418,9 @@ function setLastParcelSummary(s){
 
 /* ---- compare pinned parcels (private, client-side only) ---- */
 const PINS_KEY="simy_pins_v1";
+const PIN_UNDO_WINDOW_MS=8000;
 let pins=[];
+let pinRemovedSnapshot=null, pinRemovedIndex=-1, pinRemovedAt=0, pinUndoTimer=null;
 function loadPins(){
   try{pins=JSON.parse(localStorage.getItem(PINS_KEY)||"[]");}catch(e){pins=[];}
   updateCompareCount();
@@ -3435,11 +3438,46 @@ function addPin(){
   const vEl=document.getElementById("demandVerdict");
   const verdict=(mode==="build"&&vEl&&vEl.style.display!=="none")?vEl.textContent.trim():null;
   const {seq,...snapshot}=lastParcelSummary;
+  if(pinRemovedSnapshot){pinRemovedSnapshot=null; disarmPinUndo();}
   pins.push({...snapshot, use:mode==="build"?useLabel(current):null, verdict});
   savePins();
   return {ok:true,msg:`pinned — ⚖️ Compare (${pins.length})`};
 }
-function removePin(i){ pins.splice(i,1); savePins(); }
+// Snapshots the removed pin (and its index) before splicing it out, so a
+// "Removed — Undo" click within PIN_UNDO_WINDOW_MS can put it back exactly
+// where it was — same undoClear-backed windowed-expiry pattern as "clear all
+// recently viewed" (recordRecent/undoClear above), just restoring one row
+// instead of a whole list.
+function removePin(i){
+  const removed=pins[i];
+  if(!removed)return;
+  pinRemovedSnapshot=removed; pinRemovedIndex=i; pinRemovedAt=Date.now();
+  pins.splice(i,1);
+  savePins();
+  armPinUndo();
+}
+function undoRemovePin(){
+  const restored=undoClear(pinRemovedSnapshot?[pinRemovedSnapshot]:null,pinRemovedAt,Date.now(),PIN_UNDO_WINDOW_MS);
+  if(!restored)return;
+  pins=restorePinAt(pins,restored[0],pinRemovedIndex);
+  pinRemovedSnapshot=null;
+  disarmPinUndo();
+  savePins();
+}
+function armPinUndo(){
+  clearTimeout(pinUndoTimer);
+  const undo=document.getElementById("pinUndo");
+  if(undo){
+    const label=document.getElementById("pinUndoLabel");
+    if(label)label.textContent=pinRemovedSnapshot.label||`${pinRemovedSnapshot.lat.toFixed(4)}, ${pinRemovedSnapshot.lng.toFixed(4)}`;
+    undo.style.display="inline";
+  }
+  pinUndoTimer=setTimeout(()=>{ pinRemovedSnapshot=null; disarmPinUndo(); },PIN_UNDO_WINDOW_MS);
+}
+function disarmPinUndo(){
+  clearTimeout(pinUndoTimer); pinUndoTimer=null;
+  const undo=document.getElementById("pinUndo"); if(undo)undo.style.display="none";
+}
 // Compare's table is transposed (fields as rows, pins as columns), so
 // "sortable columns" (backlog ask) becomes clickable *row labels* for the
 // two numeric fields — clicking re-sorts pins and re-renders; a second click
@@ -3537,7 +3575,12 @@ function wireCompare(){
   document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
   document.getElementById("compareCancel").onclick=()=>closeModal(modal);
   modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
-  document.getElementById("compareClear").onclick=()=>{pins=[];savePins();};
+  document.getElementById("compareClear").onclick=()=>{
+    if(pinRemovedSnapshot){pinRemovedSnapshot=null; disarmPinUndo();}
+    pins=[];savePins();
+  };
+  const pinUndoLink=document.getElementById("pinUndoLink");
+  if(pinUndoLink)pinUndoLink.onclick=e=>{e.preventDefault();undoRemovePin();};
   document.getElementById("compareShare").onclick=()=>{
     const m=document.getElementById("compareShareMsg");
     if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}
