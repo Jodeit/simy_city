@@ -684,6 +684,23 @@ function removeSavedSearch(list,i){
   return list.slice(0,i).concat(list.slice(i+1));
 }
 
+// Re-inserts a single removed pin at its original index — the Compare
+// modal's per-row undo. Pairs with undoClear (above) for the windowed-expiry
+// decision: the caller wraps its one-pin snapshot in a 1-element array and
+// passes it through undoClear exactly like the whole-list "clear all" undo
+// does, then hands the surviving snapshot here to place it back. `index` is
+// clamped into `[0, list.length]` rather than trusted as-is, since other
+// pins may have been added or removed between the remove and the undo click
+// (a stale index would otherwise throw via a negative splice count or land
+// past the end); clamping means the pin still lands somewhere sane —
+// usually exactly where it was — instead of the undo silently failing.
+function restorePinAt(list,snapshot,index){
+  const out=(list||[]).slice();
+  const i=Math.max(0,Math.min(index==null?out.length:index,out.length));
+  out.splice(i,0,snapshot);
+  return out;
+}
+
 /* ---- sorting the Compare-parcels list ----
    Compare's table is transposed (fields as rows, pins as columns), so
    "sortable columns" means reordering the underlying `pins` array — the
@@ -1084,5 +1101,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,restorePinAt,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }

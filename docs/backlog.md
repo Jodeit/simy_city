@@ -2915,22 +2915,42 @@ Ground rules for each run:
       deep-link scheme is confirmed; otherwise link to the city/county's own
       parcel-search page. `simy validate`'s source count should go from 32
       to 33.
-- [ ] **Undo for removing a pin from Compare.** The Compare modal's
-      per-row "✕" button (`removePin(i)` in `web/explore.html`) deletes a
+- [x] **Undo for removing a pin from Compare.** The Compare modal's per-row
+      "✕" button (`removePin(i)` in `web/explore.html`) previously deleted a
       pinned parcel from `pins`/`localStorage` immediately with no
-      confirmation or recovery — the same gap "clear all recently-viewed"
-      had before its undo affordance was added. Mirror that established
-      pattern exactly: snapshot the removed pin (and its index) before
-      splicing it out, show an inline "Removed — Undo" affordance in place
-      of that row for a few seconds (reuse the existing `undoClear`-style
-      windowed-expiry math in `web/logic.js`, generalized or duplicated for
-      a single-item restore rather than a whole-list restore), and re-insert
-      the pin at its original index on Undo so pin order isn't scrambled by
-      a remove-then-undo round trip. Add unit tests for the restore-within-
-      window / past-the-window / boundary cases, same coverage
-      `clearRecentSites`/`undoClear` already have. Verify both pages still
-      load clean and that a real remove→undo click round trip in headless
-      Chromium restores the exact pin without throwing.
+      confirmation or recovery — the same gap "clear all recently-viewed" had
+      before its undo affordance was added. Mirrored that established
+      pattern: `removePin` now snapshots the removed pin and its index
+      (`pinRemovedSnapshot`/`pinRemovedIndex`/`pinRemovedAt`) before splicing
+      it out, and shows a "Removed *label* — Undo" affordance
+      (`#pinUndo`/`armPinUndo`/`disarmPinUndo`) next to the table for
+      `PIN_UNDO_WINDOW_MS` (8s, same window as recently-viewed's undo).
+      Clicking Undo (`undoRemovePin`) reuses the existing `undoClear`
+      windowed-expiry check verbatim — wraps the one-pin snapshot in a
+      1-element array and passes it through exactly like the whole-list
+      "clear all" undo does — and, if still within the window, hands the
+      surviving snapshot to a new pure `restorePinAt(list, snapshot, index)`
+      in `web/logic.js` that re-inserts it at its original index (clamped
+      into `[0, list.length]` so a stale index from other pins being
+      added/removed in between can't throw). Adding a new pin or clicking
+      "Clear all" while an undo is armed disarms it first, same as
+      `recordRecent` already does for the recently-viewed list's undo — an
+      undo offer that could silently resurrect a pin into a list that's
+      since changed shape is worse than no offer at all. Added 8 new unit
+      tests for `restorePinAt` (original-index reinsertion including a
+      shift-back case, front/end/past-end/negative-index clamping, restoring
+      into an empty list, non-mutation) plus two integration tests chaining
+      it with `undoClear` for the restore-within-window and
+      past-the-window cases. Verified: `python -m pytest -q` (15 passed,
+      unaffected — this item is JS-only), `simy validate` (OK, unaffected),
+      `node --test tests/js/*.test.mjs` (313 passed, 9 new), and headless
+      Chromium: both pages load with zero console/page errors, and driving
+      `removePin`/`undoRemovePin`/`addPin` directly on a real page confirmed
+      the full round trip — remove middle pin → undo banner shows the right
+      label → Undo restores it at its original index (`A,B,C`); a second
+      remove followed by a forced-expired undo correctly leaves it removed;
+      and adding a new pin while an undo was armed correctly disarmed the
+      banner instead of leaving a stale offer — all without throwing.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
