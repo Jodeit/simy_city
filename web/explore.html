@@ -1096,6 +1096,47 @@ const PARCEL_SOURCES=[
     // incorporated" boilerplate verbatim.
     zoning_note:"Denver is a consolidated city-county — there's no separate unincorporated area, so Denver's own zoning code (not a distinct county authority) applies everywhere in the boundary",
   },
+  {
+    name:"Boston Assessing Department (City of Boston, Suffolk County, MA)",
+    // Boston's own fiscal-year property-assessment/parcel join layer is tried
+    // first — confirmed fields (via multiple independent search-indexed
+    // sources; this sandbox blocks direct ArcGIS REST introspection like
+    // every prior county here) ST_NUM/ST_NAME (address components, split
+    // fields rather than one combined "situs" string, so they don't fit the
+    // shared single-field `situs` pick() and are left out of it) and
+    // LU_DESC (already in the shared land-use list from an earlier county).
+    // It's suffixed with a fiscal year (FY23 confirmed live; the city adds a
+    // new one each July) and could go stale, so the evergreen
+    // "Parcels_current" boundary layer — confirmed to exist under a name
+    // that doesn't need updating — is the fallback if the join layer 404s.
+    urls:[
+      "https://gisportal.boston.gov/arcgis/rest/services/PROPERTY_ASSESSMENT_PARCEL_JOIN_FY23/MapServer/0",
+      "https://gis.boston.gov/arcgis/rest/services/Parcels/Parcels_current/MapServer/0",
+    ],
+    bbox:[-71.19,42.22,-70.87,42.40],
+    // PID (Boston's parcel id, what Assessing Online's search keys on) and
+    // GIS_ID (the id the city's own docs say to join the parcel layer against
+    // its separate Property Assessment CSV on) are both confirmed field
+    // names — GIS_ID added to the shared id pick() list below. Owner name
+    // and total assessed value live only in that separate CSV, not
+    // confirmed as a field on either live layer above, so — same graceful
+    // partial-field-coverage as King/Cook/Salt Lake/Franklin/Clark here —
+    // left unmapped rather than guessed. Land area is published in square
+    // feet, not acres, on Boston's schema — same unit-mismatch call that
+    // left LA/Miami-Dade/San Diego/Allegheny's area fields unmapped rather
+    // than rendering a bogus "12000.00 ac".
+    record:(a)=>{const pid=pick(a,["PID"]);
+      return pid?`https://cityofboston.gov/assessing/search/?pid=${encodeURIComponent(pid)}`:"https://cityofboston.gov/assessing/search/";},
+    source_label:"Boston Assessing Department",
+    county_state:"City of Boston, Suffolk County, MA",
+    // Massachusetts municipalities (not the county) set their own zoning —
+    // Suffolk County itself has no zoning authority, unlike TX/AZ/CA/WA/IL/
+    // FL/NC/UT/NV counties covered so far. Suffolk County also includes
+    // Chelsea, Revere, and Winthrop, none of which this source (Boston's own
+    // parcel layer) covers — a click there correctly falls through to "no
+    // parcel data" rather than a wrong/empty Boston result.
+    zoning_note:"MA municipalities (not the county) set zoning — check the City of Boston's own zoning code; Suffolk County's other three municipalities (Chelsea, Revere, Winthrop) aren't covered by this source",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3001,7 +3042,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","GIS_ID"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc"]);

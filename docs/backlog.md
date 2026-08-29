@@ -2895,26 +2895,58 @@ Ground rules for each run:
       Overpass/ArcGIS is blocked from this sandbox, so a live end-to-end
       rooftop/school fetch on the real site is a good human spot-check, same
       as every prior real-verdict land use.
-- [ ] **20th parcel county: Suffolk County, MA (Boston).** Every parcel
-      county added so far is South, Midwest, Mountain West, or West Coast —
-      New England has zero coverage. Extend `PARCEL_SOURCES` in
-      `web/explore.html` with Boston/Suffolk County's public GIS parcel
-      layer (search for the live ArcGIS MapServer/FeatureServer endpoint,
-      same research approach every prior county entry used, since this
-      sandbox can't introspect ArcGIS REST hosts directly — Boston's own
-      open-data portal or MassGIS's statewide parcel layer are both worth
-      checking, same "lean on a good statewide aggregate when the county
-      doesn't publish its own" call the Colorado/Denver entry already made).
-      Confirm real field names from search-indexed docs before adding them
-      to the shared `pick()` candidate lists rather than guessing; if owner/
-      address/value aren't confirmed on the public layer, leave them
-      unmapped (same graceful partial-coverage precedent as King/Cook/Salt
-      Lake/Franklin/Clark/Denver). Massachusetts municipalities zone their
-      own land (unlike the TX counties already covered), so this needs its
-      own `zoning_note`. Add a record-link URL only if a stable per-parcel
-      deep-link scheme is confirmed; otherwise link to the city/county's own
-      parcel-search page. `simy validate`'s source count should go from 32
-      to 33.
+- [x] **20th parcel county: Suffolk County, MA (Boston).** Added a 20th
+      `PARCEL_SOURCES` entry to `web/explore.html` — the first New England
+      county (every prior one was South, Midwest, Mountain West, or West
+      Coast). Unlike Denver, Boston publishes its own parcel data directly
+      rather than needing a statewide aggregate fallback: `urls` tries
+      Boston's own fiscal-year property-assessment/parcel join layer first
+      (`PROPERTY_ASSESSMENT_PARCEL_JOIN_FY23`, confirmed live via multiple
+      independent search-indexed sources — this sandbox blocks direct
+      ArcGIS REST introspection like every prior county here), falling back
+      to the evergreen `Parcels_current` boundary layer (a name that doesn't
+      need updating each fiscal year the way the join layer's `_FY23` suffix
+      does) if the join layer 404s in some future year. Confirmed fields:
+      `ST_NUM`/`ST_NAME` (split address components, not a single combined
+      string, so they don't fit the shared single-field `situs` pick() and
+      were left out of it — Boston's address is genuinely thin-schema here,
+      not guessed-and-wrong) and `LU_DESC` (land use — already in the shared
+      list from an earlier county, so no list change needed there). Added
+      `GIS_ID` to the shared parcel-id `pick()` list (Boston's own docs cite
+      it as the join key to the separate Property Assessment CSV) alongside
+      the already-present `PID` (what Assessing Online's record search
+      keys on — `record()` builds `cityofboston.gov/assessing/search/?pid=…`).
+      Owner name and total assessed value live only in that separate CSV,
+      not confirmed as fields on either live layer, so — same graceful
+      partial-field-coverage precedent as King/Cook/Salt Lake/Franklin/
+      Clark — left unmapped rather than guessed; land area is published in
+      square feet on Boston's schema, so — same unit-mismatch call as LA/
+      Miami-Dade/San Diego/Allegheny — also left unmapped rather than
+      rendering a bogus "12000.00 ac". Massachusetts municipalities (not the
+      county) set zoning, so this needed its own `zoning_note`, which also
+      notes that Suffolk County's other three municipalities (Chelsea,
+      Revere, Winthrop) aren't covered by this Boston-sourced layer — a
+      click there correctly falls through to the existing "no parcel layer
+      wired" message rather than a wrong result. Verified: `python -m
+      pytest -q` (15 passed), `simy validate` (OK — unchanged at 32
+      sources/16 layers/16 land uses; that count tracks
+      `data_sources/registry.yaml`'s Python-side data-model sources, not
+      this client-side JS county list, so a `PARCEL_SOURCES` addition alone
+      doesn't move it), `node --test tests/js/*.test.mjs` (316 passed, no
+      new — this item added no new pure-logic helpers), and headless
+      Chromium: both pages load with zero console/page errors;
+      `PARCEL_SOURCES.length` went from 19 to 20; `inBbox` correctly routes
+      a downtown-Boston point to the new source and a Denver point to the
+      (unaffected) Denver source, not Boston's; and a real end-to-end
+      `analyze()` click at a Boston point with `fetch` mocked to return a
+      Boston-shaped attributes payload rendered "Parcel ID 0203456000",
+      "Land use Government", the correct `cityofboston.gov/assessing/
+      search/?pid=0203456000` record link, and the new zoning note — with
+      zero throws — while an empty-attributes payload at a second point
+      rendered the graceful empty-parcel state instead of throwing. Live
+      endpoint reachability and the exact fiscal-year join layer's owner/
+      value field names couldn't be confirmed from this sandbox — a live
+      spot-check is a good human follow-up, same as every prior county.
 - [x] **Undo for removing a pin from Compare.** The Compare modal's per-row
       "✕" button (`removePin(i)`) used to delete a pinned parcel from
       `pins`/`localStorage` immediately with no confirmation or recovery —
