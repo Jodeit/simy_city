@@ -150,6 +150,8 @@
   .cmpSortBtn{background:none;border:none;color:var(--slate);cursor:pointer;font:inherit;font-weight:inherit;padding:0;text-decoration:underline dotted}
   .cmpSortBtn:hover,.cmpSortBtn[aria-pressed="true"]{color:var(--ink)}
   .cmpEmpty{color:var(--slate);font-size:.86rem}
+  .cmpUndoBar{font-size:.82rem;color:var(--slate);margin-bottom:8px}
+  .cmpUndoBar a{color:inherit}
   .kbdList{list-style:none;margin:14px 0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:.9rem}
   .kbdList kbd{background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:.05em .4em;font-size:.85em;margin-right:2px}
   /* recently-viewed strip */
@@ -3417,7 +3419,15 @@ function setLastParcelSummary(s){
 
 /* ---- compare pinned parcels (private, client-side only) ---- */
 const PINS_KEY="simy_pins_v1";
+const PIN_UNDO_WINDOW_MS=8000;
 let pins=[];
+// Snapshot of the most recently removed pin ({pin,index,at}) so removePin's
+// "✕" click is undoable for PIN_UNDO_WINDOW_MS, same windowed-restore pattern
+// as the recently-viewed list's "clear all" undo. Only the latest removal is
+// undoable — removing a second pin while the first's offer is still showing
+// simply replaces it, same single-level-undo tradeoff clearRecentSites/
+// undoClear already made.
+let pinRemoved=null, pinUndoTimer=null;
 function loadPins(){
   try{pins=JSON.parse(localStorage.getItem(PINS_KEY)||"[]");}catch(e){pins=[];}
   updateCompareCount();
@@ -3439,7 +3449,23 @@ function addPin(){
   savePins();
   return {ok:true,msg:`pinned — ⚖️ Compare (${pins.length})`};
 }
-function removePin(i){ pins.splice(i,1); savePins(); }
+function removePin(i){
+  const removed=pins[i]; if(!removed)return;
+  pins=removePinAt(pins,i);
+  pinRemoved={pin:removed,index:i,at:Date.now()};
+  clearTimeout(pinUndoTimer);
+  pinUndoTimer=setTimeout(()=>{pinRemoved=null;renderCompare();},PIN_UNDO_WINDOW_MS);
+  savePins();
+}
+function undoRemovedPin(){
+  if(!pinRemoved)return;
+  const restored=undoRemovePin(pins,pinRemoved.pin,pinRemoved.index,pinRemoved.at,Date.now(),PIN_UNDO_WINDOW_MS);
+  if(!restored)return;
+  clearTimeout(pinUndoTimer); pinUndoTimer=null;
+  pinRemoved=null;
+  pins=restored;
+  savePins();
+}
 // Compare's table is transposed (fields as rows, pins as columns), so
 // "sortable columns" (backlog ask) becomes clickable *row labels* for the
 // two numeric fields — clicking re-sorts pins and re-renders; a second click
@@ -3448,7 +3474,10 @@ let cmpSort={key:null,dir:"asc"};
 const CMP_SORT_KEYS={"Acreage":"acres","Appraised value":"value"};
 function renderCompare(){
   const el=document.getElementById("compareBody"); if(!el)return;
-  if(!pins.length){el.innerHTML=`<p class="cmpEmpty">No pins yet. Analyze a parcel, then click 📌 <b>Pin to compare</b> in its toolbar.</p>`;return;}
+  const undoBar=pinRemoved?`<p class="cmpUndoBar">Removed <b>${esc(pinRemoved.pin.label||`${pinRemoved.pin.lat.toFixed(4)}, ${pinRemoved.pin.lng.toFixed(4)}`)}</b> — <a href="#" id="cmpUndo">Undo</a></p>`:"";
+  if(!pins.length){el.innerHTML=undoBar+`<p class="cmpEmpty">No pins yet. Analyze a parcel, then click 📌 <b>Pin to compare</b> in its toolbar.</p>`;
+    if(pinRemoved)el.querySelector("#cmpUndo").onclick=e=>{e.preventDefault();undoRemovedPin();};
+    return;}
   const sorted=cmpSort.key?sortPins(pins,cmpSort.key,cmpSort.dir):pins;
   const fmtAcres=a=>a!=null?fmtAc(a):"—";
   const fmtVal=v=>v!=null?"$"+v.toLocaleString():"—";
@@ -3470,9 +3499,10 @@ function renderCompare(){
     ["Testing", sorted.map(p=>esc(p.use||"—"))],
     ["Verdict", sorted.map(p=>esc(p.verdict||"—"))],
   ];
-  el.innerHTML=`<table class="cmpTable"><tbody>`+
+  el.innerHTML=undoBar+`<table class="cmpTable"><tbody>`+
     rows.map(([label,cells])=>`<tr><td class="lbl">${label}</td>${cells.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")+
     `</tbody></table>`;
+  if(pinRemoved)el.querySelector("#cmpUndo").onclick=e=>{e.preventDefault();undoRemovedPin();};
   el.querySelectorAll(".cmpX").forEach(b=>b.onclick=()=>removePin(+b.dataset.i));
   el.querySelectorAll(".cmpSortBtn").forEach(b=>b.onclick=()=>{
     const key=b.dataset.key;
@@ -3537,7 +3567,10 @@ function wireCompare(){
   document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
   document.getElementById("compareCancel").onclick=()=>closeModal(modal);
   modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
-  document.getElementById("compareClear").onclick=()=>{pins=[];savePins();};
+  document.getElementById("compareClear").onclick=()=>{
+    clearTimeout(pinUndoTimer); pinUndoTimer=null; pinRemoved=null;
+    pins=[];savePins();
+  };
   document.getElementById("compareShare").onclick=()=>{
     const m=document.getElementById("compareShareMsg");
     if(!pins.length){if(m){m.textContent="⚠ pin a parcel first";setTimeout(()=>m.textContent="",2500);}return;}

@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, sampleGrid, rankCandidates,
+  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
@@ -1286,6 +1286,77 @@ test("undoClear: returns null when there is nothing saved (already used, or neve
   assert.equal(undoClear(null, 0, 100, 8000), null);
   assert.equal(undoClear(undefined, 0, 100, 8000), null);
   assert.equal(undoClear([], 0, 100, 8000), null);
+});
+
+// ---- removePinAt / undoRemovePin (Compare pin remove + undo) ----
+
+test("removePinAt: removes the entry at the given index", () => {
+  const existing = [{ label: "A" }, { label: "B" }, { label: "C" }];
+  const list = removePinAt(existing, 1);
+  assert.deepEqual(list, [{ label: "A" }, { label: "C" }]);
+});
+
+test("removePinAt: no-ops on an out-of-range index", () => {
+  const existing = [{ label: "A" }];
+  assert.deepEqual(removePinAt(existing, 5), existing);
+  assert.deepEqual(removePinAt(existing, -1), existing);
+});
+
+test("removePinAt: handles a missing/null list gracefully", () => {
+  assert.deepEqual(removePinAt(null, 0), []);
+  assert.deepEqual(removePinAt(undefined, 0), []);
+});
+
+test("removePinAt: never mutates the existing list in place", () => {
+  const existing = [{ label: "A" }, { label: "B" }];
+  removePinAt(existing, 0);
+  assert.equal(existing.length, 2);
+});
+
+test("undoRemovePin: restores the removed pin at its original index, within the window", () => {
+  const afterRemoval = [{ label: "A" }, { label: "C" }];
+  const removed = { label: "B" };
+  const restored = undoRemovePin(afterRemoval, removed, 1, 1000, 1500, 8000);
+  assert.deepEqual(restored, [{ label: "A" }, { label: "B" }, { label: "C" }]);
+});
+
+test("undoRemovePin: restoring at index 0 puts it back at the front", () => {
+  const afterRemoval = [{ label: "B" }];
+  const removed = { label: "A" };
+  const restored = undoRemovePin(afterRemoval, removed, 0, 1000, 1500, 8000);
+  assert.deepEqual(restored, [{ label: "A" }, { label: "B" }]);
+});
+
+test("undoRemovePin: clamps an index past the current length rather than throwing", () => {
+  const afterRemoval = [{ label: "A" }];
+  const removed = { label: "B" };
+  const restored = undoRemovePin(afterRemoval, removed, 99, 1000, 1500, 8000);
+  assert.deepEqual(restored, [{ label: "A" }, { label: "B" }]);
+});
+
+test("undoRemovePin: returns null once the undo window has elapsed", () => {
+  assert.equal(undoRemovePin([{ label: "A" }], { label: "B" }, 1, 1000, 9001, 8000), null);
+});
+
+test("undoRemovePin: right at the window boundary still restores", () => {
+  const restored = undoRemovePin([], { label: "A" }, 0, 1000, 9000, 8000);
+  assert.deepEqual(restored, [{ label: "A" }]);
+});
+
+test("undoRemovePin: defaults the window to 8000ms when not given", () => {
+  assert.deepEqual(undoRemovePin([], { label: "A" }, 0, 0, 7999), [{ label: "A" }]);
+  assert.equal(undoRemovePin([], { label: "A" }, 0, 0, 8001), null);
+});
+
+test("undoRemovePin: returns null when there is nothing removed to restore", () => {
+  assert.equal(undoRemovePin([{ label: "A" }], null, 0, 1000, 1500, 8000), null);
+  assert.equal(undoRemovePin([{ label: "A" }], undefined, 0, 1000, 1500, 8000), null);
+});
+
+test("undoRemovePin: never mutates the list passed in", () => {
+  const afterRemoval = [{ label: "A" }];
+  undoRemovePin(afterRemoval, { label: "B" }, 1, 1000, 1500, 8000);
+  assert.equal(afterRemoval.length, 1);
 });
 
 // ---- addSavedSearch / removeSavedSearch (saved reverse searches) ----

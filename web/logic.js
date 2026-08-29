@@ -706,6 +706,33 @@ function sortPins(pins,key,dir){
   return list;
 }
 
+/* ---- undo for removing a single Compare pin ----
+   Mirrors clearRecentSites/undoClear's snapshot-and-restore pattern, but for
+   one item at its original index instead of the whole list, so a
+   remove-then-undo round trip doesn't scramble pin order. removePinAt is the
+   pure removal (identical shape to removeRecentSite/removeSavedSearch — an
+   out-of-range index no-ops rather than throwing or mutating the list).
+   undoRemovePin takes the same clock-free now/removedAt/windowMs shape as
+   undoClear so it stays pure and easily tested, plus the removed pin and the
+   index it came from, and splices it back into `list` at that position
+   (clamped to the current length, in case other pins were added/removed
+   while the undo offer was live). Returns null — never the unmodified list —
+   once there's nothing to restore or the window has elapsed, same
+   "null means nothing to restore" contract as undoClear. */
+function removePinAt(list,i){
+  if(!list||i<0||i>=list.length) return list||[];
+  return list.slice(0,i).concat(list.slice(i+1));
+}
+function undoRemovePin(list,removed,index,removedAt,now,windowMs){
+  windowMs=(windowMs==null)?8000:windowMs;
+  if(!removed) return null;
+  if(now-removedAt>windowMs) return null;
+  const out=(list||[]).slice();
+  const at=Math.max(0,Math.min(index==null?out.length:index,out.length));
+  out.splice(at,0,removed);
+  return out;
+}
+
 /* ---- reverse search, step 1: grid-scan/ranking engine ----
    Everything else in this app starts from a clicked point ("tell me about
    *this* parcel"). This flips it: "find me a few candidate sites in an
@@ -1084,5 +1111,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }

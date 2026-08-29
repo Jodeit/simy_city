@@ -2915,22 +2915,40 @@ Ground rules for each run:
       deep-link scheme is confirmed; otherwise link to the city/county's own
       parcel-search page. `simy validate`'s source count should go from 32
       to 33.
-- [ ] **Undo for removing a pin from Compare.** The Compare modal's
-      per-row "✕" button (`removePin(i)` in `web/explore.html`) deletes a
-      pinned parcel from `pins`/`localStorage` immediately with no
-      confirmation or recovery — the same gap "clear all recently-viewed"
-      had before its undo affordance was added. Mirror that established
-      pattern exactly: snapshot the removed pin (and its index) before
-      splicing it out, show an inline "Removed — Undo" affordance in place
-      of that row for a few seconds (reuse the existing `undoClear`-style
-      windowed-expiry math in `web/logic.js`, generalized or duplicated for
-      a single-item restore rather than a whole-list restore), and re-insert
-      the pin at its original index on Undo so pin order isn't scrambled by
-      a remove-then-undo round trip. Add unit tests for the restore-within-
-      window / past-the-window / boundary cases, same coverage
-      `clearRecentSites`/`undoClear` already have. Verify both pages still
-      load clean and that a real remove→undo click round trip in headless
-      Chromium restores the exact pin without throwing.
+- [x] **Undo for removing a pin from Compare.** The Compare modal's per-row
+      "✕" button (`removePin(i)`) used to delete a pinned parcel from
+      `pins`/`localStorage` immediately with no confirmation or recovery —
+      the same gap "clear all recently-viewed" had before its undo
+      affordance was added. Mirrored that established pattern: added
+      `removePinAt(list,i)` (pure index-removal, identical shape to
+      `removeRecentSite`/`removeSavedSearch` — out-of-range no-ops rather
+      than throwing) and `undoRemovePin(list,removed,index,removedAt,now,
+      windowMs)` to `web/logic.js` — same clock-free `now`/`removedAt`/
+      `windowMs` expiry contract as `undoClear`, but splicing one item back
+      in at its original index (clamped to the current length) instead of
+      restoring a whole list, so a remove-then-undo round trip doesn't
+      scramble pin order. `removePin(i)` in `web/explore.html` now snapshots
+      the removed pin/index/timestamp into `pinRemoved`, arms an 8s timer
+      (`PIN_UNDO_WINDOW_MS`), and `renderCompare()` renders a "Removed
+      **Site** — Undo" bar (`.cmpUndoBar`) above the table whenever
+      `pinRemoved` is set — including in the "no pins yet" empty state, so
+      removing the *last* pin still offers an undo instead of just going
+      blank. Only the latest removal is undoable (removing a second pin
+      while the first's offer is still showing replaces it), same
+      single-level-undo tradeoff `clearRecentSites`/`undoClear` already
+      made; "Clear all" disarms any pending offer rather than leaving a
+      stale one that could resurrect a pin into a list the user just wiped.
+      Added 12 new unit tests for `removePinAt`/`undoRemovePin` (removal,
+      out-of-range/missing-list no-ops, non-mutation, restore-within-window,
+      index-0 and past-the-end clamped restores, past-the-window/boundary
+      expiry, default window, nothing-to-restore). Verified in headless
+      Chromium: both pages load with zero console/page errors; seeded 3
+      pins and drove the *real* click path end to end — removing the middle
+      pin showed the correct undo text, clicking Undo restored all 3 pins in
+      original order, a second removal correctly replaced the first
+      unclaimed offer (undoing it restored only the latest pin, not the
+      first), and removing the sole remaining pin correctly showed a
+      working undo bar inside the empty state.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
