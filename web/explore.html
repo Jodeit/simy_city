@@ -1096,6 +1096,48 @@ const PARCEL_SOURCES=[
     // incorporated" boilerplate verbatim.
     zoning_note:"Denver is a consolidated city-county — there's no separate unincorporated area, so Denver's own zoning code (not a distinct county authority) applies everywhere in the boundary",
   },
+  {
+    name:"MassGIS Standardized Assessors' Parcels — Suffolk County (Suffolk County, MA)",
+    // Suffolk County (Boston, Chelsea, Revere, Winthrop) doesn't have its own
+    // countywide parcel FeatureServer the way most counties here do — Boston
+    // publishes its own city-only layer (gisportal.boston.gov), which would
+    // miss the other three municipalities entirely. Used the statewide
+    // MassGIS "Level 3" standardized-parcels aggregate instead, bbox-restricted
+    // to Suffolk County — same "lean on a good statewide aggregate when the
+    // county doesn't publish its own" call the Colorado/Denver entry above
+    // already made, and it covers every Massachusetts municipality uniformly
+    // (unlike Denver's case, useful again if a future run wants to extend
+    // this same source to another MA county just by widening the bbox).
+    urls:["https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/L3_TAXPAR_POLY_ASSESS_gdb/FeatureServer/0"],
+    bbox:[-71.19,42.22,-70.95,42.43],
+    // Confirmed fields (via the published MassGIS parcel standard — this
+    // sandbox blocks direct ArcGIS REST introspection like every prior county
+    // here): LOC_ID (statewide parcel id), OWNER1 (owner), SITE_ADDR (site
+    // address), USE_CODE (state land-use code), TOTAL_VAL (already in the
+    // shared value list from other counties), CITY (which of the four
+    // municipalities the parcel sits in). LOT_SIZE is deliberately left
+    // unmapped: the standard itself documents it as *either* square feet or
+    // acres depending on what the local assessor entered, with no separate
+    // unit flag to tell them apart per record — same unit-ambiguity call that
+    // left LA/Miami-Dade/San Diego/Allegheny's area fields unmapped rather
+    // than risk rendering a bogus acreage.
+    // No single per-parcel deep link spans all four municipalities (Boston's
+    // own Assessing Online is keyed by its own PID, not LOC_ID, and Chelsea/
+    // Revere/Winthrop each have their own separate portal or none at all), so
+    // — same cautious call as Harris/Bexar/LA/King/Miami-Dade/San Diego/
+    // Dallas/Allegheny/Fulton/Salt Lake/Franklin/Clark — send people to the
+    // state's own cross-municipality property-lookup map instead of guessing
+    // a link shape that would only work for one of the four.
+    record:()=>"https://www.mass.gov/info-details/massachusetts-interactive-property-map",
+    source_label:"MassGIS Standardized Assessors' Parcels",
+    county_state:"Suffolk County, MA",
+    // Massachusetts counties have no general governmental function at all —
+    // most (Suffolk included) exist only as a judicial/administrative
+    // boundary today — so unlike every other state covered so far, there's no
+    // "check the county, or the city if incorporated" split: zoning is set
+    // entirely by whichever of the four municipalities the parcel sits in.
+    zoning_note:"Massachusetts counties (Suffolk included) have no general governmental function today — zoning is set entirely by whichever municipality the parcel sits in (Boston, Chelsea, Revere, or Winthrop), not any county authority",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3001,10 +3043,10 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);
   let rows="";

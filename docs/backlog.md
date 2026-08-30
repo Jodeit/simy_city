@@ -2895,26 +2895,49 @@ Ground rules for each run:
       Overpass/ArcGIS is blocked from this sandbox, so a live end-to-end
       rooftop/school fetch on the real site is a good human spot-check, same
       as every prior real-verdict land use.
-- [ ] **20th parcel county: Suffolk County, MA (Boston).** Every parcel
-      county added so far is South, Midwest, Mountain West, or West Coast —
-      New England has zero coverage. Extend `PARCEL_SOURCES` in
-      `web/explore.html` with Boston/Suffolk County's public GIS parcel
-      layer (search for the live ArcGIS MapServer/FeatureServer endpoint,
-      same research approach every prior county entry used, since this
-      sandbox can't introspect ArcGIS REST hosts directly — Boston's own
-      open-data portal or MassGIS's statewide parcel layer are both worth
-      checking, same "lean on a good statewide aggregate when the county
-      doesn't publish its own" call the Colorado/Denver entry already made).
-      Confirm real field names from search-indexed docs before adding them
-      to the shared `pick()` candidate lists rather than guessing; if owner/
-      address/value aren't confirmed on the public layer, leave them
-      unmapped (same graceful partial-coverage precedent as King/Cook/Salt
-      Lake/Franklin/Clark/Denver). Massachusetts municipalities zone their
-      own land (unlike the TX counties already covered), so this needs its
-      own `zoning_note`. Add a record-link URL only if a stable per-parcel
-      deep-link scheme is confirmed; otherwise link to the city/county's own
-      parcel-search page. `simy validate`'s source count should go from 32
-      to 33.
+- [x] **20th parcel county: Suffolk County, MA (Boston).** Added a 20th
+      `PARCEL_SOURCES` entry covering Boston, Chelsea, Revere, and Winthrop —
+      the first New England coverage. Suffolk County has no countywide
+      parcel FeatureServer of its own (Boston's own open-data layer only
+      covers Boston, missing the other three municipalities), so — same
+      "lean on a good statewide aggregate" call the Colorado/Denver entry
+      already made — used MassGIS's statewide "Level 3" standardized-parcels
+      FeatureServer, bbox-restricted to Suffolk County. Confirmed field names
+      via the published MassGIS parcel standard (this sandbox still can't
+      introspect ArcGIS REST hosts directly, same constraint every prior
+      county hit): `LOC_ID` (id), `OWNER1` (owner), `SITE_ADDR` (address),
+      `USE_CODE` (land use), `TOTAL_VAL` (value — already in the shared list
+      from other counties) all added to the shared `pick()` candidate lists.
+      `LOT_SIZE` deliberately left unmapped: the standard itself documents it
+      as *either* square feet or acres depending on what the local assessor
+      entered, with no per-record unit flag to disambiguate — same
+      unit-ambiguity call that left LA/Miami-Dade/San Diego/Allegheny's area
+      fields unmapped rather than risk a bogus acreage. No single per-parcel
+      deep link spans all four municipalities (Boston's own portal is keyed
+      by its own PID, not `LOC_ID`), so — same cautious call as every
+      no-deep-link county before it — `record()` links to the state's own
+      cross-municipality property-lookup map. Massachusetts counties have no
+      general governmental function today, so this needed its own
+      `zoning_note` (zoning is set entirely by whichever of the four
+      municipalities the parcel sits in, not any county authority — a
+      different shape than every prior state's incorporated-vs-unincorporated
+      split). Correction to this item's original estimate: `simy validate`'s
+      source count is unaffected (stays at 32 sources, 16 layers) —
+      `PARCEL_SOURCES` is a plain JS array in `web/explore.html`, not a
+      `data_sources/*.yaml` registry entry (the existing `tcad_parcels` entry
+      already documents "the county-portal pattern" generically for every
+      county here, past and future). Verified in headless Chromium: both
+      pages load with zero genuine console/page errors; `inBbox` correctly
+      routes both downtown Boston and Winthrop to the new Suffolk source
+      (confirming the bbox spans all four municipalities) while a Denver
+      point still correctly does not; `PARCEL_SOURCES.length` is now 20; and
+      driving `showParcel` directly with a mocked MassGIS-shaped attribute
+      payload (plus an empty-attributes edge case) rendered parcel
+      ID/owner/address/land-use/appraised-value and the record link
+      correctly, with acreage correctly omitted rather than showing a bogus
+      number. Live ArcGIS endpoint reachability and exact field values
+      weren't confirmed from this sandbox — a live spot-check in Suffolk
+      County is a good human follow-up, same as every prior county.
 - [x] **Undo for removing a pin from Compare.** The Compare modal's per-row
       "✕" button (`removePin(i)`) used to delete a pinned parcel from
       `pins`/`localStorage` immediately with no confirmation or recovery —
