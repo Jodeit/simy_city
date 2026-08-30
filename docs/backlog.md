@@ -2973,6 +2973,47 @@ Ground rules for each run:
       first), and removing the sole remaining pin correctly showed a
       working undo bar inside the empty state.
 
+## Now (high value) — newly added (7)
+- [ ] **CSV/PDF export for "Best fit here" results.** The "🏆 Best fit here"
+      panel (`bestFitPanel`/`bestFitResults` in `web/explore.html`) ranks
+      every `BEST_FIT_USES` land use at the clicked site but has no way to
+      save or share the ranked table — every other results panel (Compare
+      parcels, reverse-search candidates) already has a matching "⬇️
+      Download CSV" / "📄 Download PDF" pair (`compareCsv`/`comparePdf`,
+      `searchCsv`/`searchPdf`). Add the same pair for Best-fit-here: a pure
+      `bestFitToCsvRows(entries)`-style helper in `web/logic.js` (site
+      lat/lng, each use's label, verdict, and `bestFitReasonText`) mirroring
+      the existing CSV builders, reusing the existing PDF-via-print-window
+      approach for the PDF button. Unit-test the CSV/row-building helper;
+      verify both pages still load with zero console errors in headless
+      Chromium and that clicking the new buttons produces a non-empty
+      CSV/print document for a seeded Best-fit-here result set.
+- [ ] **Offline app-shell caching via a service worker.** SIMyCity is already
+      an installable PWA (`web/manifest.json`, icons) but has no
+      `serviceworker.js` — a fresh load with a flaky connection re-fetches
+      `explore.html`/`index.html`/`logic.js`/`model.js`/vendored Leaflet/CSS
+      from scratch every time, and the installed PWA icon opens to a blank
+      error page with no network at all. Add a small cache-first service
+      worker that precaches just the static app shell (the two HTML pages,
+      `logic.js`, `model.js`, `web/vendor/*`, the manifest and icons) —
+      explicitly *not* map tiles or any Overpass/ArcGIS/Census/FEMA/USGS
+      API response, which must stay live. Register it from both pages
+      behind a `"serviceWorker" in navigator` check so it's a no-op in any
+      environment/browser without SW support. Verify in headless Chromium
+      that registration doesn't throw and both pages still load with zero
+      console/page errors (the SW's actual offline caching can't be
+      exercised in this network-blocked sandbox, but registration and the
+      cache-population logic can be).
+- [ ] **21st parcel county: Maricopa County, AZ (Phoenix).** Continues the
+      established `PARCEL_SOURCES` pattern (now 20 counties) — add a
+      Maricopa County parcel entry (ArcGIS FeatureServer/MapServer parcel
+      layer + APN/owner/acreage field mapping) following the exact shape of
+      the existing 20 entries in `web/explore.html`. Needs a human or a
+      network-enabled session to find and confirm the live ArcGIS endpoint
+      URL and field names (this sandbox can't reach it to verify), but the
+      county-list shape, docs, and any structural tests can be prepared
+      against a placeholder-free real URL once found.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
