@@ -2973,6 +2973,40 @@ Ground rules for each run:
       first), and removing the sole remaining pin correctly showed a
       working undo bar inside the empty state.
 
+## Now (high value) — newly added (7)
+- [ ] **"Best fit here" step 3, part 2: rank the remaining land uses.**
+      `rankLandUseVerdicts`/the explore-mode "What could go here?" fit list
+      only scores the 5 land uses `bestFitLeg` currently models
+      (warehouse_club, fast_casual, data_center, residential_subdivision,
+      multifamily) — the other 11 (food_truck_court, ev_charging_hub,
+      senior_living, urgent_care, self_storage, child_care_center, hotel,
+      grocery_store, car_wash, pharmacy, convenience_store) are invisible to
+      it even though each already has its own real single-use PASS/SHORT
+      verdict. Flagged as a reasonable follow-up when the fit-list ranking
+      was first built (see the "Best fit here" step-3 item above). Needs
+      either extending `standardUseVerdict`/`bestFitLeg` to cover each use's
+      actual gating legs, or a way for `rankLandUseVerdicts` to compare
+      verdicts of different shapes without forcing them into one schema.
+- [ ] **Reduced-motion for the landing page's decorative SVG animations.**
+      The `.loading` pulse got a `prefers-reduced-motion: no-preference`
+      guard in an earlier accessibility pass, but `web/index.html`'s
+      "How it works" dependency-diagram `dash`/`spin` SVG animations were
+      explicitly left out of that pass as "a natural follow-up if wanted."
+      Wrap them the same way so people who've asked their OS to minimize
+      motion get the static diagram instead of the animated one.
+- [ ] **Multi-tract ACS demographics summed across the real trade-area
+      radius.** The current Census ACS row reads exactly one tract at the
+      clicked point — noted at the time as "not a replacement for the
+      multi-km rooftop trade-area read... summing ACS tracts across a
+      multi-km radius is left as a larger follow-up." Given a use's own
+      `USE_DEMAND[...].radius`, look up every Census tract whose centroid
+      falls inside that radius (FCC block API can resolve a handful of
+      sample points, or a Census TIGERweb geo query) and aggregate
+      households/income/age across them, instead of just the one tract
+      under the pin. Larger than a single session — worth scoping down to a
+      first cut (e.g. 3x3 sample-point grid instead of exact tract
+      geometry) if picked up.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
