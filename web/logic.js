@@ -154,6 +154,50 @@ function rankLandUseVerdicts(entries){
     return a.i-b.i;
   }).map(x=>x.e);
 }
+// "Best fit here" step 2: turns a ranked list (rankLandUseVerdicts' output)
+// into toCsv()-ready rows (header + one row per use: rank, label, pass/short,
+// demand ratio, and the same gate-by-gate "why" text the on-screen panel
+// renders via explore.html's bestFitReasonText) — same "reuse the existing
+// CSV plumbing" pattern the reverse-search candidate list and Compare list
+// exports already established (candidatesToCsvRows/buildCompareReportText).
+// bestFitReasonText itself stays in explore.html rather than moving here: it
+// formats acreage through fmtAc(), which reads the live areaUnit
+// (ac/ha/sqft) display preference — a page-state global this dependency-free
+// logic.js file has no business depending on — so both this and
+// buildBestFitReportText below take `reasonFn`/`labelFn` callbacks instead of
+// recomputing that text themselves, keeping the on-screen and exported
+// reasons from ever drifting apart.
+function bestFitToCsvRows(ranked,labelFn,reasonFn){
+  const rows=[["#","Land use","Result","Demand % of need","Why"]];
+  (ranked||[]).forEach((e,i)=>rows.push([
+    i+1,
+    labelFn?labelFn(e.key):e.key,
+    e.pass?"PASS":"SHORT",
+    e.ratio!=null?Math.round(e.ratio*100):"",
+    reasonFn?reasonFn(e):"",
+  ]));
+  return rows;
+}
+// Builds the text for a printable/exportable report summarizing a "🏆 Best
+// fit here" ranked table (site, count scored, then each ranked use's rank/
+// pass-or-short/why-text) — mirrors buildCandidatesReportText's role for the
+// reverse-search candidate list, just built from rankLandUseVerdicts' output
+// instead. A missing/malformed center falls back to "?, ?" rather than
+// throwing or emitting "NaN, NaN", same contract as buildCandidatesReportText.
+function buildBestFitReportText(center,ranked,labelFn,reasonFn){
+  ranked=ranked||[];
+  const lat=(center&&typeof center.lat==="number")?center.lat.toFixed(4):"?";
+  const lng=(center&&typeof center.lng==="number")?center.lng.toFixed(4):"?";
+  let t=`SIMyCity — best fit here\n`;
+  t+=`Site: ${lat}, ${lng}\n`;
+  t+=`${ranked.length} use${ranked.length===1?"":"s"} scored\n\n`;
+  ranked.forEach((e,i)=>{
+    const label=labelFn?labelFn(e.key):e.key;
+    t+=`  ${i+1}. ${label} — ${e.pass?"PASS":"SHORT"}\n     ${reasonFn?reasonFn(e):""}\n`;
+  });
+  t+=`\nBuilt on open public data · github.com/jodeit/simy_city\n`;
+  return t;
+}
 // senior_living's demand read: every other use above reads demand as a
 // headcount (rooftops, or blendedDemand's rooftop-equivalent units) compared
 // against a threshold. Senior living instead reads demand as whether the
@@ -1113,5 +1157,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,bestFitToCsvRows,buildBestFitReportText,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }
