@@ -2994,18 +2994,40 @@ Ground rules for each run:
       explicitly left out of that pass as "a natural follow-up if wanted."
       Wrap them the same way so people who've asked their OS to minimize
       motion get the static diagram instead of the animated one.
-- [ ] **Multi-tract ACS demographics summed across the real trade-area
-      radius.** The current Census ACS row reads exactly one tract at the
-      clicked point — noted at the time as "not a replacement for the
-      multi-km rooftop trade-area read... summing ACS tracts across a
-      multi-km radius is left as a larger follow-up." Given a use's own
-      `USE_DEMAND[...].radius`, look up every Census tract whose centroid
-      falls inside that radius (FCC block API can resolve a handful of
-      sample points, or a Census TIGERweb geo query) and aggregate
-      households/income/age across them, instead of just the one tract
-      under the pin. Larger than a single session — worth scoping down to a
-      first cut (e.g. 3x3 sample-point grid instead of exact tract
-      geometry) if picked up.
+- [x] **Multi-tract ACS demographics summed across the real trade-area
+      radius.** The existing `sampleTradeAreaPoints` only ever sampled an
+      inner ring at 60% of a use's `USE_DEMAND[...].radius`, so a tract
+      centered near the actual trade-area edge was never seen by the
+      multi-tract ACS read at all — the "trade area" it summed was really
+      only the inner 60% of the stated radius. Took the scoped-down first
+      cut this item's own note suggested: added a second 8-point compass
+      ring at the *full* radius (center + 8@60% + 8@100% = 17 points, up
+      from 9), extending coverage out to the actual stated edge without an
+      exact-tract-geometry lookup (still no bbox/radius query exists on
+      either the FCC block or Census ACS APIs — point sampling remains the
+      only option). `sampleTradeAreaPoints` is shared by both call sites
+      (`runCensusTradeArea`'s on-screen "🏘️ Trade-area demographics" row and
+      `bestFitMedianAge`'s senior_living fit-list read), so both benefit
+      from the wider coverage with no other wiring changes — `dedupeTracts`/
+      `aggregateAcsTracts` downstream already handled an arbitrary point
+      count. Updated the existing unit tests for the new 17-point, two-ring
+      shape (inner ring still ~60%, new outer ring at 100% of radius) and
+      added a dedicated outer-ring-distance test; the on-screen "N-point
+      sample" label already read `pts.length` generically, so it now
+      correctly reports "17-point sample" with no template change needed.
+      Verified: `python -m pytest -q` (15 passed), `simy validate` (OK),
+      `node --test tests/js/*.test.mjs` (317 passed); headless Chromium
+      confirms both `web/explore.html` and `web/index.html` still load with
+      zero console/page errors, `sampleTradeAreaPoints` returns the expected
+      17 points from a live page context, and — with `fetch` mocked to
+      return 3 distinct tracts across the 17 sample points — driving
+      `runCensusTradeArea` directly fired exactly 17 FCC lookups, deduped to
+      3 tracts, and rendered the correct household-sum/weighted-average text
+      with the updated "17-point sample" label, zero console errors. Live
+      FCC/Census reachability is still blocked from this sandbox, so
+      whether real trade areas actually span more distinct tracts with this
+      wider coverage is a good human spot-check, same as the original
+      single-ring version.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

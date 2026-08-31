@@ -656,16 +656,22 @@ test("real model.json: findStandoffs() returns well-formed cycles", () => {
 
 // ---- multi-tract Census ACS trade area (sampleTradeAreaPoints / dedupeTracts / aggregateAcsTracts) ----
 
-test("sampleTradeAreaPoints: returns the center plus 8 compass-bearing points", () => {
+test("sampleTradeAreaPoints: returns the center plus two 8-point compass rings", () => {
   const pts = sampleTradeAreaPoints(30.327, -97.949, 15);
-  assert.equal(pts.length, 9);
+  assert.equal(pts.length, 17);
   assert.deepEqual(pts[0], { lat: 30.327, lng: -97.949 });
 });
 
-test("sampleTradeAreaPoints: ring points sit ~60% of the radius from the center", () => {
-  const pts = sampleTradeAreaPoints(30.327, -97.949, 10); // 10km radius -> 6km ring
-  const dists = pts.slice(1).map((p) => haversine(30.327, -97.949, p.lat, p.lng));
+test("sampleTradeAreaPoints: inner ring sits ~60% of the radius from the center", () => {
+  const pts = sampleTradeAreaPoints(30.327, -97.949, 10); // 10km radius -> 6km inner ring
+  const dists = pts.slice(1, 9).map((p) => haversine(30.327, -97.949, p.lat, p.lng));
   dists.forEach((km) => assert.ok(km > 5.9 && km < 6.1, `expected ~6km, got ${km}`));
+});
+
+test("sampleTradeAreaPoints: outer ring sits at the full radius from the center", () => {
+  const pts = sampleTradeAreaPoints(30.327, -97.949, 10); // 10km radius -> 10km outer ring
+  const dists = pts.slice(9, 17).map((p) => haversine(30.327, -97.949, p.lat, p.lng));
+  dists.forEach((km) => assert.ok(km > 9.9 && km < 10.1, `expected ~10km, got ${km}`));
 });
 
 test("sampleTradeAreaPoints: ring points spread across distinct bearings, not clustered", () => {

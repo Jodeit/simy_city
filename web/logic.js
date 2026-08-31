@@ -232,20 +232,22 @@ function parseAcsTractRow(json){
    query), approximate trade-area coverage by sampling points around the
    center — a documented proxy, same spirit as the rooftop-count radius
    itself — then dedupe to unique tracts and weight-average their ACS rows. */
-// Center + 8 compass-bearing points at 60% of the trade-area radius: enough
-// spatial spread to usually land in several different tracts without
-// exploding into dozens of FCC/ACS requests per click.
+// Center + 8 compass-bearing points at 60% of the trade-area radius, plus
+// another 8 at the full radius: two rings instead of one gives coverage out
+// to the actual stated trade-area edge (previously only the inner 60% was
+// ever sampled, so a tract centered near the boundary was never seen at
+// all), while still capping at 17 points/click so this doesn't explode into
+// dozens of FCC/ACS requests.
 function sampleTradeAreaPoints(lat,lng,radiusKm){
-  const R=6371, d=(radiusKm*0.6)/R;
+  const R=6371;
   const la1=lat*Math.PI/180, lo1=lng*Math.PI/180;
-  const pts=[{lat,lng}];
-  [0,45,90,135,180,225,270,315].forEach(bearingDeg=>{
+  const ring=d=>[0,45,90,135,180,225,270,315].map(bearingDeg=>{
     const brng=bearingDeg*Math.PI/180;
     const la2=Math.asin(Math.sin(la1)*Math.cos(d)+Math.cos(la1)*Math.sin(d)*Math.cos(brng));
     const lo2=lo1+Math.atan2(Math.sin(brng)*Math.sin(d)*Math.cos(la1),Math.cos(d)-Math.sin(la1)*Math.sin(la2));
-    pts.push({lat:la2*180/Math.PI, lng:((lo2*180/Math.PI+540)%360)-180});
+    return {lat:la2*180/Math.PI, lng:((lo2*180/Math.PI+540)%360)-180};
   });
-  return pts;
+  return [{lat,lng}, ...ring((radiusKm*0.6)/R), ...ring(radiusKm/R)];
 }
 // Collapses a list of per-point FCC lookups (some possibly null, on nulls/
 // dupes-because-the-same-tract-covers-multiple-sample-points) down to each
