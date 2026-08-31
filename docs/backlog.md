@@ -2974,26 +2974,36 @@ Ground rules for each run:
       working undo bar inside the empty state.
 
 ## Now (high value) — newly added (7)
-- [ ] **"Best fit here" step 3, part 2: rank the remaining land uses.**
-      `rankLandUseVerdicts`/the explore-mode "What could go here?" fit list
-      only scores the 5 land uses `bestFitLeg` currently models
-      (warehouse_club, fast_casual, data_center, residential_subdivision,
-      multifamily) — the other 11 (food_truck_court, ev_charging_hub,
-      senior_living, urgent_care, self_storage, child_care_center, hotel,
-      grocery_store, car_wash, pharmacy, convenience_store) are invisible to
-      it even though each already has its own real single-use PASS/SHORT
-      verdict. Flagged as a reasonable follow-up when the fit-list ranking
-      was first built (see the "Best fit here" step-3 item above). Needs
-      either extending `standardUseVerdict`/`bestFitLeg` to cover each use's
-      actual gating legs, or a way for `rankLandUseVerdicts` to compare
-      verdicts of different shapes without forcing them into one schema.
-- [ ] **Reduced-motion for the landing page's decorative SVG animations.**
-      The `.loading` pulse got a `prefers-reduced-motion: no-preference`
-      guard in an earlier accessibility pass, but `web/index.html`'s
-      "How it works" dependency-diagram `dash`/`spin` SVG animations were
-      explicitly left out of that pass as "a natural follow-up if wanted."
-      Wrap them the same way so people who've asked their OS to minimize
-      motion get the static diagram instead of the animated one.
+- [x] **"Best fit here" step 3, part 2: rank the remaining land uses.**
+      Already fully implemented by the time this run checked — no code
+      changes needed. `BEST_FIT_USES` (`web/explore.html`) now carries an
+      entry for all 16 `ALL_USE_KEYS` (confirmed programmatically in headless
+      Chromium: `BEST_FIT_USES.length === ALL_USE_KEYS.length === 16` with
+      zero missing/extra keys), each keyed to the right `demandKind`
+      (`"trivial"`/`"blended"`/`"schoolLoad"`/`"senior"`/`"generators"`, or
+      plain rooftop-ratio) and gating thresholds
+      (`minAcres`/`minCompetitorKm`/`minAadt`/`maxSubstationKm`/
+      `requireDistrict`) for its own verdict shape — this must have landed
+      as an incidental side effect of the later per-use "Best fit here" step
+      3 parts / new-land-use items (car_wash, pharmacy, convenience_store,
+      multifamily all wired their own `BEST_FIT_USES` entry inline as part
+      of adding the use), so the backlog just never got updated to reflect
+      it. Verified this run: `python -m pytest -q` (15 passed), `simy
+      validate` (OK), `node --test tests/js/*.test.mjs` (317 passed, no
+      changes), and headless Chromium confirms both pages load with zero
+      console/page errors and the `BEST_FIT_USES`/`ALL_USE_KEYS` coverage
+      check above.
+- [x] **Reduced-motion for the landing page's decorative SVG animations.**
+      Already fully implemented by the time this run checked — no code
+      changes needed. `web/index.html`'s `.dash`/`.spin` animation
+      declarations already sit inside a `@media (prefers-reduced-motion:
+      no-preference)` block (lines 114-117), so this must have landed as
+      part of a later full-page rewrite (`index.html` was recreated from
+      scratch alongside the PDF-export work) without the backlog being
+      updated to reflect it. Verified this run in headless Chromium with
+      `page.emulateMedia({reducedMotion:'reduce'})`: a fresh `.dash`/`.spin`
+      element's computed `animationName` is `none`; both pages load with
+      zero console/page errors.
 - [x] **Multi-tract ACS demographics summed across the real trade-area
       radius.** The existing `sampleTradeAreaPoints` only ever sampled an
       inner ring at 60% of a use's `USE_DEMAND[...].radius`, so a tract
@@ -3028,6 +3038,56 @@ Ground rules for each run:
       whether real trade areas actually span more distinct tracts with this
       wider coverage is a good human spot-check, same as the original
       single-ring version.
+
+## Now (high value) — newly added (8)
+- [ ] **CSV/PDF export for the "🏆 Best fit here" ranked table.** The other
+      two multi-result views — the Compare-parcels modal and the reverse-
+      search candidate list — both already have CSV and PDF export buttons
+      (`toCsv`/`buildCompareReportText`/`buildCandidatesReportText`/
+      `buildSimplePdf` in `web/logic.js`), but `runBestFit`'s ranked-use
+      table (`web/explore.html`) has no export at all — the only one of the
+      three multi-row results you can't take with you. Add a matching
+      "⬇️ Download CSV" / "📄 Download PDF" pair next to the existing
+      "🔍 Find candidate sites"-style controls, reusing the same
+      `toCsv`/`buildSimplePdf` helpers with a new
+      `buildBestFitReportText`-style row shape (use label, pass/short,
+      ratio/margin, the specific gate(s) that failed) — same
+      "row-shape function + existing exporter" pattern every prior export
+      item here followed, not a new export mechanism.
+- [ ] **21st parcel county: Philadelphia County, PA (Philadelphia).**
+      Philadelphia's Office of Property Assessment publishes a public
+      ArcGIS FeatureServer (`opa_properties_public`, via
+      `services.arcgis.com`/Philadelphia's open-data GIS hub) with
+      `PARCEL_NUMBER` (OPA account number, id), `OWNER_1` (owner),
+      `LOCATION` (address), `CATEGORY_CODE_DESCRIPTION` (land use), and
+      `MARKET_VALUE` (already in the shared `pick()` value list) — same
+      "confirm field names via published docs, sandbox can't introspect
+      ArcGIS REST directly" constraint every prior county here hit. OPA
+      publishes a stable per-parcel deep link
+      (`property.phila.gov/?p=<PARCEL_NUMBER>`), so this one gets a real
+      record link, not a search-page fallback. Philadelphia is a
+      consolidated city-county (no separate incorporated/unincorporated
+      split, unlike every prior county), so its `zoning_note` should say so
+      plainly rather than reusing another state's incorporated-vs-county
+      language.
+- [ ] **17th land use: Big-box home improvement / hardware store
+      (Home Depot/Lowe's-style).** Follows the same recipe as
+      `grocery_store`/`convenience_store`/`pharmacy`: a `requires.demand`
+      rooftop trade-area read at a suburban-scale radius (~8-10 km, between
+      `grocery_store`'s 8 km and `warehouse_club`'s 15 km — these draw a
+      citywide weekend-project crowd, not just the immediate neighborhood),
+      a `requires.parcel.min_buildable_acres` site-size gate (~10-12 ac for
+      the store + garden center + lumber yard + parking, closer to
+      `warehouse_club`'s 15 ac than `grocery_store`'s smaller footprint),
+      and a `requires.competition.min_distance_km_from_nearest` gate against
+      existing `shop=doityourself|hardware` OSM tags (`min_distance_km`
+      pattern already established by `car_wash`/`pharmacy`/
+      `convenience_store` — avoid saturating a market already served, not
+      the food-truck-court "farther is always better" inversion). Wire
+      through `data_sources/layers.yaml`, `ALL_USE_KEYS`, `USE_DEMAND`,
+      `BEST_FIT_USES`, and a new `maybeRenderXXXVerdict` — same
+      wait-for-both-legs shape every prior standard-gate use already uses,
+      so `standardUseVerdict` needs no changes.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
