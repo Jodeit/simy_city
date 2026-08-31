@@ -3040,20 +3040,42 @@ Ground rules for each run:
       single-ring version.
 
 ## Now (high value) — newly added (8)
-- [ ] **CSV/PDF export for the "🏆 Best fit here" ranked table.** The other
-      two multi-result views — the Compare-parcels modal and the reverse-
-      search candidate list — both already have CSV and PDF export buttons
-      (`toCsv`/`buildCompareReportText`/`buildCandidatesReportText`/
-      `buildSimplePdf` in `web/logic.js`), but `runBestFit`'s ranked-use
-      table (`web/explore.html`) has no export at all — the only one of the
-      three multi-row results you can't take with you. Add a matching
-      "⬇️ Download CSV" / "📄 Download PDF" pair next to the existing
-      "🔍 Find candidate sites"-style controls, reusing the same
-      `toCsv`/`buildSimplePdf` helpers with a new
-      `buildBestFitReportText`-style row shape (use label, pass/short,
-      ratio/margin, the specific gate(s) that failed) — same
-      "row-shape function + existing exporter" pattern every prior export
-      item here followed, not a new export mechanism.
+- [x] **CSV/PDF export for the "🏆 Best fit here" ranked table.** Added a
+      matching "⬇️ Download CSV" / "📄 Download PDF" pair to `renderBestFit`
+      (`web/explore.html`, shown only once there's a non-empty ranked list —
+      same "no button on an empty result" precedent the reverse-search
+      candidate list already set), reusing the exact `toCsv`/`buildSimplePdf`/
+      `wrapText`/Blob-and-anchor plumbing every prior export item here
+      established. Added `bestFitToCsvRows(ranked,labelFn,reasonFn)` and
+      `buildBestFitReportText(center,ranked,labelFn,reasonFn)` to
+      `web/logic.js` — rank, use label, pass/short, demand ratio, and the
+      same gate-by-gate "why" text (site size, AADT, substation, competitor
+      distance, water district — whichever gates that use's thresholds turn
+      on) the on-screen row already renders. `bestFitReasonText` itself
+      stayed in `explore.html` rather than moving to `logic.js`: it formats
+      acreage through `fmtAc()`, which reads the live `areaUnit` (ac/ha/sqft)
+      display preference — a page-state global the dependency-free
+      `logic.js` has no business depending on — so both new functions take
+      `labelFn`/`reasonFn` callbacks instead of recomputing that text
+      themselves, which keeps the on-screen and exported reasons from ever
+      drifting apart (same reasoning `candidatesToCsvRows`/
+      `buildCandidatesReportText` already share `candidateWhyText` by). Added
+      10 new unit tests (header+rows shape, missing-ratio renders as an empty
+      field not NaN/null, missing-callback fallback to the raw key/empty
+      why-text, empty/null ranked list, RFC-4180 round-trip through `toCsv`,
+      report header/site/count/per-use blocks, singular "1 use scored",
+      empty-list report, malformed-center "?, ?" fallback). Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK), `node --test
+      tests/js/*.test.mjs` (327 passed, 10 new), and headless Chromium
+      confirms both `web/explore.html` and `web/index.html` load with zero
+      console/page errors, and driving `renderBestFit` directly with a
+      fabricated ranked list (this sandbox can't reach the live
+      Overpass/ArcGIS hosts `runBestFit` itself calls) rendered both export
+      buttons, clicking them ran the real CSV/PDF download path with zero
+      errors, and the captured CSV Blob content matched the on-screen "why"
+      text exactly. A live end-to-end `runBestFit()` → export click on the
+      real site is a good human spot-check, same as every network-touching
+      item before it.
 - [ ] **21st parcel county: Philadelphia County, PA (Philadelphia).**
       Philadelphia's Office of Property Assessment publishes a public
       ArcGIS FeatureServer (`opa_properties_public`, via

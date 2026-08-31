@@ -23,7 +23,7 @@ const {
   buildCandidatesReportText, buildCompareReportText,
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
-  standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
+  standardUseVerdict, rankLandUseVerdicts, bestFitToCsvRows, buildBestFitReportText, countDemandRead, schoolLoadDemandRead,
   areaUnitLabel, convertArea, formatArea,
   APP_STATE_KEYS, buildAppStateExport, parseAppStateImport,
 } = logic;
@@ -558,6 +558,76 @@ test("rankLandUseVerdicts: doesn't mutate the input array", () => {
 test("rankLandUseVerdicts: empty and missing input don't throw", () => {
   assert.deepEqual(rankLandUseVerdicts([]), []);
   assert.deepEqual(rankLandUseVerdicts(undefined), []);
+});
+
+// ---- bestFitToCsvRows / buildBestFitReportText ("Best fit here" CSV/PDF export) ----
+const bfLabelFn = key => ({ a: "Fast Casual", b: "Warehouse Club" }[key] || key);
+const bfReasonFn = e => `demand ${Math.round(e.ratio * 100)}%${e.pass ? " (pass)" : " (short)"}`;
+
+test("bestFitToCsvRows: header row plus one row per ranked entry, using the passed label/reason callbacks", () => {
+  const ranked = [
+    { key: "a", pass: true, ratio: 1.2 },
+    { key: "b", pass: false, ratio: 0.6 },
+  ];
+  const rows = bestFitToCsvRows(ranked, bfLabelFn, bfReasonFn);
+  assert.deepEqual(rows[0], ["#", "Land use", "Result", "Demand % of need", "Why"]);
+  assert.deepEqual(rows[1], [1, "Fast Casual", "PASS", 120, "demand 120% (pass)"]);
+  assert.deepEqual(rows[2], [2, "Warehouse Club", "SHORT", 60, "demand 60% (short)"]);
+});
+
+test("bestFitToCsvRows: a missing ratio renders as an empty field, not NaN/null", () => {
+  const rows = bestFitToCsvRows([{ key: "a", pass: true, ratio: undefined }], bfLabelFn, bfReasonFn);
+  assert.equal(rows[1][3], "");
+});
+
+test("bestFitToCsvRows: missing labelFn/reasonFn falls back to the raw key / an empty why-text", () => {
+  const rows = bestFitToCsvRows([{ key: "a", pass: true, ratio: 1 }]);
+  assert.deepEqual(rows[1], [1, "a", "PASS", 100, ""]);
+});
+
+test("bestFitToCsvRows: an empty ranked list still returns just the header row", () => {
+  assert.deepEqual(bestFitToCsvRows([], bfLabelFn, bfReasonFn), [["#", "Land use", "Result", "Demand % of need", "Why"]]);
+});
+
+test("bestFitToCsvRows: handles a missing/null ranked list gracefully", () => {
+  assert.deepEqual(bestFitToCsvRows(null, bfLabelFn, bfReasonFn), [["#", "Land use", "Result", "Demand % of need", "Why"]]);
+  assert.deepEqual(bestFitToCsvRows(undefined, bfLabelFn, bfReasonFn), [["#", "Land use", "Result", "Demand % of need", "Why"]]);
+});
+
+test("bestFitToCsvRows: rows round-trip through toCsv (RFC-4180 output for a plain numeric/text shape)", () => {
+  const ranked = [{ key: "a", pass: true, ratio: 1.2 }];
+  const csv = toCsv(bestFitToCsvRows(ranked, bfLabelFn, bfReasonFn));
+  assert.equal(csv, "#,Land use,Result,Demand % of need,Why\r\n1,Fast Casual,PASS,120,demand 120% (pass)");
+});
+
+test("buildBestFitReportText: header, site, count, then one numbered block per ranked use", () => {
+  const ranked = [
+    { key: "a", pass: true, ratio: 1.2 },
+    { key: "b", pass: false, ratio: 0.6 },
+  ];
+  const t = buildBestFitReportText({ lat: 30.2672, lng: -97.7431 }, ranked, bfLabelFn, bfReasonFn);
+  assert.match(t, /SIMyCity — best fit here/);
+  assert.match(t, /Site: 30\.2672, -97\.7431/);
+  assert.match(t, /2 uses scored/);
+  assert.match(t, /1\. Fast Casual — PASS\n\s+demand 120% \(pass\)/);
+  assert.match(t, /2\. Warehouse Club — SHORT\n\s+demand 60% \(short\)/);
+  assert.match(t, /github\.com\/jodeit\/simy_city/);
+});
+
+test("buildBestFitReportText: singular 'use' for exactly one scored entry", () => {
+  const t = buildBestFitReportText({ lat: 30, lng: -97 }, [{ key: "a", pass: true, ratio: 1 }], bfLabelFn, bfReasonFn);
+  assert.match(t, /1 use scored/);
+});
+
+test("buildBestFitReportText: empty/missing ranked list still renders a valid report, zero scored", () => {
+  assert.match(buildBestFitReportText({ lat: 30, lng: -97 }, [], bfLabelFn, bfReasonFn), /0 uses scored/);
+  assert.doesNotThrow(() => buildBestFitReportText({ lat: 30, lng: -97 }, null, bfLabelFn, bfReasonFn));
+  assert.doesNotThrow(() => buildBestFitReportText({ lat: 30, lng: -97 }, undefined, bfLabelFn, bfReasonFn));
+});
+
+test("buildBestFitReportText: missing/malformed center falls back to '?, ?' instead of throwing or emitting NaN", () => {
+  assert.match(buildBestFitReportText(null, [], bfLabelFn, bfReasonFn), /Site: \?, \?/);
+  assert.match(buildBestFitReportText({}, [], bfLabelFn, bfReasonFn), /Site: \?, \?/);
 });
 
 // ---- parcel helpers (inBbox / pick) ----

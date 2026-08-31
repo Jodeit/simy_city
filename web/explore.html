@@ -2649,11 +2649,57 @@ function renderBestFit(ranked,noRead){
      </div>`).join("");
   const notRankedHtml=notRanked.length
     ? `<p class="src">Not scored here (no shared demand/site/competitor read, or no rooftop data at this point): ${notRanked.map(k=>esc(useLabel(k))).join(", ")}</p>` : "";
+  const exportHtml=ranked.length
+    ? `<div class="candCsvRow"><button class="toolbtn" id="bestFitCsv" type="button">⬇️ Download CSV</button>`+
+      `<button class="toolbtn" id="bestFitPdf" type="button">📄 Download PDF</button> <span class="ok" id="bestFitCsvMsg"></span></div>` : "";
   resEl.innerHTML=(ranked.length?`<div class="candList">${rows}</div>`
-    : `<p class="src">No candidates could be scored at this point.</p>`)+notRankedHtml;
+    : `<p class="src">No candidates could be scored at this point.</p>`)+notRankedHtml+exportHtml;
   resEl.querySelectorAll(".bfRow").forEach(row=>{
     wireActivate(row,()=>{ selectUse(row.dataset.key); if(lastLatLng)analyze(lastLatLng); closeBestFitPanel(); });
   });
+  if(!ranked.length)return;
+  document.getElementById("bestFitCsv").onclick=()=>{
+    downloadBestFitCsv();
+    const m=document.getElementById("bestFitCsvMsg");
+    if(m){m.textContent="✓ CSV downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+  document.getElementById("bestFitPdf").onclick=()=>{
+    downloadBestFitPdf();
+    const m=document.getElementById("bestFitCsvMsg");
+    if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
+  };
+}
+// Exports the "🏆 Best fit here" ranked table as a downloaded .csv via
+// bestFitToCsvRows (web/logic.js) — same client-side-only Blob+anchor
+// pattern as downloadCandidatesCsv/downloadCompareCsv, no network call.
+function downloadBestFitCsv(){
+  if(!lastBestFitRanked||!lastBestFitRanked.length)return;
+  const rows=bestFitToCsvRows(lastBestFitRanked,useLabel,bestFitReasonText);
+  const blob=new Blob([toCsv(rows)],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-best-fit.csv";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+// Exports the "🏆 Best fit here" ranked table as a printable PDF report
+// (clicked site, count scored, then each ranked use's rank/pass-or-short/
+// why-text) — same buildSimplePdf/wrapText plumbing as
+// downloadCandidatesPdf/downloadCasePdf, just fed buildBestFitReportText's
+// output instead, for sharing "what fits here" with a non-technical
+// stakeholder rather than a single use's verdict.
+function downloadBestFitPdf(){
+  if(!lastBestFitRanked||!lastBestFitRanked.length)return;
+  const text=buildBestFitReportText(lastLatLng,lastBestFitRanked,useLabel,bestFitReasonText);
+  const margin=54, fontSize=10, charWidth=fontSize*0.6; // Courier: 0.6em per glyph
+  const maxChars=Math.floor((612-2*margin)/charWidth);
+  const lines=wrapText(text,maxChars,s=>s.length);
+  const pdfText=buildSimplePdf(lines,{margin,fontSize});
+  const bytes=Uint8Array.from(pdfText,ch=>ch.charCodeAt(0));
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-best-fit.pdf";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
 
 /* ---- reverse search, step 3: the "🔍 Find candidate sites" search UI ----
