@@ -3040,20 +3040,35 @@ Ground rules for each run:
       single-ring version.
 
 ## Now (high value) — newly added (8)
-- [ ] **CSV/PDF export for the "🏆 Best fit here" ranked table.** The other
+- [x] **CSV/PDF export for the "🏆 Best fit here" ranked table.** The other
       two multi-result views — the Compare-parcels modal and the reverse-
-      search candidate list — both already have CSV and PDF export buttons
+      search candidate list — both already had CSV and PDF export buttons
       (`toCsv`/`buildCompareReportText`/`buildCandidatesReportText`/
       `buildSimplePdf` in `web/logic.js`), but `runBestFit`'s ranked-use
-      table (`web/explore.html`) has no export at all — the only one of the
-      three multi-row results you can't take with you. Add a matching
-      "⬇️ Download CSV" / "📄 Download PDF" pair next to the existing
-      "🔍 Find candidate sites"-style controls, reusing the same
-      `toCsv`/`buildSimplePdf` helpers with a new
-      `buildBestFitReportText`-style row shape (use label, pass/short,
-      ratio/margin, the specific gate(s) that failed) — same
-      "row-shape function + existing exporter" pattern every prior export
-      item here followed, not a new export mechanism.
+      table (`web/explore.html`) had no export at all. Moved the gate-by-gate
+      explanation text (previously a local closure in `explore.html` over its
+      own `fmtAc`/`areaUnit` globals) into a pure, parameterized
+      `bestFitReasonText(e, unit)` in `web/logic.js`, then added
+      `bestFitToCsvRows(ranked, unit, labelFn)` (header + rank/use/verdict/
+      demand-%-of-need/gate-detail row per ranked use, missing ratio → empty
+      cell not "NaN") and `buildBestFitReportText(center, ranked,
+      notRankedLabels, unit, labelFn)` — same "row-shape function + existing
+      exporter" pattern every prior export item here followed, not a new
+      export mechanism. Added a matching "⬇️ Download CSV" / "📄 Download PDF"
+      pair to the ranked-list panel (only shown once there's a ranking to
+      export), wired through the same `bestFitCsv`/`bestFitPdf` button-click →
+      `toCsv`/`buildSimplePdf` → Blob → anchor-click flow
+      `downloadCandidatesCsv`/`downloadCandidatesPdf` already established.
+      Added 20 new unit tests (every individual gate's pass/fail/no-data/
+      lookup-error text, unit-aware site-size formatting including hectares,
+      all-gates-together ordering, CSV header/rows/empty-input/round-trip
+      through `toCsv`, and the PDF report's header/point/count/per-use
+      sections/singular-"use"/not-ranked-list/malformed-center fallback).
+      Verified in headless Chromium: both pages load with zero console/page
+      errors; driving `renderBestFit` with synthetic ranked verdict data
+      (no live network needed) rendered the new export buttons, and clicking
+      both through the real handlers (Blob construction, `buildSimplePdf`,
+      anchor click) completed without throwing.
 - [ ] **21st parcel county: Philadelphia County, PA (Philadelphia).**
       Philadelphia's Office of Property Assessment publishes a public
       ArcGIS FeatureServer (`opa_properties_public`, via
