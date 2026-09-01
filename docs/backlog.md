@@ -3040,20 +3040,40 @@ Ground rules for each run:
       single-ring version.
 
 ## Now (high value) — newly added (8)
-- [ ] **CSV/PDF export for the "🏆 Best fit here" ranked table.** The other
-      two multi-result views — the Compare-parcels modal and the reverse-
-      search candidate list — both already have CSV and PDF export buttons
-      (`toCsv`/`buildCompareReportText`/`buildCandidatesReportText`/
-      `buildSimplePdf` in `web/logic.js`), but `runBestFit`'s ranked-use
-      table (`web/explore.html`) has no export at all — the only one of the
-      three multi-row results you can't take with you. Add a matching
-      "⬇️ Download CSV" / "📄 Download PDF" pair next to the existing
-      "🔍 Find candidate sites"-style controls, reusing the same
-      `toCsv`/`buildSimplePdf` helpers with a new
-      `buildBestFitReportText`-style row shape (use label, pass/short,
-      ratio/margin, the specific gate(s) that failed) — same
-      "row-shape function + existing exporter" pattern every prior export
-      item here followed, not a new export mechanism.
+- [x] **CSV/PDF export for the "🏆 Best fit here" ranked table.** Added a
+      matching "⬇️ Download CSV" / "📄 Download PDF" pair to the best-fit
+      results panel (`web/explore.html`), reusing the same
+      `toCsv`/`buildSimplePdf` plumbing the Compare-parcels and
+      reverse-search candidate exports already use. Moved `bestFitReasonText`
+      (the per-gate ✓/✗ reason string the panel already rendered) out of
+      `explore.html` and into `web/logic.js` as a pure function taking `unit`
+      as an argument instead of reading the page's `areaUnit` global — same
+      "pure function, caller supplies context" contract `buildCompareReportText`
+      already uses — so the live panel, the new CSV rows, and the new PDF
+      report all render off one implementation instead of duplicating the
+      per-gate text. Added `bestFitToCsvRows(ranked,unit)` (rank/use/PASS-or-
+      SHORT/demand-ratio/reason columns) and `buildBestFitReportText(center,
+      ranked,notRankedLabels,unit)` (mirrors `buildCandidatesReportText`'s
+      report shape, plus a trailing "Not scored here" section for uses with
+      no shared demand/site/competitor read) to `web/logic.js`. Each scored
+      entry now carries a resolved `label` (`useLabel(u.key)`, added where
+      `runBestFit` builds the `scored` array) since the export functions are
+      pure and can't reach the page's `MODEL` global themselves. Added 19 new
+      unit tests covering every gate's pass/short/no-data/unavailable text
+      branches, multi-gate joins, the unit-aware acreage formatting, CSV
+      header/row/round-trip shape, missing-ratio/missing-label fallbacks, and
+      the PDF report's count/pluralization/not-scored-section/null-center
+      handling. Verified in headless Chromium: both pages load with zero
+      console/page errors; switching to Test-a-use mode, selecting
+      `warehouse_club`, and driving `renderBestFit` with two synthetic scored
+      entries (one PASS, one SHORT) rendered the new CSV/PDF buttons, and
+      clicking each through the real `Blob`+anchor download path (mocking
+      `URL.createObjectURL` to observe the call rather than skip it) produced
+      the "✓ CSV downloaded" / "✓ PDF downloaded" confirmation messages with
+      zero console errors; `bestFitToCsvRows`/`buildBestFitReportText` driven
+      directly on the same synthetic data produced the expected rows/report
+      text, including the water-district SHORT reason and the "Not scored
+      here" trailer.
 - [ ] **21st parcel county: Philadelphia County, PA (Philadelphia).**
       Philadelphia's Office of Property Assessment publishes a public
       ArcGIS FeatureServer (`opa_properties_public`, via

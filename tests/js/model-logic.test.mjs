@@ -26,6 +26,7 @@ const {
   standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
   areaUnitLabel, convertArea, formatArea,
   APP_STATE_KEYS, buildAppStateExport, parseAppStateImport,
+  bestFitReasonText, bestFitToCsvRows, buildBestFitReportText,
 } = logic;
 
 // ---- perspectives (evaluate / isContested) ----
@@ -2277,4 +2278,161 @@ test("parseAppStateImport: drops unknown keys and non-string values rather than 
 
 test("parseAppStateImport: an all-unknown/all-invalid data object parses to an empty (not null) result", () => {
   assert.deepEqual(parseAppStateImport(JSON.stringify({ app: "simycity", data: { junk: "x" } })), {});
+});
+
+// ---- bestFitReasonText / bestFitToCsvRows / buildBestFitReportText ("Best fit here" CSV/PDF export) ----
+
+test("bestFitReasonText: a passing demand-only entry (no site/competitor/etc. gates)", () => {
+  const e = { demandOk: true, ratio: 0.92 };
+  assert.equal(bestFitReasonText(e, "ac"), "✓ demand 92% of need");
+});
+
+test("bestFitReasonText: a failing demand-only entry", () => {
+  const e = { demandOk: false, ratio: 0.4 };
+  assert.equal(bestFitReasonText(e, "ac"), "✗ demand only 40% of need");
+});
+
+test("bestFitReasonText: site-size gate — pass, fail, and unlisted-acreage states", () => {
+  const base = { demandOk: true, ratio: 1, minAcres: 15 };
+  assert.equal(bestFitReasonText({ ...base, siteOk: true, acres: 20 }, "ac"), "✓ demand 100% of need · ✓ site 20.00 ac");
+  assert.equal(bestFitReasonText({ ...base, siteOk: false, acres: 5 }, "ac"), "✓ demand 100% of need · ✗ site only 5.00 ac (need ≥15.00 ac)");
+  assert.equal(bestFitReasonText({ ...base, siteOk: false, acres: null }, "ac"), "✓ demand 100% of need · ? site size unlisted");
+});
+
+test("bestFitReasonText: highway-traffic (AADT) gate — pass, short, no route in range, and unavailable states", () => {
+  const base = { demandOk: true, ratio: 1, minAadt: 20000 };
+  assert.equal(
+    bestFitReasonText({ ...base, aadtOk: true, aadtHit: { aadt: 25000 } }, "ac"),
+    "✓ demand 100% of need · ✓ nearby highway ~25,000 AADT",
+  );
+  assert.equal(
+    bestFitReasonText({ ...base, aadtOk: false, aadtHit: { aadt: 8000 } }, "ac"),
+    "✓ demand 100% of need · ✗ nearby highway only ~8,000 AADT (need ≥20,000)",
+  );
+  assert.equal(
+    bestFitReasonText({ ...base, aadtOk: false, aadtHit: null }, "ac"),
+    "✓ demand 100% of need · ✗ no National Highway System route in range (need ≥20,000 AADT)",
+  );
+  assert.equal(
+    bestFitReasonText({ ...base, aadtErr: true }, "ac"),
+    "✓ demand 100% of need · ? traffic-count unavailable",
+  );
+});
+
+test("bestFitReasonText: substation-distance gate — pass, short, none in range, and unavailable states", () => {
+  const base = { demandOk: true, ratio: 1, maxSubstationKm: 5 };
+  assert.equal(bestFitReasonText({ ...base, subOk: true, subKm: 2.3 }, "ac"), "✓ demand 100% of need · ✓ substation 2.3 km away");
+  assert.equal(bestFitReasonText({ ...base, subOk: false, subKm: 8.1 }, "ac"), "✓ demand 100% of need · ✗ nearest substation 8.1 km away (need ≤5 km)");
+  assert.equal(bestFitReasonText({ ...base, subOk: false, subKm: null }, "ac"), "✓ demand 100% of need · ✗ no substation in range (need ≤5 km)");
+  assert.equal(bestFitReasonText({ ...base, subErr: true }, "ac"), "✓ demand 100% of need · ? substation distance unavailable");
+});
+
+test("bestFitReasonText: competitor-distance gate — pass, short, none in range, and unavailable states", () => {
+  const base = { demandOk: true, ratio: 1, minCompetitorKm: 1 };
+  assert.equal(
+    bestFitReasonText({ ...base, farOk: true, nearestComp: { km: 1.6 } }, "ac"),
+    "✓ demand 100% of need · ✓ nearest competitor 1.6 km away",
+  );
+  assert.equal(
+    bestFitReasonText({ ...base, farOk: false, nearestComp: { km: 0.4 } }, "ac"),
+    "✓ demand 100% of need · ✗ nearest competitor only 0.4 km away (need ≥1)",
+  );
+  assert.equal(
+    bestFitReasonText({ ...base, farOk: true, nearestComp: null }, "ac"),
+    "✓ demand 100% of need · ✓ no existing competitor in range",
+  );
+  assert.equal(bestFitReasonText({ ...base, compErr: true }, "ac"), "✓ demand 100% of need · ? competitor distance unavailable");
+});
+
+test("bestFitReasonText: water-district gate — inside, outside, and unknown-coverage states", () => {
+  const base = { demandOk: true, ratio: 1, requireDistrict: true };
+  assert.equal(bestFitReasonText({ ...base, mudOk: true, mud: true }, "ac"), "✓ demand 100% of need · ✓ inside a mapped water district");
+  assert.equal(bestFitReasonText({ ...base, mudOk: false, mud: false }, "ac"), "✓ demand 100% of need · ✗ no mapped water district here");
+  assert.equal(bestFitReasonText({ ...base, mudOk: false, mud: null }, "ac"), "✓ demand 100% of need · ? water-district coverage unknown for this area");
+});
+
+test("bestFitReasonText: multiple active gates join with the same middle-dot separator candidateWhyText uses", () => {
+  const e = {
+    demandOk: true, ratio: 0.9, minAcres: 15, siteOk: true, acres: 20,
+    minCompetitorKm: 1, farOk: false, nearestComp: { km: 0.5 },
+  };
+  assert.equal(
+    bestFitReasonText(e, "ac"),
+    "✓ demand 90% of need · ✓ site 20.00 ac · ✗ nearest competitor only 0.5 km away (need ≥1)",
+  );
+});
+
+test("bestFitReasonText: acreage is formatted in the caller's chosen unit (hectares), same as formatArea elsewhere", () => {
+  const e = { demandOk: true, ratio: 1, minAcres: 15, siteOk: true, acres: 20 };
+  assert.match(bestFitReasonText(e, "ha"), /✓ site 8\.09 ha/);
+});
+
+test("bestFitToCsvRows: header row plus one row per ranked use (rank/use/result/ratio/reason)", () => {
+  const ranked = [
+    { key: "warehouse_club", label: "Warehouse Club", pass: true, demandOk: true, ratio: 0.95 },
+    { key: "data_center", label: "Data Center", pass: false, demandOk: false, ratio: 0.3 },
+  ];
+  const rows = bestFitToCsvRows(ranked, "ac");
+  assert.equal(rows.length, 3);
+  assert.deepEqual(rows[0], ["#", "Use", "Result", "Demand ratio", "Reason"]);
+  assert.deepEqual(rows[1], [1, "Warehouse Club", "PASS", "95%", "✓ demand 95% of need"]);
+  assert.deepEqual(rows[2], [2, "Data Center", "SHORT", "30%", "✗ demand only 30% of need"]);
+});
+
+test("bestFitToCsvRows: falls back to the raw use key when a row has no resolved label", () => {
+  const rows = bestFitToCsvRows([{ key: "hotel", pass: true, demandOk: true, ratio: 1 }], "ac");
+  assert.equal(rows[1][1], "hotel");
+});
+
+test("bestFitToCsvRows: a missing ratio renders an empty ratio column rather than 'NaN%'", () => {
+  const rows = bestFitToCsvRows([{ key: "hotel", label: "Hotel", pass: true, demandOk: true, ratio: null }], "ac");
+  assert.equal(rows[1][3], "");
+});
+
+test("bestFitToCsvRows: an empty/missing ranked list still returns just the header row", () => {
+  assert.deepEqual(bestFitToCsvRows([], "ac"), [["#", "Use", "Result", "Demand ratio", "Reason"]]);
+  assert.deepEqual(bestFitToCsvRows(null, "ac"), [["#", "Use", "Result", "Demand ratio", "Reason"]]);
+  assert.deepEqual(bestFitToCsvRows(undefined, "ac"), [["#", "Use", "Result", "Demand ratio", "Reason"]]);
+});
+
+test("bestFitToCsvRows: rows round-trip through toCsv", () => {
+  const rows = bestFitToCsvRows([{ key: "warehouse_club", label: "Warehouse Club", pass: true, demandOk: true, ratio: 0.95 }], "ac");
+  assert.equal(toCsv(rows), '#,Use,Result,Demand ratio,Reason\r\n1,Warehouse Club,PASS,95%,✓ demand 95% of need');
+});
+
+test("buildBestFitReportText: header, point, count, then one numbered PASS/SHORT section per ranked use", () => {
+  const ranked = [
+    { key: "warehouse_club", label: "Warehouse Club", pass: true, demandOk: true, ratio: 0.95 },
+    { key: "data_center", label: "Data Center", pass: false, demandOk: false, ratio: 0.3 },
+  ];
+  const t = buildBestFitReportText({ lat: 30.2672, lng: -97.7431 }, ranked, [], "ac");
+  assert.match(t, /^SIMyCity — best fit at this point\n/);
+  assert.match(t, /Point: 30\.2672, -97\.7431/);
+  assert.match(t, /2 uses scored/);
+  assert.match(t, /1\. Warehouse Club — PASS\n\s+✓ demand 95% of need/);
+  assert.match(t, /2\. Data Center — SHORT\n\s+✗ demand only 30% of need/);
+  assert.match(t, /github\.com\/jodeit\/simy_city/);
+});
+
+test("buildBestFitReportText: singular 'use' for exactly one scored result", () => {
+  const t = buildBestFitReportText({ lat: 30, lng: -97 }, [{ key: "hotel", label: "Hotel", pass: true, demandOk: true, ratio: 1 }], [], "ac");
+  assert.match(t, /1 use scored/);
+  assert.doesNotMatch(t, /1 uses scored/);
+});
+
+test("buildBestFitReportText: lists not-ranked uses in a trailing section when present, and omits it when empty", () => {
+  const withNotRanked = buildBestFitReportText({ lat: 30, lng: -97 }, [], ["Data Center", "Senior Living"], "ac");
+  assert.match(withNotRanked, /Not scored here: Data Center, Senior Living/);
+  const withoutNotRanked = buildBestFitReportText({ lat: 30, lng: -97 }, [], [], "ac");
+  assert.doesNotMatch(withoutNotRanked, /Not scored here/);
+});
+
+test("buildBestFitReportText: missing/null ranked list doesn't throw and renders zero scored", () => {
+  assert.doesNotThrow(() => buildBestFitReportText({ lat: 30, lng: -97 }, null, null, "ac"));
+  assert.match(buildBestFitReportText({ lat: 30, lng: -97 }, null, null, "ac"), /0 uses scored/);
+});
+
+test("buildBestFitReportText: missing/malformed center falls back to '?, ?' instead of throwing or emitting NaN", () => {
+  assert.match(buildBestFitReportText(null, [], [], "ac"), /Point: \?, \?/);
+  assert.match(buildBestFitReportText({}, [], [], "ac"), /Point: \?, \?/);
 });
