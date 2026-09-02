@@ -2440,8 +2440,9 @@ function maybeRenderCSVerdict(seq){
    count (residential_subdivision's own `compQ` is a school count). */
 let bfSeq=0;
 // Last-rendered "Best fit here" results, so an area-unit toggle (which
-// changes bestFitReasonText's ${fmtAc(...)} output) can re-render the panel
-// in place without re-running the whole scored-every-use fetch fan-out.
+// changes bestFitReasonText's site-size output, and downloadBestFitCsv/Pdf's
+// exported figures) can re-render the panel in place without re-running the
+// whole scored-every-use fetch fan-out.
 let lastBestFitRanked=null, lastBestFitNoRead=null;
 function bestFitLeg(u,lat,lng,acres){
   const cfg=USE_DEMAND[u.key];
@@ -2549,41 +2550,10 @@ function bestFitMedianAge(lat,lng,radiusKm){
     });
   }).catch(()=>null);
 }
-function bestFitReasonText(e){
-  const parts=[
-    e.demandOk?`✓ demand ${Math.round(e.ratio*100)}% of need`
-      : `✗ demand only ${Math.round(e.ratio*100)}% of need`,
-  ];
-  if(e.minAcres!=null)parts.push(
-    e.siteOk?`✓ site ${fmtAc(e.acres)}`
-      : e.acres==null?"? site size unlisted"
-      : `✗ site only ${fmtAc(e.acres)} (need ≥${fmtAc(e.minAcres)})`
-  );
-  if(e.minAadt!=null)parts.push(
-    e.aadtErr?"? traffic-count unavailable"
-      : !e.aadtHit?`✗ no National Highway System route in range (need ≥${e.minAadt.toLocaleString()} AADT)`
-      : e.aadtOk?`✓ nearby highway ~${Math.round(e.aadtHit.aadt).toLocaleString()} AADT`
-      : `✗ nearby highway only ~${Math.round(e.aadtHit.aadt).toLocaleString()} AADT (need ≥${e.minAadt.toLocaleString()})`
-  );
-  if(e.maxSubstationKm!=null)parts.push(
-    e.subErr?"? substation distance unavailable"
-      : e.subKm==null?`✗ no substation in range (need ≤${e.maxSubstationKm} km)`
-      : e.subOk?`✓ substation ${e.subKm.toFixed(1)} km away`
-      : `✗ nearest substation ${e.subKm.toFixed(1)} km away (need ≤${e.maxSubstationKm} km)`
-  );
-  if(e.minCompetitorKm!=null)parts.push(
-    e.compErr?"? competitor distance unavailable"
-      : !e.nearestComp?"✓ no existing competitor in range"
-      : e.farOk?`✓ nearest competitor ${e.nearestComp.km.toFixed(1)} km away`
-      : `✗ nearest competitor only ${e.nearestComp.km.toFixed(1)} km away (need ≥${e.minCompetitorKm})`
-  );
-  if(e.requireDistrict)parts.push(
-    e.mudOk?"✓ inside a mapped water district"
-      : e.mud===false?"✗ no mapped water district here"
-      : "? water-district coverage unknown for this area"
-  );
-  return parts.join(" · ");
-}
+// bestFitReasonText itself now lives in web/logic.js (parameterized on
+// `unit` instead of closing over `areaUnit`, so the CSV/PDF export below can
+// reuse the exact same on-screen "why" text) — this just supplies the
+// current display unit at each call site.
 function updateBestFitAvailability(){
   const btn=document.getElementById("bestFitToggle"); if(!btn)return;
   btn.disabled=!lastLatLng;
@@ -2645,15 +2615,69 @@ function renderBestFit(ranked,noRead){
     `<div class="candRow bfRow ${e.pass?'bfPass':'bfShort'}" data-key="${e.key}" role="button" tabindex="0">
        <span class="candNum">${i+1}</span>
        <span><b>${esc(useLabel(e.key))}</b> — ${e.pass?"✓ PASS":"✗ SHORT"}<br>
-       <small>${esc(bestFitReasonText(e))}</small></span>
+       <small>${esc(bestFitReasonText(e,areaUnit))}</small></span>
      </div>`).join("");
   const notRankedHtml=notRanked.length
     ? `<p class="src">Not scored here (no shared demand/site/competitor read, or no rooftop data at this point): ${notRanked.map(k=>esc(useLabel(k))).join(", ")}</p>` : "";
+  const exportHtml=ranked.length
+    ? `<div class="candCsvRow"><button class="toolbtn" id="bfCsv" type="button">⬇️ Download CSV</button>`+
+      `<button class="toolbtn" id="bfPdf" type="button">📄 Download PDF</button> <span class="ok" id="bfCsvMsg"></span></div>` : "";
   resEl.innerHTML=(ranked.length?`<div class="candList">${rows}</div>`
-    : `<p class="src">No candidates could be scored at this point.</p>`)+notRankedHtml;
+    : `<p class="src">No candidates could be scored at this point.</p>`)+notRankedHtml+exportHtml;
   resEl.querySelectorAll(".bfRow").forEach(row=>{
     wireActivate(row,()=>{ selectUse(row.dataset.key); if(lastLatLng)analyze(lastLatLng); closeBestFitPanel(); });
   });
+  if(ranked.length){
+    document.getElementById("bfCsv").onclick=()=>{
+      downloadBestFitCsv();
+      const m=document.getElementById("bfCsvMsg");
+      if(m){m.textContent="✓ CSV downloaded";setTimeout(()=>m.textContent="",2500);}
+    };
+    document.getElementById("bfPdf").onclick=()=>{
+      downloadBestFitPdf();
+      const m=document.getElementById("bfCsvMsg");
+      if(m){m.textContent="✓ PDF downloaded";setTimeout(()=>m.textContent="",2500);}
+    };
+  }
+}
+// bestFitLabels: the {key: display label} map bestFitToCsvRows/
+// buildBestFitReportText (web/logic.js) need but deliberately don't look up
+// themselves (that module stays dependency-free — no MODEL global). Covers
+// every ranked key plus every "not scored here" key, same set renderBestFit
+// already shows a label for.
+function bestFitLabels(){
+  const labels={};
+  ALL_USE_KEYS.forEach(k=>{labels[k]=useLabel(k);});
+  return labels;
+}
+// Exports the "Best fit here" ranked table as a downloaded .csv via
+// bestFitToCsvRows (web/logic.js) — same client-side-only Blob+anchor
+// pattern as downloadCandidatesCsv/downloadCompareCsv, no network call.
+function downloadBestFitCsv(){
+  if(!lastBestFitRanked||!lastBestFitRanked.length)return;
+  const rows=bestFitToCsvRows(lastBestFitRanked,bestFitLabels(),areaUnit);
+  const blob=new Blob([toCsv(rows)],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-best-fit.csv";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+// Exports the ranked table as a printable PDF report — same
+// buildSimplePdf/wrapText plumbing as downloadCandidatesPdf/downloadComparePdf,
+// just fed buildBestFitReportText's output instead.
+function downloadBestFitPdf(){
+  if(!lastBestFitRanked||!lastBestFitRanked.length)return;
+  const text=buildBestFitReportText(lastLatLng,lastBestFitRanked,lastBestFitNoRead,bestFitLabels(),areaUnit);
+  const margin=54, fontSize=10, charWidth=fontSize*0.6; // Courier: 0.6em per glyph
+  const maxChars=Math.floor((612-2*margin)/charWidth);
+  const lines=wrapText(text,maxChars,s=>s.length);
+  const pdfText=buildSimplePdf(lines,{margin,fontSize});
+  const bytes=Uint8Array.from(pdfText,ch=>ch.charCodeAt(0));
+  const blob=new Blob([bytes],{type:"application/pdf"});
+  const url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="simycity-best-fit.pdf";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
 
 /* ---- reverse search, step 3: the "🔍 Find candidate sites" search UI ----

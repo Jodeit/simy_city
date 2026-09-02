@@ -1024,6 +1024,90 @@ function buildCompareReportText(pins,unit){
   return t;
 }
 
+// "Best fit here" ranked-table CSV/PDF export — the third and last of the
+// three multi-result views (reverse-search candidates, Compare list, and
+// this one) to get an export, same "row-shape function + existing exporter"
+// pattern candidatesToCsvRows/buildCandidatesReportText and
+// buildCompareReportText already established. `e` is one rankLandUseVerdicts()
+// entry: standardUseVerdict's pass/demandOk/siteOk/farOk/aadtOk/subOk/mudOk/
+// ratio fields merged with the per-use thresholds/reads runBestFit already
+// carries (acres, minAcres, nearestComp, minCompetitorKm, aadtHit, minAadt,
+// subKm, maxSubstationKm, mud, requireDistrict) — the exact shape
+// web/explore.html's `scored` array already builds for on-screen rendering,
+// reused as-is rather than re-deriving anything. `unit` (default "ac") drives
+// the same display-only area-unit conversion formatArea uses everywhere else.
+function bestFitReasonText(e,unit){
+  unit=unit||"ac";
+  const fmt=a=>a==null?"—":(formatArea(a,unit)??"—");
+  const parts=[
+    e.demandOk?`✓ demand ${Math.round(e.ratio*100)}% of need`
+      : `✗ demand only ${Math.round(e.ratio*100)}% of need`,
+  ];
+  if(e.minAcres!=null)parts.push(
+    e.siteOk?`✓ site ${fmt(e.acres)}`
+      : e.acres==null?"? site size unlisted"
+      : `✗ site only ${fmt(e.acres)} (need ≥${fmt(e.minAcres)})`
+  );
+  if(e.minAadt!=null)parts.push(
+    e.aadtErr?"? traffic-count unavailable"
+      : !e.aadtHit?`✗ no National Highway System route in range (need ≥${e.minAadt.toLocaleString()} AADT)`
+      : e.aadtOk?`✓ nearby highway ~${Math.round(e.aadtHit.aadt).toLocaleString()} AADT`
+      : `✗ nearby highway only ~${Math.round(e.aadtHit.aadt).toLocaleString()} AADT (need ≥${e.minAadt.toLocaleString()})`
+  );
+  if(e.maxSubstationKm!=null)parts.push(
+    e.subErr?"? substation distance unavailable"
+      : e.subKm==null?`✗ no substation in range (need ≤${e.maxSubstationKm} km)`
+      : e.subOk?`✓ substation ${e.subKm.toFixed(1)} km away`
+      : `✗ nearest substation ${e.subKm.toFixed(1)} km away (need ≤${e.maxSubstationKm} km)`
+  );
+  if(e.minCompetitorKm!=null)parts.push(
+    e.compErr?"? competitor distance unavailable"
+      : !e.nearestComp?"✓ no existing competitor in range"
+      : e.farOk?`✓ nearest competitor ${e.nearestComp.km.toFixed(1)} km away`
+      : `✗ nearest competitor only ${e.nearestComp.km.toFixed(1)} km away (need ≥${e.minCompetitorKm})`
+  );
+  if(e.requireDistrict)parts.push(
+    e.mudOk?"✓ inside a mapped water district"
+      : e.mud===false?"✗ no mapped water district here"
+      : "? water-district coverage unknown for this area"
+  );
+  return parts.join(" · ");
+}
+// `labels` maps each entry's `key` to its display label — callers already
+// have this from MODEL.land_uses/actor_uses, kept out of this dependency-free
+// module rather than reaching for a global MODEL here. A key missing from
+// `labels` falls back to the raw key rather than throwing or showing "undefined".
+function bestFitToCsvRows(ranked,labels,unit){
+  labels=labels||{};
+  const rows=[["#","Use","Verdict","Demand (% of need)","Reason"]];
+  (ranked||[]).forEach((e,i)=>rows.push([
+    i+1, labels[e.key]||e.key, e.pass?"PASS":"SHORT",
+    e.ratio!=null?Math.round(e.ratio*100):"",
+    bestFitReasonText(e,unit),
+  ]));
+  return rows;
+}
+// Mirrors buildCandidatesReportText/buildCompareReportText's role for the
+// third multi-result view's printable PDF report. `noRead` (use keys with no
+// shared demand/site/competitor read, or no rooftop data at this point) is
+// listed separately rather than silently dropped, same as the on-screen
+// "Not scored here" line renderBestFit already shows.
+function buildBestFitReportText(center,ranked,noRead,labels,unit){
+  ranked=ranked||[]; noRead=noRead||[]; labels=labels||{};
+  const lat=(center&&typeof center.lat==="number")?center.lat.toFixed(4):"?";
+  const lng=(center&&typeof center.lng==="number")?center.lng.toFixed(4):"?";
+  let t=`SIMyCity — "Best fit here" ranked results\n`;
+  t+=`Point: ${lat}, ${lng}\n`;
+  t+=`${ranked.length} use${ranked.length===1?"":"s"} scored\n\n`;
+  ranked.forEach((e,i)=>{
+    t+=`  ${i+1}. ${labels[e.key]||e.key} — ${e.pass?"PASS":"SHORT"}\n`;
+    t+=`     ${bestFitReasonText(e,unit)}\n`;
+  });
+  if(noRead.length)t+=`\nNot scored here: ${noRead.map(k=>labels[k]||k).join(", ")}\n`;
+  t+=`\nBuilt on open public data · github.com/jodeit/simy_city\n`;
+  return t;
+}
+
 /* ---- minimal hand-rolled PDF writer for "make the case" ----
    No vendored library, no CDN, no build step — same constraint every other
    feature in this app runs under. Supports exactly what "make the case"
@@ -1113,5 +1197,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }

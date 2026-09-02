@@ -3040,20 +3040,36 @@ Ground rules for each run:
       single-ring version.
 
 ## Now (high value) — newly added (8)
-- [ ] **CSV/PDF export for the "🏆 Best fit here" ranked table.** The other
-      two multi-result views — the Compare-parcels modal and the reverse-
-      search candidate list — both already have CSV and PDF export buttons
-      (`toCsv`/`buildCompareReportText`/`buildCandidatesReportText`/
-      `buildSimplePdf` in `web/logic.js`), but `runBestFit`'s ranked-use
-      table (`web/explore.html`) has no export at all — the only one of the
-      three multi-row results you can't take with you. Add a matching
-      "⬇️ Download CSV" / "📄 Download PDF" pair next to the existing
-      "🔍 Find candidate sites"-style controls, reusing the same
-      `toCsv`/`buildSimplePdf` helpers with a new
-      `buildBestFitReportText`-style row shape (use label, pass/short,
-      ratio/margin, the specific gate(s) that failed) — same
-      "row-shape function + existing exporter" pattern every prior export
-      item here followed, not a new export mechanism.
+- [x] **CSV/PDF export for the "🏆 Best fit here" ranked table.** Added a
+      matching "⬇️ Download CSV" / "📄 Download PDF" pair to the Best-fit
+      panel, same `toCsv`/`buildSimplePdf` plumbing and Blob+anchor pattern
+      the Compare modal and reverse-search candidate list already use. Moved
+      the on-screen `bestFitReasonText` (previously a `web/explore.html`
+      closure over the `areaUnit` global) into `web/logic.js` as a pure,
+      unit-parameterized function, then added `bestFitToCsvRows(ranked,
+      labels, unit)` (header + one row per ranked use: label, PASS/SHORT,
+      demand-ratio percent, the same gate-by-gate why-text the panel already
+      renders) and `buildBestFitReportText(center, ranked, noRead, labels,
+      unit)` (mirrors `buildCandidatesReportText`/`buildCompareReportText`'s
+      report shape, plus a "Not scored here" line for uses with no shared
+      read at this point) — both dependency-free, taking a `{key: label}`
+      map from the caller rather than reaching for the `MODEL` global.
+      Buttons only render when there's a ranked result to export (mirrors
+      the candidate-list panel's guard), and re-render correctly when the
+      area-unit toggle flips (same `lastBestFitRanked`-driven in-place
+      re-render the panel already had for its on-screen text). Added 12 new
+      unit tests covering every gate branch (demand/site/AADT/substation/
+      competitor/water-district, each in its pass/short/unavailable/
+      no-read states), the `unit` parameter changing the site-size format,
+      CSV header/row shape and the missing-ratio/missing-label fallbacks,
+      and the PDF report's count/point/not-scored-line text including a
+      missing-center edge case. Verified in headless Chromium: both pages
+      load with zero console/page errors; driving `bestFitReasonText`/
+      `bestFitToCsvRows`/`buildBestFitReportText` directly produced the
+      expected text/rows; and a real end-to-end `fast_casual` "Best fit
+      here" run (mocked Overpass) rendered the ranked panel with working
+      `bfCsv`/`bfPdf` buttons that triggered real downloads with zero
+      console errors.
 - [ ] **21st parcel county: Philadelphia County, PA (Philadelphia).**
       Philadelphia's Office of Property Assessment publishes a public
       ArcGIS FeatureServer (`opa_properties_public`, via
