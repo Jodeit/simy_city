@@ -3070,22 +3070,35 @@ Ground rules for each run:
       here" run (mocked Overpass) rendered the ranked panel with working
       `bfCsv`/`bfPdf` buttons that triggered real downloads with zero
       console errors.
-- [ ] **21st parcel county: Philadelphia County, PA (Philadelphia).**
-      Philadelphia's Office of Property Assessment publishes a public
-      ArcGIS FeatureServer (`opa_properties_public`, via
-      `services.arcgis.com`/Philadelphia's open-data GIS hub) with
-      `PARCEL_NUMBER` (OPA account number, id), `OWNER_1` (owner),
-      `LOCATION` (address), `CATEGORY_CODE_DESCRIPTION` (land use), and
-      `MARKET_VALUE` (already in the shared `pick()` value list) — same
-      "confirm field names via published docs, sandbox can't introspect
-      ArcGIS REST directly" constraint every prior county here hit. OPA
-      publishes a stable per-parcel deep link
+- [x] **21st parcel county: Philadelphia County, PA (Philadelphia).** Added
+      Philadelphia's Office of Property Assessment as a 21st `PARCEL_SOURCES`
+      entry — its `opa_properties_public` dataset, published as an ArcGIS
+      FeatureServer under the city's own ArcGIS Online org (org id
+      `fLeGjb7u4uXqeF9q`, confirmed via other public services under that same
+      org since this sandbox blocks direct ArcGIS REST introspection like
+      every prior county here). Added `PARCEL_NUMBER` (id), `OWNER_1`
+      (owner), `LOCATION` (address), and `CATEGORY_CODE_DESCRIPTION` (land
+      use) to the shared `pick()` candidate lists — `MARKET_VALUE` was
+      already there. OPA publishes a stable per-parcel deep link
       (`property.phila.gov/?p=<PARCEL_NUMBER>`), so this one gets a real
       record link, not a search-page fallback. Philadelphia is a
       consolidated city-county (no separate incorporated/unincorporated
-      split, unlike every prior county), so its `zoning_note` should say so
-      plainly rather than reusing another state's incorporated-vs-county
-      language.
+      split, like Denver), so its `zoning_note` says so plainly rather than
+      reusing another state's incorporated-vs-county language. Verified:
+      `python -m pytest -q` (15 passed), `simy validate` (OK, 32 sources/16
+      layers/16 land uses), `node --test tests/js/*.test.mjs` (329 passed,
+      unchanged — this item touches only `PARCEL_SOURCES`/`pick()`
+      candidates, no shared pure-logic behavior), and headless Chromium
+      confirms both pages load with zero genuine console/page errors,
+      `inBbox` correctly routes a downtown-Philadelphia point to the new
+      source (and still finds none for an out-of-coverage point), and a real
+      simulated map click with a mocked OPA-shaped ArcGIS response (Esri JSON
+      `attributes`/`geometry.rings` shape) rendered parcel ID/owner/address/
+      land-use/appraised-value and the `property.phila.gov` record link
+      correctly with zero console errors. Live ArcGIS endpoint reachability
+      (the exact `OPA_Properties_Public` service name) couldn't be confirmed
+      from this sandbox — a live spot-check is a good human follow-up, same
+      as every prior county.
 - [ ] **17th land use: Big-box home improvement / hardware store
       (Home Depot/Lowe's-style).** Follows the same recipe as
       `grocery_store`/`convenience_store`/`pharmacy`: a `requires.demand`
