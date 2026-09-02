@@ -981,6 +981,29 @@ window.SIMY_MODEL = {
       },
       "notes": "A rooftop-headcount demand read like car_wash, at a slightly tighter radius (3 km) \u2014 a convenience store/gas station draws a purely local walk/short-drive crowd, tighter than car_wash's 5 km or pharmacy's 6 km. min_households_drive_time (6000), min_buildable_acres (0.75, a small pad site + fuel canopy, smaller than car_wash's 1.0-acre wash tunnel + stacking lanes), near_arterial_aadt (25000, same threshold as car_wash/ pharmacy), and min_distance_km_from_nearest (1.0, same as pharmacy) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+AADT+competitor-distance shape car_wash/pharmacy/grocery_store already established), no new gate-shape work needed. OSM tags this with two live tags \u2014 `shop=convenience` and `amenity=fuel` \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy already documented (the two tags are often colocated on the same real site \u2014 a gas station with an attached convenience store \u2014 but not always, so both are counted rather than picking one).\n"
     },
+    "home_improvement_store": {
+      "label": "Big-Box Home Improvement / Hardware Store",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 30000,
+          "drive_time_min": 12
+        },
+        "parcel": {
+          "min_buildable_acres": 12
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 4.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "high",
+        "carbon": "medium",
+        "traffic": "high"
+      },
+      "notes": "A rooftop-headcount demand read like grocery_store, but at a wider radius (10 km, between grocery_store's 8 km and warehouse_club's 15 km) \u2014 a big-box home improvement store draws a citywide weekend-project crowd, not just the immediate neighborhood. min_households_drive_time (30000), min_buildable_acres (12, closer to warehouse_club's 15-acre big-box pad than grocery_store's smaller mid-box footprint \u2014 store + garden center + lumber yard + parking), and min_distance_km_from_nearest (4.0, wider than grocery_store's 2.0 to match the bigger trade area) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+competitor-distance shape grocery_store already established, no AADT gate), no new gate-shape work needed. OSM tags this with two live tags \u2014 `shop=doityourself` and `shop=hardware` \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy/ convenience_store already documented (a full big-box home improvement store and a small neighborhood hardware store are tagged differently, but both compete for the same \"hardware/home-project\" trip, so both are counted rather than picking one).\n"
+    },
     "multifamily": {
       "label": "Multifamily / Apartment Complex",
       "requires": {

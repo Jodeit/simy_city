@@ -3099,24 +3099,44 @@ Ground rules for each run:
       (the exact `OPA_Properties_Public` service name) couldn't be confirmed
       from this sandbox — a live spot-check is a good human follow-up, same
       as every prior county.
-- [ ] **17th land use: Big-box home improvement / hardware store
-      (Home Depot/Lowe's-style).** Follows the same recipe as
-      `grocery_store`/`convenience_store`/`pharmacy`: a `requires.demand`
-      rooftop trade-area read at a suburban-scale radius (~8-10 km, between
-      `grocery_store`'s 8 km and `warehouse_club`'s 15 km — these draw a
-      citywide weekend-project crowd, not just the immediate neighborhood),
-      a `requires.parcel.min_buildable_acres` site-size gate (~10-12 ac for
-      the store + garden center + lumber yard + parking, closer to
-      `warehouse_club`'s 15 ac than `grocery_store`'s smaller footprint),
-      and a `requires.competition.min_distance_km_from_nearest` gate against
-      existing `shop=doityourself|hardware` OSM tags (`min_distance_km`
-      pattern already established by `car_wash`/`pharmacy`/
-      `convenience_store` — avoid saturating a market already served, not
-      the food-truck-court "farther is always better" inversion). Wire
-      through `data_sources/layers.yaml`, `ALL_USE_KEYS`, `USE_DEMAND`,
-      `BEST_FIT_USES`, and a new `maybeRenderXXXVerdict` — same
-      wait-for-both-legs shape every prior standard-gate use already uses,
-      so `standardUseVerdict` needs no changes.
+- [x] **17th land use: Big-box home improvement / hardware store
+      (Home Depot/Lowe's-style).** Added `home_improvement_store` to
+      `data_sources/layers.yaml`, following the exact `grocery_store` recipe:
+      a `requires.demand` rooftop trade-area read at a 10 km radius (between
+      `grocery_store`'s 8 km and `warehouse_club`'s 15 km — a citywide
+      weekend-project crowd, not just the immediate neighborhood; roofNeed
+      30,000), a `requires.parcel.min_buildable_acres: 12` site-size gate
+      (store + garden center + lumber yard + parking, closer to
+      `warehouse_club`'s 15 ac than `grocery_store`'s smaller mid-box
+      footprint), and a `requires.competition.min_distance_km_from_nearest:
+      4.0` gate (wider than `grocery_store`'s 2.0, matching the bigger trade
+      area) against existing `shop=doityourself|hardware` OSM tags, OR-
+      queried same as `car_wash`/`pharmacy`/`convenience_store`'s messy-
+      tagging caveat — avoiding saturating a market already served, not the
+      food-truck-court "farther is always better" inversion. No AADT gate,
+      same as `grocery_store` (layers.yaml declares no `transportation`
+      block). Wired through `ALL_USE_KEYS`, `USE_DEMAND`, `BEST_FIT_USES`,
+      and a new `maybeRenderHIVerdict` — modeled directly on
+      `maybeRenderGSVerdict` (rooftop leg + acreage leg + competitor-distance
+      leg, all via the shared `standardUseVerdict`, web/logic.js — no
+      gate-shape changes needed there). Verified: `python -m pytest -q`
+      (15 passed), `simy validate` (OK, 32 sources/16 layers/**17 land
+      uses**), `node --test tests/js/*.test.mjs` (329 passed, unchanged —
+      this item flows entirely through the already-tested
+      `standardUseVerdict`, no new pure-logic function to test), and headless
+      Chromium confirms both pages load with zero genuine console/page
+      errors; `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`/`MODEL.land_uses`
+      all correctly carry the new key; driving `maybeRenderHIVerdict`
+      directly through PASS / SHORT-on-demand / SHORT-on-site-size /
+      SHORT-on-competitor-too-close / no-competitor-in-range (passes) /
+      acreage-unavailable / no-rooftop-read / wrong-use-selected states all
+      produced correct verdict text and CSS classes with zero throws; and a
+      real end-to-end `analyze()` run with `home_improvement_store` selected
+      and mocked Overpass/ArcGIS responses rendered the full result panel
+      (verdict text, CSS class, `hiState` populated) with zero console
+      errors. Outbound network to Overpass/ArcGIS is blocked from this
+      sandbox, so a live end-to-end rooftop/acreage/competitor fetch on the
+      real site is a good human spot-check, same as every prior use.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
