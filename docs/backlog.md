@@ -3139,29 +3139,41 @@ Ground rules for each run:
       real site is a good human spot-check, same as every prior use.
 
 ## Now (high value) — newly added (9)
-- [ ] **Service worker for offline/repeat-visit app-shell caching.** The
-      manifest (`web/manifest.json`) already makes the app installable, but
-      there's no service worker, so an installed/repeat visit still
-      re-fetches `explore.html`, `index.html`, `logic.js`, `model.js`,
-      `model.json`, the vendored Leaflet JS/CSS, and the icon set from
-      scratch every load, and the app is unusable with no connection at all
-      (even though everything except live map tiles/Overpass/ArcGIS/Census
-      calls is static and same-origin). Add a small `web/sw.js`: cache-first
-      for the static app-shell files above (versioned cache name, bump on
-      each deploy so stale shells don't stick around — a `skipWaiting`/
-      `clients.claim` activate step that deletes old-named caches), and
-      network-only passthrough for everything cross-origin (tiles, Overpass,
-      ArcGIS, Census, USGS, Nominatim) — never cache those, they're live
-      data, not app shell. Register it from both `explore.html` and
-      `index.html` behind `if ("serviceWorker" in navigator)`, guarded so a
-      registration failure (or running from `file://`, which rejects SW
-      registration) degrades silently, not as a console error. Verify with
-      headless Chromium: both pages still load with zero console/page
-      errors with the registration guard in place (SW registration itself
-      will no-op under `file://`/sandboxed network, which is expected — the
-      registration *call* not throwing is what to check, same caveat every
-      prior network-touching item here has noted). A live install +
-      airplane-mode reload is a good human spot-check this sandbox can't do.
+- [x] **Service worker for offline/repeat-visit app-shell caching.** Added
+      `web/sw.js`: cache-first for the static, same-origin app shell
+      (`explore.html`, `index.html`, `logic.js`, `model.js`, `model.json`,
+      `manifest.json`, the vendored Leaflet JS/CSS/marker images, and the
+      icon set) under a versioned `simy-shell-v1` cache name, with an
+      `activate` step that deletes any old-named cache and calls
+      `skipWaiting`/`clients.claim` so a new deploy's shell takes over
+      immediately rather than waiting for every tab to close first. The
+      `fetch` handler only intercepts same-origin GETs (checked via
+      `new URL(req.url).origin === self.location.origin`) and falls through
+      to `caches.match(req) || fetch(req)` — any cross-origin request (map
+      tiles, Overpass, ArcGIS, Census, USGS, Nominatim) is left completely
+      alone, never cached, since that's live data. Registered from both
+      pages behind `if ("serviceWorker" in navigator)` with a `.catch(()=>{})`
+      on the registration promise, so a rejection (e.g. `file://`, which
+      disallows SW registration) degrades silently instead of surfacing as a
+      console error. Verified in headless Chromium two ways: (1) opened both
+      pages via `file://` — zero console/page errors, confirming the
+      registration attempt fails-and-degrades cleanly exactly as designed;
+      (2) unlike every prior network-touching item's "can't verify live in
+      this sandbox" caveat, a **local** `http-server` on `web/` let this one
+      actually be exercised for real — served `explore.html` over
+      `http://127.0.0.1`, confirmed `navigator.serviceWorker.ready` resolves
+      with an **active** registration and all 14 app-shell files present in
+      the `simy-shell-v1` cache, then flipped the browser context fully
+      offline (`context.setOffline(true)`) and reloaded the page: it loaded
+      successfully from the cache (correct `<title>`, real body content)
+      with zero JS errors — only the expected `ERR_INTERNET_DISCONNECTED`/
+      `ERR_TUNNEL_CONNECTION_FAILED` failures for the live third-party calls
+      that are correctly *not* cached. This is the actual "airplane-mode
+      reload" scenario the original item flagged as sandbox-untestable —
+      turns out a local static server sidesteps that limitation entirely. A
+      live GitHub Pages install + airplane-mode spot-check is still a good
+      human follow-up, but the mechanism itself is now proven working, not
+      just non-throwing.
 - [ ] **Recent-sites history dropdown.** Every clicked point already flows
       through `writeHash`/`applyHash` for a shareable permalink, but nothing
       remembers *this browser's* last few clicks across sessions — closing
