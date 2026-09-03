@@ -3138,6 +3138,72 @@ Ground rules for each run:
       sandbox, so a live end-to-end rooftop/acreage/competitor fetch on the
       real site is a good human spot-check, same as every prior use.
 
+## Now (high value) — newly added (9)
+- [ ] **Service worker for offline/repeat-visit app-shell caching.** The
+      manifest (`web/manifest.json`) already makes the app installable, but
+      there's no service worker, so an installed/repeat visit still
+      re-fetches `explore.html`, `index.html`, `logic.js`, `model.js`,
+      `model.json`, the vendored Leaflet JS/CSS, and the icon set from
+      scratch every load, and the app is unusable with no connection at all
+      (even though everything except live map tiles/Overpass/ArcGIS/Census
+      calls is static and same-origin). Add a small `web/sw.js`: cache-first
+      for the static app-shell files above (versioned cache name, bump on
+      each deploy so stale shells don't stick around — a `skipWaiting`/
+      `clients.claim` activate step that deletes old-named caches), and
+      network-only passthrough for everything cross-origin (tiles, Overpass,
+      ArcGIS, Census, USGS, Nominatim) — never cache those, they're live
+      data, not app shell. Register it from both `explore.html` and
+      `index.html` behind `if ("serviceWorker" in navigator)`, guarded so a
+      registration failure (or running from `file://`, which rejects SW
+      registration) degrades silently, not as a console error. Verify with
+      headless Chromium: both pages still load with zero console/page
+      errors with the registration guard in place (SW registration itself
+      will no-op under `file://`/sandboxed network, which is expected — the
+      registration *call* not throwing is what to check, same caveat every
+      prior network-touching item here has noted). A live install +
+      airplane-mode reload is a good human spot-check this sandbox can't do.
+- [ ] **Recent-sites history dropdown.** Every clicked point already flows
+      through `writeHash`/`applyHash` for a shareable permalink, but nothing
+      remembers *this browser's* last few clicks across sessions — closing
+      the tab loses them, and there's no way back to "that parcel from
+      yesterday" short of re-finding it on the map. This is distinct from
+      the existing Compare-pins list (which is a deliberate side-by-side
+      set the user builds, not a visit log) and from the JSON backup/restore
+      item (a full manual export/import, not a lightweight recent-history
+      UI). Add a capped (~10 entries, oldest evicted first) `localStorage`-
+      backed history of `{lat, lng, label, mode, use, ts}` — reuse
+      `encodeHash`/`decodeHash` from `web/logic.js` for the shape and add a
+      pure `pushHistoryEntry(history, entry, max)` helper there (dedupe by
+      near-identical lat/lng, most-recent-first, capped) with unit tests,
+      same pattern as the CSV/report builders. Surface it as a small
+      "🕑 Recent" dropdown near the address search box; picking an entry
+      does the same `map.setView` + `analyze()` the address search and
+      permalink-load path already do. No new network calls — purely local
+      storage of points already visited. Verify: new `web/logic.js` unit
+      tests for `pushHistoryEntry` (cap, dedupe, ordering, malformed-entry
+      skip) plus headless Chromium confirming both pages still load with
+      zero console/page errors and that clicking a history entry re-centers
+      the map and re-runs `analyze()`.
+- [ ] **Web Share API for the permalink/"make the case" share buttons, with
+      the existing clipboard-copy as fallback.** The share tools (permalink
+      copy, "Make the case" copy/email/image-download) all currently target
+      desktop clipboard/email-client flows. On a mobile browser that
+      supports `navigator.share`, add a "Share…" option alongside the
+      existing copy button that hands the OS its native share sheet
+      (AirDrop/Messages/etc. for the permalink URL; permalink + case text
+      for "Make the case") — feature-detect with
+      `if (navigator.share) {...} else {/* existing copy-to-clipboard
+      path, unchanged */}` so nothing regresses on desktop/unsupported
+      browsers. `navigator.share` requires a real user-gesture click to
+      resolve (won't fire synthetically in a test), so verify by confirming
+      the feature-detect branch itself is correct (mock
+      `navigator.share`/absence of it, assert the right path is taken and
+      the existing copy path is 100% unchanged when unsupported) and that
+      headless Chromium still loads both pages with zero console/page
+      errors. A live mobile Safari/Chrome spot-check for the actual share
+      sheet is a good human follow-up, same as every other browser-API item
+      here.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
