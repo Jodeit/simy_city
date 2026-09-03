@@ -519,5 +519,15 @@
   };
 })();
 </script>
+<script>
+// Offline/repeat-visit app-shell caching. Registration failure (unsupported
+// browser, file://, no HTTPS) degrades silently — the app already works
+// fully without it, this is a pure enhancement.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+</script>
 </body>
 </html>
