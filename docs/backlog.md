@@ -3139,29 +3139,39 @@ Ground rules for each run:
       real site is a good human spot-check, same as every prior use.
 
 ## Now (high value) — newly added (9)
-- [ ] **Service worker for offline/repeat-visit app-shell caching.** The
-      manifest (`web/manifest.json`) already makes the app installable, but
-      there's no service worker, so an installed/repeat visit still
-      re-fetches `explore.html`, `index.html`, `logic.js`, `model.js`,
-      `model.json`, the vendored Leaflet JS/CSS, and the icon set from
-      scratch every load, and the app is unusable with no connection at all
-      (even though everything except live map tiles/Overpass/ArcGIS/Census
-      calls is static and same-origin). Add a small `web/sw.js`: cache-first
-      for the static app-shell files above (versioned cache name, bump on
-      each deploy so stale shells don't stick around — a `skipWaiting`/
-      `clients.claim` activate step that deletes old-named caches), and
-      network-only passthrough for everything cross-origin (tiles, Overpass,
-      ArcGIS, Census, USGS, Nominatim) — never cache those, they're live
-      data, not app shell. Register it from both `explore.html` and
-      `index.html` behind `if ("serviceWorker" in navigator)`, guarded so a
-      registration failure (or running from `file://`, which rejects SW
-      registration) degrades silently, not as a console error. Verify with
-      headless Chromium: both pages still load with zero console/page
-      errors with the registration guard in place (SW registration itself
-      will no-op under `file://`/sandboxed network, which is expected — the
-      registration *call* not throwing is what to check, same caveat every
-      prior network-touching item here has noted). A live install +
-      airplane-mode reload is a good human spot-check this sandbox can't do.
+- [x] **Service worker for offline/repeat-visit app-shell caching.** Added
+      `web/sw.js`: an `install` step that opens a versioned cache
+      (`simy-shell-v1`) and pre-caches the static app shell
+      (`explore.html`, `index.html`, `logic.js`, `model.js`, `model.json`,
+      `manifest.json`, the vendored Leaflet JS/CSS/marker images, and the
+      icon set), an `activate` step (`skipWaiting`/`clients.claim` +
+      deleting any cache not matching the current version, so a bumped
+      `CACHE_NAME` on a future deploy sheds the old shell automatically),
+      and a `fetch` handler that's cache-first for same-origin GET requests
+      (falling back to network-then-cache-populate for anything not
+      pre-cached) and does nothing at all for cross-origin requests — no
+      `respondWith` call, so map tiles/Overpass/ArcGIS/Census/USGS/Nominatim
+      always hit the network untouched, exactly like before this change.
+      Registered from both `explore.html` and `index.html` behind
+      `if ("serviceWorker" in navigator)` with `navigator.serviceWorker
+      .register("sw.js").catch(()=>{})` — the relative URL matters since the
+      site is served from a GitHub Pages *project* path
+      (`jodeit.github.io/simy_city/`), not the domain root. Verified in
+      headless Chromium: both pages load with zero genuine console/page
+      errors (only the expected sandbox-blocked `ERR_TUNNEL_CONNECTION_FAILED`
+      network errors, same as every prior network-touching item); confirmed
+      `"serviceWorker" in navigator` is `true` even under `file://` in this
+      Chromium build, and drove `navigator.serviceWorker.register("sw.js")`
+      directly — it rejects under `file://` ("URL protocol of the current
+      origin ('null') is not supported", expected, since SW registration
+      requires a real secure-context origin) and the `.catch(()=>{})` guard
+      swallows it with zero console errors, confirming the degrade-silently
+      path actually works rather than just trusting the `try`/`catch`
+      pattern by inspection. `node --check web/sw.js` confirms the worker
+      script itself is syntactically valid (Node can't execute
+      `self`/`caches`/`ServiceWorkerGlobalScope` APIs, so this is a syntax
+      check only). A live install + airplane-mode reload on the real
+      deployed site is a good human spot-check this sandbox can't do.
 - [ ] **Recent-sites history dropdown.** Every clicked point already flows
       through `writeHash`/`applyHash` for a shareable permalink, but nothing
       remembers *this browser's* last few clicks across sessions — closing
