@@ -3211,6 +3211,50 @@ Ground rules for each run:
       Safari/Chrome spot-check for the actual OS share sheet is a good
       human follow-up, same as every other browser-API item here.
 
+## Next (breadth) — newly added (17)
+- [ ] **18th land use: distribution / fulfillment warehouse (logistics).** All
+      17 land uses so far are gated on retail rooftop-demand trade areas
+      (or, for data_center, a substation/water-district read). A logistics
+      warehouse is a genuinely different pattern worth modeling: no
+      household-demand leg at all — instead gate on highway/AADT proximity
+      (already-fetched via the `transportation` layer the same way
+      `home_improvement_store`-style uses could, but none currently do),
+      a large `min_buildable_acres` (bigger than warehouse_club's 15, closer
+      to 25-40 for a real fulfillment footprint + trailer staging), and the
+      existing `power` substation-distance read data_center already uses
+      (automation/refrigeration draws real load). This is the first "purely
+      site-logistics, zero rooftop-demand" verdict, so it also exercises
+      `standardUseVerdict`/the shared verdict helpers against a use with no
+      `requires.demand` block at all — worth adding as its own test case in
+      `web/logic.js`'s test suite if the shared helper doesn't already
+      handle a missing demand leg gracefully.
+- [ ] **22nd parcel county: San Francisco, CA (City and County of San
+      Francisco).** DataSF publishes an "Assessor Parcels - Active and
+      Retired" layer as a public ArcGIS FeatureServer under the city's own
+      ArcGIS Online org — same discovery approach used for every prior
+      county here (search-indexed docs, since this sandbox blocks direct
+      ArcGIS REST introspection). San Francisco is a consolidated
+      city-county (no separate incorporated/unincorporated split, same
+      wording Denver and Philadelphia already established), so it reuses
+      that `zoning_note` framing rather than needing new copy. Follow the
+      exact `PARCEL_SOURCES` entry shape and `pick()` field-candidate
+      pattern from the Philadelphia (OPA) or Denver entries; a live
+      spot-check of the exact field names and layer path is the standard
+      human follow-up every prior county has needed.
+- [ ] **Print stylesheet for the result panel.** The "Make the case"
+      flow already offers copy/email/Web-Share/PNG-image export, but
+      printing the on-screen result panel directly (Ctrl/Cmd+P) currently
+      prints the whole page chrome — header, mode switcher, map, side
+      panels — not a clean single-parcel handout. Add a `@media print`
+      block to `web/explore.html` that hides the map, header controls, and
+      any panel other than the active result (and the recently-viewed/
+      compare UI), and lays out the verdict/checklist/case text in plain
+      readable black-on-white. Pure CSS, no new JS logic, so it verifies
+      cleanly in headless Chromium via `page.emulateMedia({media:
+      'print'})` plus a computed-style check that the map/header are
+      `display:none` under print without touching on-screen (`no
+      media query`) rendering at all.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
