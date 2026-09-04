@@ -3139,51 +3139,47 @@ Ground rules for each run:
       real site is a good human spot-check, same as every prior use.
 
 ## Now (high value) — newly added (9)
-- [ ] **Service worker for offline/repeat-visit app-shell caching.** The
-      manifest (`web/manifest.json`) already makes the app installable, but
-      there's no service worker, so an installed/repeat visit still
-      re-fetches `explore.html`, `index.html`, `logic.js`, `model.js`,
-      `model.json`, the vendored Leaflet JS/CSS, and the icon set from
-      scratch every load, and the app is unusable with no connection at all
-      (even though everything except live map tiles/Overpass/ArcGIS/Census
-      calls is static and same-origin). Add a small `web/sw.js`: cache-first
-      for the static app-shell files above (versioned cache name, bump on
-      each deploy so stale shells don't stick around — a `skipWaiting`/
-      `clients.claim` activate step that deletes old-named caches), and
-      network-only passthrough for everything cross-origin (tiles, Overpass,
-      ArcGIS, Census, USGS, Nominatim) — never cache those, they're live
-      data, not app shell. Register it from both `explore.html` and
-      `index.html` behind `if ("serviceWorker" in navigator)`, guarded so a
-      registration failure (or running from `file://`, which rejects SW
-      registration) degrades silently, not as a console error. Verify with
-      headless Chromium: both pages still load with zero console/page
-      errors with the registration guard in place (SW registration itself
-      will no-op under `file://`/sandboxed network, which is expected — the
-      registration *call* not throwing is what to check, same caveat every
-      prior network-touching item here has noted). A live install +
-      airplane-mode reload is a good human spot-check this sandbox can't do.
-- [ ] **Recent-sites history dropdown.** Every clicked point already flows
-      through `writeHash`/`applyHash` for a shareable permalink, but nothing
-      remembers *this browser's* last few clicks across sessions — closing
-      the tab loses them, and there's no way back to "that parcel from
-      yesterday" short of re-finding it on the map. This is distinct from
-      the existing Compare-pins list (which is a deliberate side-by-side
-      set the user builds, not a visit log) and from the JSON backup/restore
-      item (a full manual export/import, not a lightweight recent-history
-      UI). Add a capped (~10 entries, oldest evicted first) `localStorage`-
-      backed history of `{lat, lng, label, mode, use, ts}` — reuse
-      `encodeHash`/`decodeHash` from `web/logic.js` for the shape and add a
-      pure `pushHistoryEntry(history, entry, max)` helper there (dedupe by
-      near-identical lat/lng, most-recent-first, capped) with unit tests,
-      same pattern as the CSV/report builders. Surface it as a small
-      "🕑 Recent" dropdown near the address search box; picking an entry
-      does the same `map.setView` + `analyze()` the address search and
-      permalink-load path already do. No new network calls — purely local
-      storage of points already visited. Verify: new `web/logic.js` unit
-      tests for `pushHistoryEntry` (cap, dedupe, ordering, malformed-entry
-      skip) plus headless Chromium confirming both pages still load with
-      zero console/page errors and that clicking a history entry re-centers
-      the map and re-runs `analyze()`.
+- [x] **Service worker for offline/repeat-visit app-shell caching.** Added
+      `web/sw.js`: cache-first for the static app-shell files (`explore.html`,
+      `index.html`, `logic.js`, `model.js`, `model.json`, `manifest.json`, the
+      vendored Leaflet JS/CSS/marker images, and the icon set) under a
+      versioned `simy-shell-v1` cache name, with an `install` step
+      (`skipWaiting`) that pre-warms the cache and an `activate` step that
+      deletes any previously-named cache and calls `clients.claim()`.
+      Cross-origin requests (map tiles, Overpass, ArcGIS, Census, USGS,
+      Nominatim) are never intercepted — the fetch handler bails out
+      immediately for any request whose origin doesn't match
+      `self.location.origin`, so those always hit the network live, same as
+      today. A same-origin request outside `SHELL_ASSETS` (there aren't any
+      today, but future additions are safe) also falls through to default
+      network handling rather than being force-cached. Registered from both
+      `explore.html` and `index.html` behind `if ("serviceWorker" in
+      navigator)` on the `load` event, with `.catch(()=>{})` so a
+      registration failure (unsupported browser, or `file://`, which rejects
+      SW registration) degrades silently instead of surfacing as a console
+      error. Verified: `python -m pytest -q` (15 passed), `simy validate`
+      (OK, 17 land uses/32 sources unaffected — this item touches no model
+      data), `node --test tests/js/*.test.mjs` (329 passed, no new JS
+      helpers needed — this is pure service-worker/registration code, not
+      `web/logic.js` logic), `node --check web/sw.js` (valid syntax), and
+      headless Chromium loading both `explore.html` and `index.html` via
+      `file://` with zero console/page errors, confirming the registration
+      guard's `.catch()` swallows the `file://`-rejected registration
+      cleanly rather than throwing. A live install + airplane-mode reload is
+      a good human follow-up this sandbox can't do (no real HTTP origin or
+      persistent browser profile here, and the sandbox blocks outbound
+      network entirely, so there is no way to install the SW over a real
+      origin and confirm a genuine offline reload from this environment).
+- [x] **Recent-sites history dropdown.** Already shipped, just never checked
+      off here: `addRecentSite`/`removeRecentSite`/`clearRecentSites`/
+      `undoClear` (`web/logic.js`) plus the "Recently viewed" `<details>`
+      panel, `loadRecent`/`renderRecent`/`recordRecent`/`armRecentUndo`
+      (`web/explore.html`) implement this exact feature — a capped (6),
+      deduped-by-rounded-lat/lng, most-recent-first `localStorage` history
+      that clicking a row re-centers the map and re-runs `analyze()` from,
+      with an undo-clear affordance beyond what this item even asked for.
+      No code change needed; reconciling the backlog so this doesn't get
+      re-implemented from scratch by a future run.
 - [ ] **Web Share API for the permalink/"make the case" share buttons, with
       the existing clipboard-copy as fallback.** The share tools (permalink
       copy, "Make the case" copy/email/image-download) all currently target

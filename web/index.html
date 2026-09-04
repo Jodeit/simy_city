@@ -518,6 +518,14 @@
     paint(next);
   };
 })();
+
+/* App-shell service worker (web/sw.js) — see explore.html for the fuller
+   note; same guarded, silently-degrading registration here. */
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
