@@ -1485,13 +1485,16 @@ function buildCaseText(use,latlng){
 function fillTools(latlng){
   const el=document.getElementById("tools"); if(!el)return;
   const link=permalink(latlng);
+  const canShare=hasWebShare(navigator);
   let h=`<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`+
+    (canShare?`<button class="toolbtn" id="shareNativeBtn">📤 Share…</button>`:"")+
     `<button class="toolbtn" id="pinBtn">📌 Pin to compare</button><span class="ok" id="pinMsg"></span>`;
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     h+=`<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
        `<textarea readonly id="caseTxt">${esc(txt)}</textarea>`+
        `<div class="row"><button class="toolbtn" id="caseCopy">Copy text</button>`+
+       (canShare?`<button class="toolbtn" id="caseShare">📤 Share…</button>`:"")+
        `<a class="toolbtn" id="caseMail" href="#">Email it</a>`+
        `<button class="toolbtn" id="caseImg">🖼️ Download image</button>`+
        `<button class="toolbtn" id="casePdf">📄 Download PDF</button>`+
@@ -1500,6 +1503,12 @@ function fillTools(latlng){
   }
   el.innerHTML=h;
   document.getElementById("shareBtn").onclick=()=>copy(link,"link copied — share it");
+  if(canShare){
+    document.getElementById("shareNativeBtn").onclick=()=>{
+      const label=mode==="build"?MODEL.land_uses[current].label:null;
+      navigator.share(sharePayloadForLink(link,label)).catch(()=>{});
+    };
+  }
   document.getElementById("pinBtn").onclick=()=>{
     const r=addPin();
     const m=document.getElementById("pinMsg");
@@ -1508,6 +1517,11 @@ function fillTools(latlng){
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     document.getElementById("caseCopy").onclick=()=>copy(txt,"copied");
+    if(canShare){
+      document.getElementById("caseShare").onclick=()=>{
+        navigator.share(sharePayloadForCase(txt,MODEL.land_uses[current].label)).catch(()=>{});
+      };
+    }
     document.getElementById("caseMail").href=
       `mailto:?subject=${encodeURIComponent("SIMyCity: "+MODEL.land_uses[current].label+" — should we build it here?")}&body=${encodeURIComponent(txt)}`;
     document.getElementById("caseImg").onclick=()=>{

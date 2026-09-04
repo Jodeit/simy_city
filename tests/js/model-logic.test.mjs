@@ -14,7 +14,8 @@ const {
   countOf, haversine, inBbox, pick, blendedDemand, seniorDemandRead,
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
-  encodeHash, decodeHash, encodeComparePins, decodeComparePins, mergeComparePins,
+  encodeHash, decodeHash, hasWebShare, sharePayloadForLink, sharePayloadForCase,
+  encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
@@ -904,6 +905,47 @@ test("decodeHash: missing/unparseable lat or lng comes back null, not NaN", () =
 test("decodeHash: a use value is URI-decoded", () => {
   const q = decodeHash(`mode=build&use=${encodeURIComponent("fast_casual")}&lat=1&lng=2`);
   assert.equal(q.use, "fast_casual");
+});
+
+// ---- hasWebShare / sharePayloadForLink / sharePayloadForCase (Web Share API) ----
+// navigator.share() itself requires a real user gesture and never resolves in
+// a synthetic/headless test, so these cover the feature-detect branch and the
+// payload shape it builds — the two things that are actually pure logic here.
+
+test("hasWebShare: true only when navigator.share is a function", () => {
+  assert.equal(hasWebShare({ share: () => {} }), true);
+});
+
+test("hasWebShare: false when navigator has no share property", () => {
+  assert.equal(hasWebShare({}), false);
+});
+
+test("hasWebShare: false when navigator.share exists but isn't callable", () => {
+  assert.equal(hasWebShare({ share: "nope" }), false);
+});
+
+test("hasWebShare: false for a missing/undefined navigator (unsupported/non-browser)", () => {
+  assert.equal(hasWebShare(undefined), false);
+  assert.equal(hasWebShare(null), false);
+});
+
+test("sharePayloadForLink: carries the link as url and labels the title with the use", () => {
+  const p = sharePayloadForLink("https://example.com/#mode=build", "Fast-casual restaurant");
+  assert.equal(p.url, "https://example.com/#mode=build");
+  assert.equal(p.title, "SIMyCity: Fast-casual restaurant");
+  assert.equal(p.text, undefined);
+});
+
+test("sharePayloadForLink: falls back to a plain title when there's no use label (explore mode)", () => {
+  const p = sharePayloadForLink("https://example.com/#mode=explore", null);
+  assert.equal(p.title, "SIMyCity");
+});
+
+test("sharePayloadForCase: carries the case text as text (already includes the permalink) and a use-specific title", () => {
+  const p = sharePayloadForCase("SIMyCity — case text…", "Data center");
+  assert.equal(p.text, "SIMyCity — case text…");
+  assert.equal(p.title, "SIMyCity: Data center — should we build it here?");
+  assert.equal(p.url, undefined);
 });
 
 // ---- encodeComparePins / decodeComparePins / mergeComparePins (shareable Compare list) ----

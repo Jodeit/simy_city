@@ -3180,25 +3180,36 @@ Ground rules for each run:
       with an undo-clear affordance beyond what this item even asked for.
       No code change needed; reconciling the backlog so this doesn't get
       re-implemented from scratch by a future run.
-- [ ] **Web Share API for the permalink/"make the case" share buttons, with
-      the existing clipboard-copy as fallback.** The share tools (permalink
-      copy, "Make the case" copy/email/image-download) all currently target
-      desktop clipboard/email-client flows. On a mobile browser that
-      supports `navigator.share`, add a "Share…" option alongside the
-      existing copy button that hands the OS its native share sheet
-      (AirDrop/Messages/etc. for the permalink URL; permalink + case text
-      for "Make the case") — feature-detect with
-      `if (navigator.share) {...} else {/* existing copy-to-clipboard
-      path, unchanged */}` so nothing regresses on desktop/unsupported
-      browsers. `navigator.share` requires a real user-gesture click to
-      resolve (won't fire synthetically in a test), so verify by confirming
-      the feature-detect branch itself is correct (mock
-      `navigator.share`/absence of it, assert the right path is taken and
-      the existing copy path is 100% unchanged when unsupported) and that
-      headless Chromium still loads both pages with zero console/page
-      errors. A live mobile Safari/Chrome spot-check for the actual share
-      sheet is a good human follow-up, same as every other browser-API item
-      here.
+- [x] **Web Share API for the permalink/"make the case" share buttons, with
+      the existing clipboard-copy as fallback.** Added a "📤 Share…" button
+      alongside the existing "🔗 Copy share link" button, and another
+      alongside "Copy text" in the "Make the case" box, both rendered only
+      when `navigator.share` exists (feature-detected once per `fillTools()`
+      render via a new pure `hasWebShare(nav)` in `web/logic.js`, called with
+      the real `navigator`) — nothing changes for desktop/unsupported
+      browsers, which keep exactly the pre-existing copy-only buttons. On
+      click, the permalink Share button hands the OS share sheet
+      `{title, url}` for the permalink (via new pure `sharePayloadForLink`);
+      the case Share button hands it `{title, text}` for the full case text,
+      which already embeds the permalink (`sharePayloadForCase`) — both
+      wrapped in `.catch(()=>{})` since a user dismissing the native share
+      sheet rejects the promise and shouldn't surface as an error. As the
+      item itself notes, `navigator.share()` needs a real user gesture and
+      never resolves in a headless test, so verification targeted the parts
+      that *are* pure logic: 7 new unit tests for `hasWebShare` (present/
+      absent/non-callable/undefined-navigator) and the two payload builders
+      (title text, `url` vs `text` shape, explore-mode's label-less
+      fallback title). End-to-end in headless Chromium: with a mocked
+      `navigator.share` installed before page load, a real `analyze()` run
+      in build mode rendered both Share buttons and clicking each invoked
+      the mock with the correct `{title,url}`/`{title,text}` payload
+      (confirmed the case payload's `text` really does carry the permalink
+      substring); removing `navigator.share` and re-running `analyze()`
+      rendered neither Share button while the original "🔗 Copy share
+      link"/"Copy text" buttons remained present and unchanged; both pages
+      still load with zero genuine console/page errors. A live mobile
+      Safari/Chrome spot-check for the actual OS share sheet is a good
+      human follow-up, same as every other browser-API item here.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
