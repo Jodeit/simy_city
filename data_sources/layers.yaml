@@ -626,6 +626,54 @@ land_uses:
       but both compete for the same "hardware/home-project" trip, so both are
       counted rather than picking one).
 
+  distribution_center:    # last-mile fulfillment / distribution warehouse (Amazon-type)
+    label: Last-Mile Distribution / Fulfillment Warehouse
+    requires:
+      # Unlike every retail use above, "demand" here is really two things a
+      # rooftop count is an imperfect but real proxy for: the delivery-area
+      # population a last-mile facility serves, and the workforce catchment
+      # it draws staff from — same read direction (more rooftops = better
+      # fit), just at a wider citywide radius than any use except
+      # warehouse_club, since a fulfillment center's van routes and labor
+      # shed both reach across a metro, not a neighborhood.
+      demand:        { min_households_drive_time: 40000, drive_time_min: 15 }
+      # Reuses the same `minAadt` gate mechanism (`standardUseVerdict`'s AADT
+      # leg, web/logic.js) warehouse_club/car_wash/pharmacy/convenience_store
+      # already established, at warehouse_club's own highway-frontage bar
+      # (40000 -> here 35000, just under it) — trucks need real highway
+      # access, not just an arterial.
+      transportation: { near_highway_aadt: 35000 }
+      # A cross-dock building + truck court + trailer parking needs more room
+      # than even warehouse_club's 15-acre big-box pad.
+      parcel:        { min_buildable_acres: 20 }
+    induces:
+      transportation:
+        note: high daily truck-trip generation; may require dedicated turn lanes/signal timing for freight access
+    impacts:
+      habitat: low
+      land_cover: high         # a large paved building + truck court + trailer yard
+      carbon: medium
+      traffic: high             # heavy daily truck/van trip generation, both directions of the day
+    notes: >
+      The logistics counterpart to warehouse_club's retail-anchor shape:
+      rooftop demand (delivery-area + workforce catchment, at a 12 km radius
+      between grocery_store's 8 km and warehouse_club's 15 km),
+      min_buildable_acres (20, bigger than warehouse_club's 15-acre pad — a
+      cross-dock building plus a full truck court and trailer yard), and
+      near_highway_aadt (35000, just under warehouse_club's 40000 — real
+      highway access matters, but a fulfillment center isn't the destination
+      draw a warehouse club is). Deliberately has no `competition` gate:
+      unlike every retail use since food_truck_court, distribution/fulfillment
+      warehouses routinely cluster together in the same logistics parks near
+      an interchange rather than needing distance from each other, so there's
+      no "farther is better" (or "avoid crowding") read that would be
+      honest here — the existing-warehouse count is still shown for context
+      (OSM `building=warehouse`, the same single-tag confidence
+      self_storage's `shop=storage_rental` has), just not gated on. Wired up
+      via `standardUseVerdict` directly (same demand+site-size+AADT shape
+      warehouse_club already established, minus the competitor-distance leg),
+      no new gate-shape work needed.
+
   multifamily:            # garden-style/mid-rise apartment complex (renter-housing lens)
     label: Multifamily / Apartment Complex
     # residential_subdivision's rental-housing sibling: every land use above is

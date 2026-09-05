@@ -1004,6 +1004,33 @@ window.SIMY_MODEL = {
       },
       "notes": "A rooftop-headcount demand read like grocery_store, but at a wider radius (10 km, between grocery_store's 8 km and warehouse_club's 15 km) \u2014 a big-box home improvement store draws a citywide weekend-project crowd, not just the immediate neighborhood. min_households_drive_time (30000), min_buildable_acres (12, closer to warehouse_club's 15-acre big-box pad than grocery_store's smaller mid-box footprint \u2014 store + garden center + lumber yard + parking), and min_distance_km_from_nearest (4.0, wider than grocery_store's 2.0 to match the bigger trade area) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site- size+competitor-distance shape grocery_store already established, no AADT gate), no new gate-shape work needed. OSM tags this with two live tags \u2014 `shop=doityourself` and `shop=hardware` \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy/ convenience_store already documented (a full big-box home improvement store and a small neighborhood hardware store are tagged differently, but both compete for the same \"hardware/home-project\" trip, so both are counted rather than picking one).\n"
     },
+    "distribution_center": {
+      "label": "Last-Mile Distribution / Fulfillment Warehouse",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 40000,
+          "drive_time_min": 15
+        },
+        "transportation": {
+          "near_highway_aadt": 35000
+        },
+        "parcel": {
+          "min_buildable_acres": 20
+        }
+      },
+      "induces": {
+        "transportation": {
+          "note": "high daily truck-trip generation; may require dedicated turn lanes/signal timing for freight access"
+        }
+      },
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "high",
+        "carbon": "medium",
+        "traffic": "high"
+      },
+      "notes": "The logistics counterpart to warehouse_club's retail-anchor shape: rooftop demand (delivery-area + workforce catchment, at a 12 km radius between grocery_store's 8 km and warehouse_club's 15 km), min_buildable_acres (20, bigger than warehouse_club's 15-acre pad \u2014 a cross-dock building plus a full truck court and trailer yard), and near_highway_aadt (35000, just under warehouse_club's 40000 \u2014 real highway access matters, but a fulfillment center isn't the destination draw a warehouse club is). Deliberately has no `competition` gate: unlike every retail use since food_truck_court, distribution/fulfillment warehouses routinely cluster together in the same logistics parks near an interchange rather than needing distance from each other, so there's no \"farther is better\" (or \"avoid crowding\") read that would be honest here \u2014 the existing-warehouse count is still shown for context (OSM `building=warehouse`, the same single-tag confidence self_storage's `shop=storage_rental` has), just not gated on. Wired up via `standardUseVerdict` directly (same demand+site-size+AADT shape warehouse_club already established, minus the competitor-distance leg), no new gate-shape work needed.\n"
+    },
     "multifamily": {
       "label": "Multifamily / Apartment Complex",
       "requires": {

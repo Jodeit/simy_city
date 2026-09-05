@@ -3243,6 +3243,53 @@ Ground rules for each run:
       use id) by hand. No network involved anywhere in this change, and no
       web/JS files were touched, so no browser check was needed this run.
 
+## Now (high value) — newly added (11)
+- [x] **18th land use: Last-Mile Distribution / Fulfillment Warehouse
+      (Amazon-type).** Added `distribution_center` to `data_sources/layers.yaml`
+      — the logistics counterpart to `warehouse_club`'s retail-anchor shape: a
+      rooftop-headcount demand read (`requires.demand.min_households_drive_time:
+      40000`, at a 12 km radius between `grocery_store`'s 8 km and
+      `warehouse_club`'s 15 km — a proxy for both the delivery-area population
+      it serves and the workforce catchment it hires from), a real AADT
+      traffic-count gate (`transportation.near_highway_aadt: 35000`, just
+      under `warehouse_club`'s 40000 — trucks need real highway access), and a
+      `parcel.min_buildable_acres: 20` site-size gate (bigger than
+      `warehouse_club`'s 15-acre pad — a cross-dock building plus a full truck
+      court and trailer yard). Deliberately **no** `competition` gate: unlike
+      every retail use since `food_truck_court`, fulfillment warehouses
+      cluster together in logistics parks near an interchange rather than
+      needing distance from each other, so there's no honest "farther is
+      better" (or "avoid crowding") read here — the existing-warehouse count
+      (OSM `building=warehouse`) is still shown for context, just not gated
+      on, same "compQ fetched, not gated" pattern `warehouse_club` already
+      established. Wired through `ALL_USE_KEYS`, `USE_DEMAND`, `BEST_FIT_USES`,
+      and a new `maybeRenderDWVerdict` — modeled directly on `car_wash`'s
+      demand+site-size+AADT shape via the shared `standardUseVerdict`
+      (web/logic.js), minus the competitor-distance leg — no gate-shape
+      changes needed there since `standardUseVerdict` already treats an
+      omitted `minCompetitorKm` as an always-pass leg (the same default
+      `warehouse_club`'s own shape already relies on). Verified:
+      `python -m pytest -q` (22 passed), `simy validate` (OK, 32 sources/16
+      layers/**18 land uses**), `node --test tests/js/*.test.mjs` (336 passed
+      — including the integration test that runs `evaluate()` against every
+      land use in the real compiled `model.json`, confirming the new use's
+      `impacts`/stakeholder read works with zero new pure-logic helpers
+      needed, since this flows entirely through the already-tested
+      `standardUseVerdict`), and headless Chromium confirms both pages load
+      with zero genuine console/page errors (only the expected
+      sandbox-blocked `ERR_TUNNEL_CONNECTION_FAILED` for map tiles);
+      `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`/`MODEL.land_uses` all
+      correctly carry the new key; driving `maybeRenderDWVerdict` directly
+      through PASS / SHORT-on-demand / SHORT-on-site-size / SHORT-on-AADT /
+      no-highway-route-in-range / AADT-lookup-unavailable /
+      acreage-unavailable / no-rooftop-read / wrong-use-selected states all
+      produced correct verdict text and CSS classes with zero throws; and a
+      real end-to-end `analyze()` run with `distribution_center` selected and
+      mocked Overpass/ArcGIS responses rendered the full result panel with
+      zero console errors. Outbound network to Overpass/ArcGIS is blocked
+      from this sandbox, so a live end-to-end rooftop/acreage/AADT fetch on
+      the real site is a good human spot-check, same as every prior use.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
