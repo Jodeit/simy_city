@@ -5,6 +5,9 @@
     python -m simy_city.cli todo            # connectors a contributor can pick up
     python -m simy_city.cli use data_center  # dependency profile of a land use
     python -m simy_city.cli standoffs       # chicken-and-egg standoffs in the model
+    python -m simy_city.cli standoffs residential_subdivision,fast_casual
+                                             # ...filtered to those still stuck given
+                                             # uses already present at a place
     python -m simy_city.cli perspectives data_center  # "should we?" by stakeholder
     python -m simy_city.cli validate        # exit non-zero if registry is broken
 """
@@ -70,18 +73,28 @@ def cmd_use(reg: Registry, use_id: str) -> int:
     return 0
 
 
-def cmd_standoffs(reg: Registry) -> int:
-    standoffs = find_standoffs(reg)
-    if not standoffs:
-        print("No chicken-and-egg standoffs in the current model.")
-        return 0
-    print(f"{len(standoffs)} structural standoff(s) in the model "
-          f"(cycles of mutually-blocking absent uses):\n")
+def cmd_standoffs(reg: Registry, present: set[str] | None = None) -> int:
+    standoffs = find_standoffs(reg, present=present)
+    if present:
+        print(f"Uses already present: {', '.join(sorted(present))}\n")
+        if not standoffs:
+            print("No standoffs remain stuck — every structural cycle has at least\n"
+                  "one use already present there.")
+            return 0
+        print(f"{len(standoffs)} standoff(s) still stuck given what's already there:\n")
+    else:
+        if not standoffs:
+            print("No chicken-and-egg standoffs in the current model.")
+            return 0
+        print(f"{len(standoffs)} structural standoff(s) in the model "
+              f"(cycles of mutually-blocking absent uses):\n")
     for s in standoffs:
         print(s.describe(reg))
         print()
-    print("Once M1 connectors land, pass the uses already present in a place to\n"
-          "filter these down to the standoffs that are actually stuck there.")
+    if not present:
+        print("Pass a comma-separated list of uses already present at a place\n"
+              "(e.g. `simy standoffs residential_subdivision,fast_casual`) to filter\n"
+              "these down to the standoffs actually stuck there.")
     return 0
 
 
@@ -129,7 +142,15 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "use" and len(argv) > 1:
         return cmd_use(reg, argv[1])
     if cmd == "standoffs":
-        return cmd_standoffs(reg)
+        present = None
+        if len(argv) > 1:
+            present = {u.strip() for u in argv[1].split(",") if u.strip()}
+            unknown = present - reg.all_use_ids()
+            if unknown:
+                print(f"unknown use id(s): {', '.join(sorted(unknown))}. "
+                      f"known: {', '.join(sorted(reg.all_use_ids()))}", file=sys.stderr)
+                return 1
+        return cmd_standoffs(reg, present)
     if cmd == "perspectives" and len(argv) > 1:
         return cmd_perspectives(reg, argv[1])
     if cmd == "validate":

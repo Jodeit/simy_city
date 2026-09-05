@@ -3211,6 +3211,38 @@ Ground rules for each run:
       Safari/Chrome spot-check for the actual OS share sheet is a good
       human follow-up, same as every other browser-API item here.
 
+## Now (high value) — newly added (10)
+- [x] **Wire `simy standoffs` up to the `present`-uses filter it already had.**
+      `find_standoffs(reg, present=...)` (`simy_city/standoffs.py`) has
+      supported filtering structural cycles down to the ones still actually
+      stuck given uses already on the ground since the M1 connectors landed
+      (and was already covered by `test_present_use_breaks_standoff` in
+      `tests/test_registry.py`) — but the CLI itself never exposed it: `simy
+      standoffs` always called `find_standoffs(reg)` with no filter and
+      printed a stub "once M1 connectors land, pass the uses already present…"
+      message, even though M1 (21+ county parcel sources, live Overpass/
+      ArcGIS/Census/USGS/FEMA reads) had long since landed. Added an optional
+      comma-separated arg — `simy standoffs residential_subdivision,fast_casual`
+      — parsed in `main()`, validated against `reg.all_use_ids()` (an unknown
+      use id prints a clear error to stderr and exits 1, listing the known
+      ids, rather than silently no-op-filtering), and threaded through to
+      `cmd_standoffs(reg, present)`. Output now says which uses were treated
+      as present and how many standoffs remain stuck given that (or "No
+      standoffs remain stuck" when the filter clears every cycle); the
+      "pass a comma-separated list…" hint only prints in the unfiltered case,
+      since it no longer applies once someone's already used the flag. Added
+      `tests/test_cli.py` (7 new tests: unfiltered output shape, a real
+      partial-filter case with the correct count and label text, a
+      present-set covering every use clearing all standoffs, both `main()`
+      entry-point argv shapes, the unknown-use-id error path, and blank/empty
+      comma-separated entries being ignored rather than erroring). Verified:
+      `python -m pytest -q` (22 passed, 7 new), `simy validate` (OK, 32
+      sources/17 land uses unaffected — this is a Python-CLI-only change,
+      no model data or web code touched), and manual smoke-testing all three
+      `simy standoffs` invocation shapes (no args, a real filter, an unknown
+      use id) by hand. No network involved anywhere in this change, and no
+      web/JS files were touched, so no browser check was needed this run.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
