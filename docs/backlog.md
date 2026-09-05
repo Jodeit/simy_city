@@ -3211,6 +3211,57 @@ Ground rules for each run:
       Safari/Chrome spot-check for the actual OS share sheet is a good
       human follow-up, same as every other browser-API item here.
 
+## Now (high value) — newly added (10)
+- [ ] **18th land use: Veterinary Clinic / Animal Hospital.** Add
+      `veterinary_clinic` to `data_sources/layers.yaml`: rooftop demand at a
+      modest ~4 km radius (a neighborhood service, tighter than
+      grocery_store's 8 km), `requires.parcel.min_buildable_acres: 0.75` (a
+      small standalone building or strip-center suite), and an inverted
+      `requires.competition.min_distance_km_from_nearest: 2.0` against
+      `amenity=veterinary` (avoid saturating a market already served — the
+      grocery_store/car_wash/pharmacy "don't crowd" shape, not
+      food_truck_court's "farther is always better" inversion). No AADT gate
+      needed (a destination business people seek out, not a drive-by-visibility
+      one), so this should need **zero** new gate-shape work in
+      `web/logic.js` — `standardUseVerdict` already covers
+      rooftop-demand + site-size + competitor-distance. Wire through
+      `ALL_USE_KEYS`, `USE_DEMAND`, `BEST_FIT_USES`, and a new
+      `maybeRenderVCVerdict`, following the `grocery_store`/
+      `maybeRenderGSVerdict` template. Verify with `pytest`, `simy validate`
+      (expect 18 land uses), the full Node test suite, and headless-Chromium
+      PASS/SHORT/edge-case verdict-state checks, same as every prior
+      land-use item.
+- [ ] **22nd parcel county: Wayne County, MI (Detroit).** Add a
+      `PARCEL_SOURCES` entry for Wayne County's (or the City of Detroit's own
+      open-data — whichever has a real, findable ArcGIS REST endpoint; this
+      sandbox can't introspect ArcGIS hosts directly, same constraint every
+      prior county hit) parcel MapServer/FeatureServer. Map whatever
+      id/owner/address/land-use/acreage/value field names can be confirmed
+      from search-indexed docs into the shared `pick()` candidate lists
+      (leave any field unconfirmed rather than guessed, same graceful
+      partial-coverage precedent as King/Cook/Denver/Suffolk), add a
+      Michigan-specific `zoning_note`, and a `record()` deep link if a stable
+      per-parcel URL scheme is documented, else fall back to the
+      county/city's own search portal. Verify `inBbox` correctly routes a
+      downtown-Detroit point (and not an out-of-coverage point), and that
+      `showParcel` renders a mocked Wayne-County-shaped payload with zero
+      console errors — same verification shape as every prior county entry.
+- [ ] **GeoJSON export for the "🏆 Best fit here" ranked table.** The Compare
+      modal and the reverse-search candidate list both already have a "🗺️
+      Download GeoJSON" export button; the Best-fit panel got CSV/PDF
+      exports (see above) but never the matching GeoJSON one. Add a
+      `bestFitToGeoJSON(center, ranked, labels)` pure helper to
+      `web/logic.js` — one Point feature per ranked use at the shared query
+      center, `properties` carrying the use label, PASS/SHORT verdict, and
+      demand-ratio (there's no per-use *location* to plot here, unlike
+      Compare/reverse-search, so this is one feature per use at one point,
+      not a distinct-point-per-feature layer) — and a "🗺️ Download GeoJSON"
+      button next to the existing `bfCsv`/`bfPdf` buttons, same Blob+anchor
+      download pattern. Add unit tests mirroring the existing
+      `bestFitToCsvRows` coverage (every gate-state branch, missing-center
+      edge case) and verify both pages still load with zero console errors
+      in headless Chromium.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
