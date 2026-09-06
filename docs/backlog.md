@@ -3290,6 +3290,63 @@ Ground rules for each run:
       from this sandbox, so a live end-to-end rooftop/acreage/AADT fetch on
       the real site is a good human spot-check, same as every prior use.
 
+## Now (high value) — newly added (12)
+- [ ] **19th land use: Fitness Center / Gym (Planet Fitness/LA Fitness-type).**
+      Add `fitness_center` to `data_sources/layers.yaml` — a common
+      site-selection use not yet covered by the 18 existing ones. Suggested
+      requirements: `requires.demand` on nearby rooftops at a mid-size radius
+      (a gym draws a short-drive neighborhood membership base, somewhere
+      between `urgent_care`'s 3 km and `grocery_store`'s 8 km — maybe 5 km),
+      `requires.parcel.min_buildable_acres` around 1.5–2 (a single-story big
+      box + parking, smaller than `warehouse_club`'s pad), and the same
+      inverted "farther is better" `requires.competition` gate
+      `food_truck_court`/`senior_living`/`urgent_care` established
+      (`min_distance_km_from_nearest`, maybe 2 km — two gyms two blocks apart
+      split the same membership pool). OSM tagging is `leisure=fitness_centre`
+      for both demand-side existing gyms and the competition query. Wire up a
+      real PASS/SHORT verdict in `web/explore.html` — this should fit the
+      shared `standardUseVerdict` helper (`web/logic.js`) already used by
+      `car_wash`/`distribution_center`/etc. with no new pure-logic code
+      needed, same as most uses since that helper was extracted. Add it to
+      `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`. Verify per the ground
+      rules above (pytest, `simy validate`, node tests, headless Chromium
+      zero-console-error check, and driving the new verdict function
+      directly through PASS/SHORT/unavailable states).
+- [ ] **22nd parcel county: Orange County, CA (Santa Ana/Anaheim/Irvine).**
+      Extend `PARCEL_SOURCES` in `web/explore.html` with Orange County's
+      public GIS parcel layer — search for the live ArcGIS MapServer/FeatureServer
+      endpoint (likely under `ocpw` or the OC Assessor/GIS portal), same
+      research approach every prior county entry used since this sandbox
+      can't introspect ArcGIS REST hosts directly. Confirm real field names
+      from search-indexed docs before adding them to the shared `pick()`
+      candidate lists rather than guessing; if owner/address/value aren't
+      confirmed on the public layer, leave them unmapped (same graceful
+      partial-coverage precedent as King/Cook/Salt Lake/Franklin/Clark/Denver).
+      California counties zone unincorporated land (reuse the `zoning_note`
+      already written for LA/San Diego County, both CA), and add a
+      record-link URL only if a stable per-parcel deep-link scheme is
+      confirmed — otherwise link to the county's own parcel-search/Assessor
+      page, same fallback every under-documented county here has used.
+- [ ] **Highlight the nearest competitor/context point on the map.** Every
+      use's competitor/context scan (`runDemand` in `web/explore.html`,
+      around the `probeLayer` amber-dot rendering) already sorts hits by
+      distance and calls out the nearest one by name in the text readout
+      (e.g. "nearest **Lakeview Elementary** 1.2 km") — but visually, the
+      nearest dot looks identical to the other ~40 rendered ones, so there's
+      no way to *see* which one the text is talking about. Give the nearest
+      hit (`els[0]`) a visually distinct marker style (different fill color
+      or a small ring) and draw a thin dashed `L.polyline` from the analyzed
+      point to it with a distance-label tooltip (reuse the existing
+      `els[0].km` value already computed via `haversine` — no new network
+      call or math). Remove/replace the line the same way `probeLayer`
+      already gets `.remove()`d and re-added on every new analysis, so stale
+      lines from a previous click never linger. Verify in headless Chromium:
+      both pages load with zero console/page errors, and a real simulated
+      map click renders exactly one highlighted marker + one line when
+      competitor/context hits exist, and neither when the scan returns zero
+      hits (same "no competitor in range" case several verdicts already
+      handle).
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
