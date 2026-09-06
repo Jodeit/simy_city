@@ -3291,27 +3291,44 @@ Ground rules for each run:
       the real site is a good human spot-check, same as every prior use.
 
 ## Now (high value) — newly added (12)
-- [ ] **19th land use: Fitness Center / Gym (Planet Fitness/LA Fitness-type).**
-      Add `fitness_center` to `data_sources/layers.yaml` — a common
-      site-selection use not yet covered by the 18 existing ones. Suggested
-      requirements: `requires.demand` on nearby rooftops at a mid-size radius
-      (a gym draws a short-drive neighborhood membership base, somewhere
-      between `urgent_care`'s 3 km and `grocery_store`'s 8 km — maybe 5 km),
-      `requires.parcel.min_buildable_acres` around 1.5–2 (a single-story big
-      box + parking, smaller than `warehouse_club`'s pad), and the same
-      inverted "farther is better" `requires.competition` gate
-      `food_truck_court`/`senior_living`/`urgent_care` established
-      (`min_distance_km_from_nearest`, maybe 2 km — two gyms two blocks apart
-      split the same membership pool). OSM tagging is `leisure=fitness_centre`
-      for both demand-side existing gyms and the competition query. Wire up a
-      real PASS/SHORT verdict in `web/explore.html` — this should fit the
-      shared `standardUseVerdict` helper (`web/logic.js`) already used by
-      `car_wash`/`distribution_center`/etc. with no new pure-logic code
-      needed, same as most uses since that helper was extracted. Add it to
-      `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`. Verify per the ground
-      rules above (pytest, `simy validate`, node tests, headless Chromium
-      zero-console-error check, and driving the new verdict function
-      directly through PASS/SHORT/unavailable states).
+- [x] **19th land use: Fitness Center / Gym (Planet Fitness/LA Fitness-type).**
+      Added `fitness_center` to `data_sources/layers.yaml` — `requires.demand`
+      on nearby rooftops at a 5 km radius (between `urgent_care`'s 3 km and
+      `grocery_store`'s 8 km — a gym draws a short-drive neighborhood
+      membership base), `requires.parcel.min_buildable_acres: 1.5` (a
+      single-story box + parking, smaller than `warehouse_club`'s 15-acre
+      pad), and the same inverted "farther is better"
+      `requires.competition.min_distance_km_from_nearest: 2.0` gate every use
+      since `food_truck_court` has established (two gyms a couple km apart
+      split the same membership pool). OSM tagging is unambiguous —
+      `leisure=fitness_centre` — for both the live demand-side existing-gym
+      count and the competition query, no OR-fallback needed. Wired up a real
+      PASS/SHORT verdict in `web/explore.html` (`maybeRenderFNVerdict`,
+      `fnState`) via the shared `standardUseVerdict` helper (`web/logic.js`)
+      directly — the same demand+site-size+competitor-distance shape
+      `grocery_store`/`home_improvement_store` already established, no AADT
+      gate and no new gate-shape work needed. Added to
+      `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`/`VERDICT_REFRESH`, plus the
+      matching state-init/reset, rooftop/competitor/acreage leg wiring, and
+      "Live area read" label copy every other use already has. Verified:
+      `python -m pytest -q` (22 passed), `simy validate` (OK, 32 sources/16
+      layers/**19 land uses**), `node --test tests/js/*.test.mjs` (336
+      passed — including the integration test that runs `evaluate()` against
+      every land use in the real compiled `model.json`, confirming the new
+      use's `impacts`/stakeholder read works with zero new pure-logic helpers
+      needed since it flows entirely through the already-tested
+      `standardUseVerdict`), and headless Chromium confirms both pages load
+      with zero genuine console/page errors; `ALL_USE_KEYS`/`USE_DEMAND`/
+      `BEST_FIT_USES` all correctly carry the new key; driving
+      `maybeRenderFNVerdict` directly through PASS / SHORT-on-demand /
+      SHORT-on-site-size / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws; and a real end-to-end `analyze()` run with
+      `fitness_center` selected rendered the full result panel with zero
+      console errors. Outbound network to Overpass/ArcGIS is blocked from
+      this sandbox, so a live end-to-end rooftop/acreage fetch on the real
+      site is a good human spot-check, same as every prior use.
 - [ ] **22nd parcel county: Orange County, CA (Santa Ana/Anaheim/Irvine).**
       Extend `PARCEL_SOURCES` in `web/explore.html` with Orange County's
       public GIS parcel layer — search for the live ArcGIS MapServer/FeatureServer

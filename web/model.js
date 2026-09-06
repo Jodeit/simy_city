@@ -1031,6 +1031,29 @@ window.SIMY_MODEL = {
       },
       "notes": "The logistics counterpart to warehouse_club's retail-anchor shape: rooftop demand (delivery-area + workforce catchment, at a 12 km radius between grocery_store's 8 km and warehouse_club's 15 km), min_buildable_acres (20, bigger than warehouse_club's 15-acre pad \u2014 a cross-dock building plus a full truck court and trailer yard), and near_highway_aadt (35000, just under warehouse_club's 40000 \u2014 real highway access matters, but a fulfillment center isn't the destination draw a warehouse club is). Deliberately has no `competition` gate: unlike every retail use since food_truck_court, distribution/fulfillment warehouses routinely cluster together in the same logistics parks near an interchange rather than needing distance from each other, so there's no \"farther is better\" (or \"avoid crowding\") read that would be honest here \u2014 the existing-warehouse count is still shown for context (OSM `building=warehouse`, the same single-tag confidence self_storage's `shop=storage_rental` has), just not gated on. Wired up via `standardUseVerdict` directly (same demand+site-size+AADT shape warehouse_club already established, minus the competitor-distance leg), no new gate-shape work needed.\n"
     },
+    "fitness_center": {
+      "label": "Fitness Center / Gym",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 5000,
+          "drive_time_min": 8
+        },
+        "parcel": {
+          "min_buildable_acres": 1.5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 2.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "A rooftop-headcount demand read like urgent_care/self_storage, at a mid-size radius (5 km) between urgent_care's 3 km and grocery_store's 8 km. min_households_drive_time (5000), min_buildable_acres (1.5), and min_distance_km_from_nearest (2.0) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site-size+competitor-distance shape grocery_store/home_improvement_store already established, no AADT gate), no new gate-shape work needed. OSM tags this unambiguously as `leisure=fitness_centre`, used for both the live demand-side existing-gym count and the competition query \u2014 no OR-fallback needed, same single-tag confidence self_storage's `shop=storage_rental` has.\n"
+    },
     "multifamily": {
       "label": "Multifamily / Apartment Complex",
       "requires": {

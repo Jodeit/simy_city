@@ -674,6 +674,41 @@ land_uses:
       warehouse_club already established, minus the competitor-distance leg),
       no new gate-shape work needed.
 
+  fitness_center:         # Planet Fitness/LA Fitness-type gym or fitness club
+    label: Fitness Center / Gym
+    requires:
+      # A gym draws a short-drive neighborhood membership base — between
+      # urgent_care's 3 km walk-in radius and grocery_store's 8 km trade area.
+      demand:      { min_households_drive_time: 5000, drive_time_min: 8 }
+      # A single-story big box + parking, smaller than warehouse_club's
+      # 15-acre pad but bigger than urgent_care's single-clinic lot.
+      parcel:      { min_buildable_acres: 1.5 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court/ev_charging_hub/senior_living/urgent_care/
+      # self_storage/child_care_center/hotel/grocery_store/car_wash/pharmacy/
+      # convenience_store/home_improvement_store established: two gyms a
+      # couple km apart split the same membership pool rather than each
+      # opening up a new one.
+      competition: { min_distance_km_from_nearest: 2.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low          # a single-story box + parking, well under a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      A rooftop-headcount demand read like urgent_care/self_storage, at a
+      mid-size radius (5 km) between urgent_care's 3 km and grocery_store's
+      8 km. min_households_drive_time (5000), min_buildable_acres (1.5), and
+      min_distance_km_from_nearest (2.0) are first-draft heuristics — refine
+      freely, same as every other threshold here. Wired up via
+      `standardUseVerdict` directly (same demand+site-size+competitor-distance
+      shape grocery_store/home_improvement_store already established, no AADT
+      gate), no new gate-shape work needed. OSM tags this unambiguously as
+      `leisure=fitness_centre`, used for both the live demand-side existing-gym
+      count and the competition query — no OR-fallback needed, same
+      single-tag confidence self_storage's `shop=storage_rental` has.
+
   multifamily:            # garden-style/mid-rise apartment complex (renter-housing lens)
     label: Multifamily / Apartment Complex
     # residential_subdivision's rental-housing sibling: every land use above is
