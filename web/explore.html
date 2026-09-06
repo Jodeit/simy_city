@@ -1849,9 +1849,21 @@ function runDemand(latlng,seq){
       return (la&&lo)?{name:(e.tags&&(e.tags.name||e.tags.operator))||"(unnamed)",lat:la,lon:lo,km:haversine(lat,lng,la,lo)}:null;})
       .filter(Boolean).sort((a,b)=>a.km-b.km);
     if(probeLayer)probeLayer.remove();
-    if(els.length)probeLayer=L.layerGroup(els.slice(0,40).map(e=>
-      L.circleMarker([e.lat,e.lon],{radius:5,color:"#16201f",weight:1,fillColor:"#d9a441",fillOpacity:.9})
-        .bindPopup(`${esc(e.name)} — ${e.km.toFixed(1)} km`))).addTo(map);
+    if(els.length){
+      // Nearest hit (els[0]) is the one every verdict's text calls out by
+      // name/distance — give it a visually distinct marker + a dashed line
+      // back to the analyzed point so it's not just one dot among ~40.
+      const dots=els.slice(0,40).map((e,i)=>
+        i===0
+          ? L.circleMarker([e.lat,e.lon],{radius:7,color:"#16201f",weight:2,fillColor:"#c0392b",fillOpacity:.95})
+              .bindPopup(`${esc(e.name)} — ${e.km.toFixed(1)} km (nearest)`)
+          : L.circleMarker([e.lat,e.lon],{radius:5,color:"#16201f",weight:1,fillColor:"#d9a441",fillOpacity:.9})
+              .bindPopup(`${esc(e.name)} — ${e.km.toFixed(1)} km`));
+      const nearLine=L.polyline([[lat,lng],[els[0].lat,els[0].lon]],
+        {color:"#c0392b",weight:2,dashArray:"6,6",opacity:.85})
+        .bindTooltip(`${els[0].km.toFixed(1)} km`,{permanent:true,direction:"center",opacity:.9});
+      probeLayer=L.layerGroup([...dots,nearLine]).addTo(map);
+    }
     setHTML("compVal", els.length
       ? `📍 <b>${els.length}</b> ${esc(cfg.compLabel)} in range · nearest <b>${esc(els[0].name)}</b> ${els[0].km.toFixed(1)} km`
       : `📍 no ${esc(cfg.compLabel)} in range`);

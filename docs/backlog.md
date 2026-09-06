@@ -3344,25 +3344,31 @@ Ground rules for each run:
       record-link URL only if a stable per-parcel deep-link scheme is
       confirmed — otherwise link to the county's own parcel-search/Assessor
       page, same fallback every under-documented county here has used.
-- [ ] **Highlight the nearest competitor/context point on the map.** Every
+- [x] **Highlight the nearest competitor/context point on the map.** Every
       use's competitor/context scan (`runDemand` in `web/explore.html`,
       around the `probeLayer` amber-dot rendering) already sorts hits by
       distance and calls out the nearest one by name in the text readout
       (e.g. "nearest **Lakeview Elementary** 1.2 km") — but visually, the
-      nearest dot looks identical to the other ~40 rendered ones, so there's
-      no way to *see* which one the text is talking about. Give the nearest
-      hit (`els[0]`) a visually distinct marker style (different fill color
-      or a small ring) and draw a thin dashed `L.polyline` from the analyzed
-      point to it with a distance-label tooltip (reuse the existing
-      `els[0].km` value already computed via `haversine` — no new network
-      call or math). Remove/replace the line the same way `probeLayer`
-      already gets `.remove()`d and re-added on every new analysis, so stale
-      lines from a previous click never linger. Verify in headless Chromium:
-      both pages load with zero console/page errors, and a real simulated
-      map click renders exactly one highlighted marker + one line when
-      competitor/context hits exist, and neither when the scan returns zero
-      hits (same "no competitor in range" case several verdicts already
-      handle).
+      nearest dot looked identical to the other ~40 rendered ones, so there
+      was no way to *see* which one the text was talking about. Gave the
+      nearest hit (`els[0]`) a visually distinct marker (larger radius, red
+      `#c0392b` fill vs. the other dots' amber `#d9a441` — a color not
+      already used by any other marker layer in the app: green ring, blue
+      numbered candidate pins, orange BYO pins) and drew a thin dashed
+      `L.polyline` from the analyzed point to it with a permanent
+      distance-label tooltip, reusing the existing `els[0].km` value already
+      computed via `haversine` — no new network call or math. The line lives
+      inside the same `probeLayer` group (`L.layerGroup([...dots,nearLine])`)
+      that already gets `.remove()`d and rebuilt on every new `analyze()`
+      call, so stale lines from a previous click never linger — no new
+      cleanup code needed. Verified in headless Chromium: both pages load
+      with zero console/page errors; driving a real `analyze()` call in
+      Test-a-use/data_center mode with a mocked two-element Overpass response
+      rendered exactly 2 circle markers + 1 dashed polyline, with the nearest
+      element's marker in the new red fill color and the line's `dashArray`
+      set; and a mocked zero-element response rendered zero layers (no
+      marker, no line) — the same "no competitor in range" case several
+      verdicts already handle gracefully.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
