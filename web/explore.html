@@ -804,6 +804,38 @@ const PARCEL_SOURCES=[
     zoning_note:"TX counties don't zone — legal zoning applies only inside a city/ETJ",
   },
   {
+    name:"OC Public Works GIS (Orange County, CA)",
+    urls:["https://www.ocgis.com/arcpub/rest/services/Map_Layers/Parcels/MapServer/0"],
+    bbox:[-118.13,33.33,-117.41,33.95],
+    // Confirmed fields on the public "Parcels" layer (via multiple independent
+    // search-indexed sources — this sandbox blocks direct ArcGIS REST
+    // introspection like every prior county here): only 6 fields total —
+    // ASSESSMENT_NO (APN, hyphenated e.g. "072-478-23"), SITE_ADDRESS
+    // (already in the shared address list from other counties), YEAR_BUILT,
+    // NBR_BEDROOMS, plus SHAPE/OBJECTID. Owner name, land use, acreage, and
+    // appraised value are confirmed absent from this public boundary layer
+    // (full assessor data sits behind the separate ParcelQuest-powered
+    // ocassessor.gov portal, not this GIS layer) — same graceful
+    // partial-field-coverage as King/Cook/Salt Lake/Franklin/Clark here.
+    // ocassessor.gov's search is a form (address or APN, then submit) with no
+    // documented per-APN query-string deep link, so — same cautious call as
+    // Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/Allegheny/Fulton/Salt
+    // Lake/Franklin/Clark/Suffolk — send people to the search page instead of
+    // guessing a link shape that might 404.
+    // Listed here, ahead of LA County and San Diego County below, on purpose:
+    // `inBbox`/`.find()` picks the *first* bbox match, and LA's rough bbox
+    // (padded to cover the offshore Channel Islands) and San Diego's both
+    // loosely overlap Orange County's real, non-rectangular border — Santa
+    // Ana/Anaheim/Irvine fall inside LA's bbox too, and San Clemente falls
+    // inside San Diego's. Checking Orange County's tighter bbox first is what
+    // actually routes those cities here instead of silently mis-resolving to
+    // a neighboring county's parcel service.
+    record:()=>"https://ocassessor.gov/search",
+    source_label:"OC Public Works GIS",
+    county_state:"Orange County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
+  {
     name:"LA County Assessor (Los Angeles County, CA)",
     urls:["https://public.gis.lacounty.gov/public/rest/services/LACounty_Cache/LACounty_Parcel/MapServer/0"],
     // includes the offshore Channel Islands (Catalina, San Clemente) — inBbox is
@@ -3292,7 +3324,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);

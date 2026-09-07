@@ -3329,21 +3329,47 @@ Ground rules for each run:
       console errors. Outbound network to Overpass/ArcGIS is blocked from
       this sandbox, so a live end-to-end rooftop/acreage fetch on the real
       site is a good human spot-check, same as every prior use.
-- [ ] **22nd parcel county: Orange County, CA (Santa Ana/Anaheim/Irvine).**
-      Extend `PARCEL_SOURCES` in `web/explore.html` with Orange County's
-      public GIS parcel layer — search for the live ArcGIS MapServer/FeatureServer
-      endpoint (likely under `ocpw` or the OC Assessor/GIS portal), same
-      research approach every prior county entry used since this sandbox
-      can't introspect ArcGIS REST hosts directly. Confirm real field names
-      from search-indexed docs before adding them to the shared `pick()`
-      candidate lists rather than guessing; if owner/address/value aren't
-      confirmed on the public layer, leave them unmapped (same graceful
-      partial-coverage precedent as King/Cook/Salt Lake/Franklin/Clark/Denver).
-      California counties zone unincorporated land (reuse the `zoning_note`
-      already written for LA/San Diego County, both CA), and add a
-      record-link URL only if a stable per-parcel deep-link scheme is
-      confirmed — otherwise link to the county's own parcel-search/Assessor
-      page, same fallback every under-documented county here has used.
+- [x] **22nd parcel county: Orange County, CA (Santa Ana/Anaheim/Irvine).**
+      Added Orange County, CA as a 22nd `PARCEL_SOURCES` entry —
+      `ocgis.com`'s public "Parcels" MapServer (`Map_Layers/Parcels/MapServer/0`),
+      found via web search since this sandbox can't introspect ArcGIS REST
+      hosts directly, same research approach every prior county here used.
+      Confirmed via multiple independent search-indexed sources that the
+      public layer exposes only 6 fields total: `ASSESSMENT_NO` (hyphenated
+      APN, added to the shared `pick()` id candidate list), `SITE_ADDRESS`
+      (already in the shared address list), `YEAR_BUILT`, `NBR_BEDROOMS`,
+      plus `SHAPE`/`OBJECTID` — no owner name, land use, acreage, or
+      appraised value on this layer (that data sits behind the separate
+      ParcelQuest-powered `ocassessor.gov` portal), so those stayed unmapped
+      rather than guessed, same graceful partial-coverage precedent as
+      King/Cook/Salt Lake/Franklin/Clark. `ocassessor.gov`'s property search
+      is a plain form (address or APN, then submit) with no documented
+      per-APN query-string deep link, so `record()` links to
+      `ocassessor.gov/search` rather than guessing a URL shape that might
+      404, same fallback every under-documented county here has used.
+      California counties zone unincorporated land, reusing the `zoning_note`
+      already written for LA/San Diego County. Caught and fixed a real bug
+      before shipping: `inBbox`/`.find()` resolves to the *first* matching
+      bbox, and both LA County's bbox (padded to cover the offshore Channel
+      Islands) and San Diego County's loosely overlap Orange County's actual,
+      non-rectangular border — a naive append-to-the-end placement made
+      Santa Ana/Anaheim/Irvine silently resolve to the LA County parcel
+      service instead of Orange's, and San Clemente to San Diego's. Fixed by
+      listing the new entry *before* LA County in the array (ahead of San
+      Diego too, since it comes later) so Orange's tighter bbox wins the
+      first-match race for its own cities, documented inline so a future
+      county addition knows to check for the same kind of overlap. Verified
+      in headless Chromium: both pages load with zero console/page errors;
+      `inBbox` now correctly routes Santa Ana, Irvine, Anaheim, and San
+      Clemente to Orange County while Long Beach (LA) and downtown San Diego
+      still correctly resolve to their own existing sources, and an
+      out-of-coverage point (Denver) still matches no source; driving the
+      shared `pick()` id/address extraction and the new source's `record()`
+      against a mocked `ASSESSMENT_NO`/`SITE_ADDRESS` payload produced the
+      correct hyphenated APN, address, and `ocassessor.gov/search` link.
+      Live ArcGIS endpoint reachability couldn't be confirmed from this
+      sandbox — outbound network to `ocgis.com` is blocked — so a live
+      spot-check is a good human follow-up, same as every prior county.
 - [x] **Highlight the nearest competitor/context point on the map.** Every
       use's competitor/context scan (`runDemand` in `web/explore.html`,
       around the `probeLayer` amber-dot rendering) already sorts hits by
