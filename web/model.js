@@ -1116,6 +1116,32 @@ window.SIMY_MODEL = {
         "traffic": "medium"
       },
       "notes": "The renter-housing counterpart to residential_subdivision's for-sale lens \u2014 same mechanism, different density assumption (25-40 units/ac, 30 used here, vs. 3 units/ac) and a lower students/home rate (0.3 vs. 0.5, apartment households skew smaller). Wired to web/explore.html's `maybeRenderMFVerdict` via the same wait-for-both-legs (parcel acreage + nearby-school count) pattern `maybeRenderResVerdict` already established, and reuses `schoolLoadDemandRead` in web/logic.js verbatim with its own density constants rather than a new demand-read function.\n"
+    },
+    "drive_thru_coffee": {
+      "label": "Drive-Thru Coffee Kiosk",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 5000,
+          "drive_time_min": 6
+        },
+        "transportation": {
+          "near_arterial_aadt": 30000
+        },
+        "parcel": {
+          "min_buildable_acres": 0.5
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.0
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "A rooftop-headcount demand read like car_wash, at a much tighter radius (2 km) \u2014 a drive-thru coffee kiosk draws a purely local commute-corridor crowd, tighter than even convenience_store's 3 km. min_households_drive_time (5000), min_buildable_acres (0.5, a kiosk + stacking lane, the smallest footprint of any use here), near_arterial_aadt (30000, between car_wash's 25000 and distribution_center's 35000), and min_distance_km_from_nearest (1.0, same as pharmacy/convenience_store) are first-draft heuristics \u2014 refine freely, same as every other threshold here. Wired up via `standardUseVerdict` directly (same demand+site-size+AADT+competitor- distance shape car_wash/pharmacy/convenience_store already established), no new gate-shape work needed. OSM has no single dominant tag for a drive-thru-specific coffee kiosk as distinct from a sit-down caf\u00e9 \u2014 the real distinguishing signal is the secondary `drive_through=yes` tag layered on either `amenity=cafe` or `shop=coffee`, so the live competitor/site read queries both combinations with an OR-fallback (deliberately *not* every `amenity=cafe`, which would false-positive on every sit-down coffee shop with no drive lane) \u2014 same messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy/convenience_store already documented, just filtered tighter here since the base tag alone would be far too broad.\n"
     }
   },
   "actor_uses": {

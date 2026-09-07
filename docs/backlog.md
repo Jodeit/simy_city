@@ -3397,28 +3397,44 @@ Ground rules for each run:
       verdicts already handle gracefully.
 
 ## Now (high value) — newly added (13)
-- [ ] **20th land use: Drive-thru coffee kiosk (Starbucks/Dutch Bros-type).**
-      A small-footprint, traffic-driven use distinct from the existing 19.
-      Add a `drive_thru_coffee` entry to `data_sources/layers.yaml`:
-      `requires.demand` on nearby rooftops/workplaces at a tight ~2 km radius
-      (walk/short-drive + commute-corridor — tighter than `car_wash`'s),
-      a real AADT gate (a drive-thru lives or dies on passing traffic volume
-      — put the threshold between `car_wash`'s and `distribution_center`'s),
-      `requires.parcel.min_buildable_acres` around 0.4–0.6 (a kiosk + stacking
-      lane, the smallest footprint of any use here), and the established
-      inverted "farther is better" `requires.competition.
-      min_distance_km_from_nearest` gate (~1 km) against other coffee shops
-      (OSM `amenity=cafe`, filtered toward drive-thru-style operators — check
-      what tag combination actually separates a coffee kiosk from a sit-down
-      café in OSM before committing to a query shape). Wire a
-      `maybeRenderDTCVerdict` in `web/explore.html` via the shared
+- [x] **20th land use: Drive-thru coffee kiosk (Starbucks/Dutch Bros-type).**
+      Added a `drive_thru_coffee` entry to `data_sources/layers.yaml` — a
+      tight 2 km rooftop/commute-corridor demand radius (tighter than
+      `car_wash`'s 5 km), a real AADT gate at `near_arterial_aadt: 30000`
+      (between `car_wash`'s 25000 and `distribution_center`'s 35000 — a
+      drive-thru wants a busy commute arterial, busier than a car wash needs
+      but short of interstate frontage), `min_buildable_acres: 0.5` (a kiosk +
+      stacking lane, the smallest footprint of any use here), and the
+      established inverted "farther is better" `competition.
+      min_distance_km_from_nearest: 1.0` gate against existing coffee shops.
+      OSM has no single dominant tag for a drive-thru-specific kiosk as
+      distinct from a sit-down café, so the live competitor/site query
+      (`web/explore.html`'s `USE_DEMAND.drive_thru_coffee.compQ`) filters on
+      the secondary `drive_through=yes` tag layered on either `amenity=cafe`
+      or `shop=coffee`, OR-fallback — deliberately *not* every bare
+      `amenity=cafe`, which would false-positive on every sit-down coffee shop
+      with no drive lane. Wired up `maybeRenderDTCVerdict` via the shared
       `standardUseVerdict` helper (`web/logic.js`) — same
-      demand+site-size+AADT+competitor-distance shape `car_wash`/
-      `distribution_center` already use, no new gate shapes should be needed.
-      Verify to the same bar every prior land-use item here has: `simy
-      validate`, `python -m pytest -q`, `node --test tests/js/*.test.mjs`,
-      headless-Chromium load-with-zero-errors, and driving the new verdict
-      function directly through its PASS/SHORT/missing-data states.
+      demand+site-size+AADT+competitor-distance shape `car_wash`/`pharmacy`/
+      `convenience_store` already use, so no new gate-shape work was needed
+      (`simy validate` confirms 20 land uses, no new validator changes).
+      Verified: `python -m pytest -q` (22 passed), `simy validate` (OK, 20
+      land uses), `node --test tests/js/*.test.mjs` (336 passed, no new JS
+      logic — this use reuses `standardUseVerdict`/`maxAadtWithinRadius`
+      verbatim, nothing new to unit-test at the logic.js layer), and headless
+      Chromium confirms both `web/explore.html` and `web/index.html` load
+      with zero console/page errors; selecting `drive_thru_coffee` in
+      Test-a-use mode resolves the right land-use label and a real simulated
+      map click runs the full fan-out without throwing; and driving
+      `maybeRenderDTCVerdict` directly through PASS / SHORT-on-demand /
+      SHORT-on-site-size / SHORT-on-AADT / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / AADT-lookup-unavailable / wrong-use-selected (no-op guard) states all
+      produced correct verdict text and CSS classes with zero throws. Outbound
+      network to Overpass/ArcGIS is blocked from this sandbox, so a live
+      end-to-end rooftop/AADT/competitor fetch on the real site — and a check
+      of how well `drive_through=yes` is actually populated on real-world
+      coffee-kiosk OSM data — is a good human spot-check.
 
 - [ ] **23rd parcel county.** `PARCEL_SOURCES` in `web/explore.html` currently
       covers 22: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
