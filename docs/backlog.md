@@ -3396,6 +3396,65 @@ Ground rules for each run:
       marker, no line) — the same "no competitor in range" case several
       verdicts already handle gracefully.
 
+## Now (high value) — newly added (13)
+- [ ] **20th land use: Drive-thru coffee kiosk (Starbucks/Dutch Bros-type).**
+      A small-footprint, traffic-driven use distinct from the existing 19.
+      Add a `drive_thru_coffee` entry to `data_sources/layers.yaml`:
+      `requires.demand` on nearby rooftops/workplaces at a tight ~2 km radius
+      (walk/short-drive + commute-corridor — tighter than `car_wash`'s),
+      a real AADT gate (a drive-thru lives or dies on passing traffic volume
+      — put the threshold between `car_wash`'s and `distribution_center`'s),
+      `requires.parcel.min_buildable_acres` around 0.4–0.6 (a kiosk + stacking
+      lane, the smallest footprint of any use here), and the established
+      inverted "farther is better" `requires.competition.
+      min_distance_km_from_nearest` gate (~1 km) against other coffee shops
+      (OSM `amenity=cafe`, filtered toward drive-thru-style operators — check
+      what tag combination actually separates a coffee kiosk from a sit-down
+      café in OSM before committing to a query shape). Wire a
+      `maybeRenderDTCVerdict` in `web/explore.html` via the shared
+      `standardUseVerdict` helper (`web/logic.js`) — same
+      demand+site-size+AADT+competitor-distance shape `car_wash`/
+      `distribution_center` already use, no new gate shapes should be needed.
+      Verify to the same bar every prior land-use item here has: `simy
+      validate`, `python -m pytest -q`, `node --test tests/js/*.test.mjs`,
+      headless-Chromium load-with-zero-errors, and driving the new verdict
+      function directly through its PASS/SHORT/missing-data states.
+
+- [ ] **23rd parcel county.** `PARCEL_SOURCES` in `web/explore.html` currently
+      covers 22: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
+      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
+      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia. Pick a
+      populous metro not yet covered with a public ArcGIS-hosted parcel
+      MapServer — worth checking first: Multnomah County OR (Portland),
+      Bernalillo County NM (Albuquerque), Marion County IN (Indianapolis),
+      Wayne County MI (Detroit), or Mecklenburg County NC (Charlotte). Needs
+      a web search to find the live public parcel REST endpoint and its real
+      field names — same research-then-graceful-partial-coverage approach
+      every prior county here used (not every county exposes acreage/owner/
+      value on its public layer, and that's fine; don't guess a field that
+      isn't there, and don't guess a per-APN deep-link URL shape that might
+      404). Check the new entry's bbox for overlap with existing entries
+      before appending it to the array — Orange County CA/LA County/San
+      Diego County already collided once (`inBbox` resolves to the *first*
+      match), and the fix was ordering, not a new mechanism.
+
+- [ ] **Bulk address import for Compare mode.** Compare mode
+      (`encodeComparePins`/`mergeComparePins` in `web/logic.js`) currently
+      only grows one pin at a time, via a map click or a pasted permalink.
+      Add a "paste a list of addresses" box that geocodes each line
+      sequentially through the existing Nominatim helper (`nominatimUrl`/
+      `parseNominatimResult`) — sequential with a real delay between
+      requests, never parallel or on-keystroke, per the same Nominatim
+      usage-policy constraint the existing address search box already
+      respects — and adds each successfully-geocoded result as a new
+      compare pin via the existing `mergeComparePins`, skipping (and listing
+      back to the user) any line that fails to geocode rather than aborting
+      the whole batch. Cap the list length so a pasted spreadsheet column
+      can't fire an unbounded request burst. This sandbox has no outbound
+      network to test live geocoding end-to-end — mock the Nominatim fetch
+      in unit tests and the headless-Chromium check, the same way the
+      address search box's own tests already do.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
