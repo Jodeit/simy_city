@@ -3436,23 +3436,47 @@ Ground rules for each run:
       of how well `drive_through=yes` is actually populated on real-world
       coffee-kiosk OSM data — is a good human spot-check.
 
-- [ ] **23rd parcel county.** `PARCEL_SOURCES` in `web/explore.html` currently
-      covers 22: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
-      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
-      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia. Pick a
-      populous metro not yet covered with a public ArcGIS-hosted parcel
-      MapServer — worth checking first: Multnomah County OR (Portland),
-      Bernalillo County NM (Albuquerque), Marion County IN (Indianapolis),
-      Wayne County MI (Detroit), or Mecklenburg County NC (Charlotte). Needs
-      a web search to find the live public parcel REST endpoint and its real
-      field names — same research-then-graceful-partial-coverage approach
-      every prior county here used (not every county exposes acreage/owner/
-      value on its public layer, and that's fine; don't guess a field that
-      isn't there, and don't guess a per-APN deep-link URL shape that might
-      404). Check the new entry's bbox for overlap with existing entries
-      before appending it to the array — Orange County CA/LA County/San
-      Diego County already collided once (`inBbox` resolves to the *first*
-      match), and the fix was ordering, not a new mechanism.
+- [x] **23rd parcel county.** Added Mecklenburg County, NC (Charlotte) as a
+      23rd `PARCEL_SOURCES` entry — `gis.charlottenc.gov`'s
+      `CountyData/Parcels/MapServer/0` (Charlotte and Mecklenburg County
+      jointly run GIS under a shared agreement, so the county-wide parcel
+      layer lives on the city's own ArcGIS Server host; confirmed live and
+      queryable — export/identify/query, max record count 3000 — via
+      multiple independent search-indexed sources, since this sandbox's
+      egress policy blocks direct ArcGIS REST introspection like every prior
+      county here). The public layer's confirmed field list (13 fields total:
+      `OBJECTID`, `MAP_BOOK`, `MAP_PAGE`, `MAP_BLOCK`, `LOT_NUM`, `NC_PIN`,
+      `PID`, `PARCEL_TYPE`, `CONDO_TOWN_FLAG`, `Legal_From`, `Shape`) confirms
+      owner name, situs address, land use, acreage, and appraised value are
+      genuinely absent from this boundary layer (they live behind the
+      separate Polaris land-records system) — same graceful
+      partial-field-coverage as King/Cook/Salt Lake/Franklin/Clark/Orange CA
+      here, not a guess at a field that isn't there. `PID` was already in the
+      shared `pick()` id candidate list from prior counties; added `NC_PIN`
+      too for robustness. Polaris does publish a stable per-PID deep link
+      (`polaris3g.mecklenburgcountync.gov/pid/<PID>`, confirmed via multiple
+      live search-indexed example URLs), so `record()` builds a real link
+      instead of falling back to a search page. Reused Wake County's existing
+      "NC counties do zone unincorporated land" `zoning_note` framing,
+      adapted to Mecklenburg's own incorporated towns (Charlotte,
+      Huntersville, Cornelius, Davidson, Matthews, Mint Hill, Pineville).
+      Checked the new bbox (`[-81.06,34.95,-80.55,35.51]`) against the only
+      other NC entry (Wake County, centered on Raleigh, ~180km away) —
+      no overlap. Verified: `python -m pytest -q` (22 passed), `simy validate`
+      (OK, unaffected — parcel sources are JS-only data), `node --test
+      tests/js/*.test.mjs` (336 passed, no new JS logic — this is pure config
+      data plus one `pick()` candidate, nothing new to unit-test at the
+      logic.js layer), and headless Chromium confirms both `web/explore.html`
+      and `web/index.html` load with zero console/page errors; a downtown
+      Charlotte point correctly resolves to the new source while Raleigh
+      still correctly resolves to Wake County and a rural-Wyoming point
+      correctly finds no source; and driving `showParcel` directly with a
+      mocked Mecklenburg-shaped ArcGIS attribute payload (PID-only, matching
+      the confirmed field list) rendered the parcel ID and the correct
+      Polaris record link and zoning note, with an empty-attributes edge case
+      also rendering without throwing. Live endpoint reachability couldn't be
+      confirmed from this sandbox — a live spot-check is a good human
+      follow-up, same as every prior county.
 
 - [ ] **Bulk address import for Compare mode.** Compare mode
       (`encodeComparePins`/`mergeComparePins` in `web/logic.js`) currently

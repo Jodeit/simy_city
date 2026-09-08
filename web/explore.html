@@ -1260,6 +1260,32 @@ const PARCEL_SOURCES=[
     // there's no separate incorporated/unincorporated split to check.
     zoning_note:"Philadelphia is a consolidated city-county — its own zoning code (not a distinct county authority) applies everywhere in the boundary, no separate county zoning to check",
   },
+  {
+    name:"Mecklenburg County / Charlotte GIS (Mecklenburg County, NC)",
+    // Hosted on the City of Charlotte's ArcGIS Server — Charlotte and
+    // Mecklenburg County jointly run GIS under a shared agreement, so the
+    // county-wide parcel layer lives on the city's own host. Confirmed live
+    // and queryable (export/identify/query, max record count 3000) via
+    // multiple independent search-indexed sources; this sandbox blocks
+    // direct ArcGIS REST introspection like every prior county here.
+    urls:["https://gis.charlottenc.gov/arcgis/rest/services/CountyData/Parcels/MapServer/0"],
+    bbox:[-81.06,34.95,-80.55,35.51],
+    // Confirmed fields on the public parcel layer (13 total, via multiple
+    // independent search-indexed sources): OBJECTID, MAP_BOOK, MAP_PAGE,
+    // MAP_BLOCK, LOT_NUM, NC_PIN, PID, PARCEL_TYPE, CONDO_TOWN_FLAG,
+    // Legal_From, Shape. Owner name, situs address, land use, acreage, and
+    // appraised value are confirmed absent from this public boundary layer
+    // (they live behind the separate Polaris land-records system, not this
+    // GIS layer) — same graceful partial-field-coverage as King/Cook/Salt
+    // Lake/Franklin/Clark/Orange CA here. Polaris does publish a stable
+    // per-PID deep link, so build a real record URL instead of falling back
+    // to a search page.
+    record:(a)=>{const id=pick(a,["PID","NC_PIN"]);
+      return id?`https://polaris3g.mecklenburgcountync.gov/pid/${encodeURIComponent(id)}`:"https://polaris3g.mecklenburgcountync.gov/";},
+    source_label:"Mecklenburg County / Charlotte GIS",
+    county_state:"Mecklenburg County, NC",
+    zoning_note:"unlike TX, NC counties do zone unincorporated land — check Mecklenburg County's unincorporated-area zoning, or the city/town if incorporated (Charlotte, Huntersville, Cornelius, Davidson, Matthews, Mint Hill, or Pineville)",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3397,7 +3423,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","NC_PIN","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
