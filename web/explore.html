@@ -1260,6 +1260,32 @@ const PARCEL_SOURCES=[
     // there's no separate incorporated/unincorporated split to check.
     zoning_note:"Philadelphia is a consolidated city-county — its own zoning code (not a distinct county authority) applies everywhere in the boundary, no separate county zoning to check",
   },
+  {
+    name:"Mecklenburg County GIS (Mecklenburg County, NC)",
+    urls:["https://gis.charlottenc.gov/arcgis/rest/services/CountyData/Parcels/MapServer/0"],
+    bbox:[-81.06,34.95,-80.55,35.51],
+    // Confirmed fields (via multiple independent search-indexed sources — this
+    // sandbox blocks direct ArcGIS REST introspection like every prior county
+    // here): OBJECTID, MAP_BOOK, MAP_PAGE, MAP_BLOCK, LOT_NUM, NC_PIN, PID,
+    // PARCEL_TYPE, CONDO_TOWN_FLAG, Legal_From, plus geometry. Owner name and
+    // situs address are confirmed absent from this public boundary layer
+    // (full CAMA/ownership data lives in the county's separate Polaris
+    // system, not this GIS layer) — same graceful partial-field-coverage as
+    // King/Cook/Salt Lake/Franklin/Clark/Orange CA here. PID is already in
+    // the shared id-field candidate list from other counties, so the parcel
+    // panel's "Parcel ID" row resolves correctly with no changes there.
+    // Unlike Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/Allegheny/
+    // Fulton/Salt Lake/Franklin/Clark/Suffolk/Orange CA, the county *does*
+    // publish a stable per-PID deep link (polaris3g.mecklenburgcountync.gov/pid/<PID>,
+    // confirmed via multiple live, indexed example pages) — padStart guards
+    // the same ArcGIS-drops-a-leading-zero risk Wake County's REID link
+    // already guards against, since every confirmed example PID is 8 digits.
+    record:(a)=>{const pid=pick(a,["PID"]);
+      return pid?`https://polaris3g.mecklenburgcountync.gov/pid/${String(pid).padStart(8,"0")}`:"https://polaris3g.mecklenburgcountync.gov/";},
+    source_label:"Mecklenburg County GIS",
+    county_state:"Mecklenburg County, NC",
+    zoning_note:"unlike TX, NC counties do zone unincorporated land — check Mecklenburg County's unincorporated-area zoning, or the city/town if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/

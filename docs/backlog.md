@@ -3436,23 +3436,40 @@ Ground rules for each run:
       of how well `drive_through=yes` is actually populated on real-world
       coffee-kiosk OSM data — is a good human spot-check.
 
-- [ ] **23rd parcel county.** `PARCEL_SOURCES` in `web/explore.html` currently
-      covers 22: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
-      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
-      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia. Pick a
-      populous metro not yet covered with a public ArcGIS-hosted parcel
-      MapServer — worth checking first: Multnomah County OR (Portland),
-      Bernalillo County NM (Albuquerque), Marion County IN (Indianapolis),
-      Wayne County MI (Detroit), or Mecklenburg County NC (Charlotte). Needs
-      a web search to find the live public parcel REST endpoint and its real
-      field names — same research-then-graceful-partial-coverage approach
-      every prior county here used (not every county exposes acreage/owner/
-      value on its public layer, and that's fine; don't guess a field that
-      isn't there, and don't guess a per-APN deep-link URL shape that might
-      404). Check the new entry's bbox for overlap with existing entries
-      before appending it to the array — Orange County CA/LA County/San
-      Diego County already collided once (`inBbox` resolves to the *first*
-      match), and the fix was ordering, not a new mechanism.
+- [x] **23rd parcel county.** Added Mecklenburg County, NC (Charlotte) —
+      `gis.charlottenc.gov`'s `CountyData/Parcels/MapServer/0` (found via web
+      search since this sandbox's egress policy blocks direct ArcGIS REST
+      introspection, same constraint every prior county here hit; confirmed
+      live and indexed via multiple independent search-indexed sources
+      rather than a single unverified snippet). The public layer's confirmed
+      fields are OBJECTID/MAP_BOOK/MAP_PAGE/MAP_BLOCK/LOT_NUM/NC_PIN/PID/
+      PARCEL_TYPE/CONDO_TOWN_FLAG/Legal_From plus geometry — owner name and
+      situs address are confirmed absent (full CAMA/ownership data lives in
+      the county's separate Polaris system, not this GIS layer), same
+      graceful partial-field-coverage as King/Cook/Salt Lake/Franklin/Clark/
+      Orange CA. `PID` was already in the shared `pick()` id-field candidate
+      list from other counties, so no changes needed there. Unlike most
+      prior counties, this one *does* get a real per-parcel deep link:
+      `polaris3g.mecklenburgcountync.gov/pid/<PID>`, confirmed via multiple
+      live, search-indexed example pages (not guessed) — `padStart(8,"0")`
+      guards the same ArcGIS-drops-a-leading-zero risk Wake County's REID
+      link already guards against, since every confirmed example PID is 8
+      digits. Checked the new bbox (`[-81.06,34.95,-80.55,35.51]`) against
+      every existing entry for overlap before appending — no collision (the
+      nearest existing NC entry, Wake County/Raleigh, sits ~2.5° of
+      longitude away). Verified: `python -m pytest -q` (22 passed), `simy
+      validate` (OK, 32 sources), `node --test tests/js/*.test.mjs` (336
+      passed, no new JS logic — this reuses `pick()`/`inBbox`/`showParcel`
+      verbatim), and headless Chromium confirms both pages load with zero
+      console/page errors; `inBbox` correctly routes downtown Charlotte to
+      the new source and correctly finds no match for an out-of-coverage
+      point (Denver); and a real end-to-end map click at that point with a
+      mocked ArcGIS response rendered the correct Parcel ID and the correct
+      live Polaris record link via the existing `showParcel` path, with zero
+      console errors. Live ArcGIS endpoint reachability and the exact
+      `NC_PIN`/`PID` field formats couldn't be confirmed from this sandbox —
+      a live spot-check is a good human follow-up, same as every prior
+      county.
 
 - [ ] **Bulk address import for Compare mode.** Compare mode
       (`encodeComparePins`/`mergeComparePins` in `web/logic.js`) currently
