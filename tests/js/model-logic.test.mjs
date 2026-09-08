@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
-  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, splitAddressLines, buildBulkImportStatus, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
@@ -1112,6 +1112,72 @@ test("parseNominatimResult: a malformed/non-array response is null, not a throw"
 
 test("parseNominatimResult: unparseable lat/lon on the hit is null", () => {
   assert.equal(parseNominatimResult([{ lat: "not-a-number", lon: "-97.7" }]), null);
+});
+
+// ---- splitAddressLines / buildBulkImportStatus (bulk address import) ----
+
+test("splitAddressLines: trims and drops blank lines", () => {
+  assert.deepEqual(
+    splitAddressLines("  123 Main St, Austin, TX  \n\n\n456 Oak Ave, Round Rock, TX\n   \n"),
+    ["123 Main St, Austin, TX", "456 Oak Ave, Round Rock, TX"]
+  );
+});
+
+test("splitAddressLines: handles Windows-style CRLF line endings", () => {
+  assert.deepEqual(splitAddressLines("one\r\ntwo\r\nthree"), ["one", "two", "three"]);
+});
+
+test("splitAddressLines: case-insensitively dedupes repeated lines", () => {
+  assert.deepEqual(
+    splitAddressLines("123 Main St\n123 MAIN ST\n  123 main st  \n456 Oak Ave"),
+    ["123 Main St", "456 Oak Ave"]
+  );
+});
+
+test("splitAddressLines: caps at the given maxLines", () => {
+  const text = ["a", "b", "c", "d", "e"].join("\n");
+  assert.deepEqual(splitAddressLines(text, 3), ["a", "b", "c"]);
+});
+
+test("splitAddressLines: defaults the cap to 20 when omitted", () => {
+  const lines = Array.from({ length: 25 }, (_, i) => `addr ${i}`);
+  assert.equal(splitAddressLines(lines.join("\n")).length, 20);
+});
+
+test("splitAddressLines: non-string/empty input returns an empty array", () => {
+  assert.deepEqual(splitAddressLines(""), []);
+  assert.deepEqual(splitAddressLines(null), []);
+  assert.deepEqual(splitAddressLines(undefined), []);
+});
+
+test("buildBulkImportStatus: prompts when nothing was attempted", () => {
+  assert.equal(buildBulkImportStatus({ total: 0, added: 0, failedLines: [], skippedForCap: 0 }), "Paste at least one address, one per line.");
+  assert.equal(buildBulkImportStatus(null), "Paste at least one address, one per line.");
+});
+
+test("buildBulkImportStatus: all succeed", () => {
+  assert.equal(buildBulkImportStatus({ total: 3, added: 3, failedLines: [], skippedForCap: 0 }), "Added 3 of 3.");
+});
+
+test("buildBulkImportStatus: lists lines that failed to geocode", () => {
+  assert.equal(
+    buildBulkImportStatus({ total: 3, added: 2, failedLines: ["nowhere real"], skippedForCap: 0 }),
+    "Added 2 of 3. Couldn't find: nowhere real."
+  );
+});
+
+test("buildBulkImportStatus: notes lines skipped once the 6-pin Compare cap is full", () => {
+  assert.equal(
+    buildBulkImportStatus({ total: 10, added: 4, failedLines: [], skippedForCap: 6 }),
+    "Added 4 of 10. 6 skipped — Compare list is capped at 6 pins."
+  );
+});
+
+test("buildBulkImportStatus: combines failed and capped in one message", () => {
+  assert.equal(
+    buildBulkImportStatus({ total: 5, added: 2, failedLines: ["bad addr"], skippedForCap: 2 }),
+    "Added 2 of 5. 2 skipped — Compare list is capped at 6 pins. Couldn't find: bad addr."
+  );
 });
 
 // ---- parseCoordPair (short-circuit a pasted "lat, lng" pair) ----

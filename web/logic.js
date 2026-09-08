@@ -563,6 +563,45 @@ function parseNominatimResult(json){
   return {lat,lng,label:hit.display_name||null};
 }
 
+/* ---- bulk address import for Compare mode ----
+   Turns a pasted block of addresses (one per line) into the list explore.html
+   geocodes sequentially through the same nominatimUrl/parseNominatimResult
+   helpers the single address search box uses, one request at a time with a
+   real delay between them (never parallel, never on keystroke) per Nominatim's
+   usage policy. `splitAddressLines` is the pure parsing half: trims blank
+   lines, case-insensitively dedupes repeated lines (pasting the same address
+   twice shouldn't cost a second lookup), and caps the result so a pasted
+   spreadsheet column can't fire an unbounded request burst — the cap is a
+   hard slice, not a truncation-with-warning, since the caller decides what to
+   tell the user about anything past it. `buildBulkImportStatus` is the pure
+   text half: given how many lines were attempted, how many geocoded
+   successfully, which ones didn't, and how many were skipped because the
+   6-pin Compare cap was already full, it renders the one status line
+   explore.html shows — kept pure and separate from the async fetch loop so
+   the message wording has its own unit tests without mocking fetch/timers. */
+function splitAddressLines(text,maxLines){
+  const cap=maxLines>0?maxLines:20;
+  if(typeof text!=="string")return [];
+  const seen=new Set(), out=[];
+  for(const raw of text.split(/\r?\n/)){
+    const line=raw.trim();
+    if(!line)continue;
+    const key=line.toLowerCase();
+    if(seen.has(key))continue;
+    seen.add(key);
+    out.push(line);
+    if(out.length>=cap)break;
+  }
+  return out;
+}
+function buildBulkImportStatus(result){
+  if(!result||!result.total)return "Paste at least one address, one per line.";
+  const parts=[`Added ${result.added} of ${result.total}.`];
+  if(result.skippedForCap>0)parts.push(`${result.skippedForCap} skipped — Compare list is capped at 6 pins.`);
+  if(result.failedLines&&result.failedLines.length)parts.push(`Couldn't find: ${result.failedLines.join("; ")}.`);
+  return parts.join(" ");
+}
+
 /* People commonly paste a raw "lat, lng" pair straight from Google Maps or a
    GPS app into the address box — that's not something Nominatim needs to
    geocode, and shouldn't cost a network round-trip. Matches a plain
@@ -1215,5 +1254,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,splitAddressLines,buildBulkImportStatus,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }
