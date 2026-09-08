@@ -3454,22 +3454,47 @@ Ground rules for each run:
       Diego County already collided once (`inBbox` resolves to the *first*
       match), and the fix was ordering, not a new mechanism.
 
-- [ ] **Bulk address import for Compare mode.** Compare mode
-      (`encodeComparePins`/`mergeComparePins` in `web/logic.js`) currently
-      only grows one pin at a time, via a map click or a pasted permalink.
-      Add a "paste a list of addresses" box that geocodes each line
-      sequentially through the existing Nominatim helper (`nominatimUrl`/
-      `parseNominatimResult`) — sequential with a real delay between
-      requests, never parallel or on-keystroke, per the same Nominatim
-      usage-policy constraint the existing address search box already
-      respects — and adds each successfully-geocoded result as a new
-      compare pin via the existing `mergeComparePins`, skipping (and listing
-      back to the user) any line that fails to geocode rather than aborting
-      the whole batch. Cap the list length so a pasted spreadsheet column
-      can't fire an unbounded request burst. This sandbox has no outbound
-      network to test live geocoding end-to-end — mock the Nominatim fetch
-      in unit tests and the headless-Chromium check, the same way the
-      address search box's own tests already do.
+- [x] **Bulk address import for Compare mode.** Added a "📥 Bulk import
+      addresses" `<details>` disclosure to the Compare modal (`web/explore.html`)
+      with a textarea (one address per line) and an "Import" button. On click,
+      `wireBulkImport()` geocodes each line **sequentially** — one request at
+      a time with a real 1s `setTimeout` delay between them, never parallel or
+      on-keystroke — reusing the exact same `nominatimUrl`/`parseNominatimResult`
+      helpers and `netCache` session cache the single address search box
+      already uses, plus the existing `parseCoordPair` short-circuit so a
+      pasted `lat, lng` line skips the network call entirely. Each
+      successfully-geocoded line becomes a new pin (`lat`/`lng`/`label` only —
+      Nominatim has no parcel data, so the rest of the pin's fields render as
+      the same "—" dashes the Compare table already shows for a partial row)
+      folded in via the existing `mergeComparePins` (same rounded-lat/lng
+      dedupe/6-pin-cap `addPin()` uses). Added a pure `splitAddressLines(text,
+      maxLines)` to `web/logic.js` — trims blank lines, case-insensitively
+      dedupes repeated lines (pasting the same address twice shouldn't cost a
+      second lookup), and hard-caps at 20 lines by default so a pasted
+      spreadsheet column can't fire an unbounded request burst — and a pure
+      `buildBulkImportStatus(result)` that renders the one status line from
+      how many succeeded, which lines failed to geocode, and how many were
+      skipped once the 6-pin Compare cap filled up mid-import (checked before
+      each line, so once the cap is hit the loop stops **without** spending a
+      geocode request on lines it can't use anyway). Added 12 new unit tests
+      covering both helpers (blank-line trimming, CRLF handling, dedup, the
+      default/explicit cap, non-string input, and every status-message
+      combination: empty, all-succeed, some-failed, some-capped, both at
+      once). Verified in headless Chromium: both pages load with zero
+      console/page errors; opening Compare and driving a real end-to-end
+      import with a mocked `fetch` — a coordinate-pair line (no network hit),
+      a geocode success, and a geocode failure, against 5 pre-seeded pins (1
+      slot left) — filled the coordinate-pair pin into the last slot and
+      correctly skipped the remaining two lines for the cap (`"Added 1 of 3.
+      2 skipped — Compare list is capped at 6 pins."`) **without** issuing
+      fetch calls for the skipped lines; a duplicate-address paste against an
+      empty pin list collapsed to a single geocode call and added one pin
+      with the mocked result's `display_name` as its label; and pasting only
+      blank lines showed the "paste at least one address" guard instead of
+      running anything. Outbound network to `nominatim.openstreetmap.org` is
+      blocked from this sandbox, so a live end-to-end bulk import on the real
+      site — including confirming the 1s-per-request pace stays comfortably
+      within Nominatim's usage policy — is a good human spot-check.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

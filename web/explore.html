@@ -117,6 +117,8 @@
     background:var(--overlay-bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;
     font-size:.8rem;color:var(--slate);max-width:min(280px,80vw);text-align:center}
   .addrstatus.err{color:var(--contested-fg);background:var(--contested-bg);border-color:var(--err-border)}
+  .bulkStatus{font-size:.8rem;color:var(--slate)}
+  .bulkStatus.err{color:var(--contested-fg)}
   .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 6px}
   .toolbtn{font:inherit;font-size:.8rem;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);
     padding:.4em .7em;border-radius:9px;cursor:pointer}
@@ -362,6 +364,17 @@
     <p>Pin a parcel from its analysis (📌 in the toolbar) to line it up against others here — size,
       value, and (in <b>Test a use</b>) the verdict.</p>
     <div class="cmpScroll"><div id="compareBody"></div></div>
+    <details class="recentStrip" id="bulkImportBox">
+      <summary>📥 Bulk import addresses</summary>
+      <p style="margin:6px 0 4px;font-size:.82rem;color:var(--slate)">One address per line (up to 20) —
+        geocoded one at a time via the free address search below, so a big list can take a while.</p>
+      <textarea id="bulkAddrText" placeholder="123 Main St, Austin, TX
+456 Oak Ave, Round Rock, TX"></textarea>
+      <div class="row" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+        <button class="btng" id="bulkAddrGo" type="button">Import</button>
+        <span id="bulkAddrStatus" class="bulkStatus"></span>
+      </div>
+    </details>
     <div class="privacy">🔒 Saved to local storage, never uploaded automatically. "Share list" puts these pins in a URL only when you copy it.</div>
     <div class="actions">
       <span class="ok" id="compareShareMsg" style="margin-right:auto"></span>
@@ -3996,6 +4009,55 @@ function wireCompare(){
     if(m){m.textContent="✓ GeoJSON downloaded";setTimeout(()=>m.textContent="",2500);}
   };
 }
+const BULK_ADDR_DELAY_MS=1000;
+let bulkImportRunning=false;
+// Geocodes a pasted list of addresses into new Compare pins, one request at a
+// time with a real delay between them — never parallel, never on keystroke —
+// same Nominatim usage-policy constraint wireAddrSearch already respects.
+// A pin built this way only carries lat/lng/label (Nominatim has no parcel
+// data), same "thin pin, real fields fill in as blank dashes" shape the
+// Compare table already renders for a shared link's partial rows.
+function wireBulkImport(){
+  const btn=document.getElementById("bulkAddrGo");
+  const ta=document.getElementById("bulkAddrText");
+  const status=document.getElementById("bulkAddrStatus");
+  if(!btn)return;
+  btn.onclick=async ()=>{
+    if(bulkImportRunning)return;
+    const lines=splitAddressLines(ta.value);
+    if(!lines.length){status.className="bulkStatus err";status.textContent="Paste at least one address, one per line.";return;}
+    bulkImportRunning=true; btn.disabled=true;
+    let added=0, skippedForCap=0;
+    const failedLines=[];
+    for(let i=0;i<lines.length;i++){
+      if(pins.length>=6){ skippedForCap=lines.length-i; break; }
+      status.className="bulkStatus";
+      status.textContent=`Looking up ${i+1} of ${lines.length}…`;
+      const q=lines[i];
+      const coords=parseCoordPair(q);
+      let hit=coords?{lat:coords.lat,lng:coords.lng,label:q}:null;
+      if(!hit&&!coords){
+        const url=nominatimUrl(q);
+        try{
+          const json=await netCache(url, ()=>fetch(url,{headers:{"Accept":"application/json"}}).then(r=>r.ok?r.json():Promise.reject(r.status)));
+          hit=parseNominatimResult(json);
+        }catch(e){ hit=null; }
+      }
+      if(hit){
+        const before=pins.length;
+        pins=mergeComparePins(pins,[{lat:hit.lat,lng:hit.lng,label:hit.label||q,owner:null,acres:null,value:null,land:null,county:null,use:null,verdict:null}]);
+        if(pins.length>before)added++;
+      } else {
+        failedLines.push(q);
+      }
+      if(i<lines.length-1)await new Promise(res=>setTimeout(res,BULK_ADDR_DELAY_MS));
+    }
+    savePins();
+    status.className="bulkStatus";
+    status.textContent=buildBulkImportStatus({total:lines.length,added,failedLines,skippedForCap});
+    btn.disabled=false; bulkImportRunning=false;
+  };
+}
 
 /* ---- honor an incoming share link (#mode=..&use=..&lat=..&lng=.. and/or
    #cmp=.. for a shared Compare list, and/or #search=.. for a shared reverse
@@ -4226,7 +4288,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); wireData(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); wireBulkImport(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); wireData(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses
