@@ -3541,6 +3541,42 @@ Ground rules for each run:
       (also async, also currently silent to screen readers) — left as a
       natural follow-up rather than widening this fix.
 
+## Now (high value) — newly added (15)
+- [ ] **`aria-live` on the `roofVal`/`compVal` loading rows.** The earlier
+      `aria-live` fix covered the shared `#demandVerdict` region, but each
+      verdict function first paints `#roofVal`/`#compVal` with a loading
+      string ("counting rooftops in the trade area…", "scanning for …") and
+      only later overwrites them with the resolved count/error via `setHTML`
+      (`web/explore.html`, e.g. lines ~1744-1745, ~1851/1870, ~1962/2060) —
+      currently silent to screen readers the same way `#demandVerdict` used
+      to be. Add `role="status" aria-live="polite"` to both rows' initial
+      markup, same fix shape as the `#demandVerdict` change, and re-verify in
+      headless Chromium that a real `analyze()` run still produces zero
+      console errors.
+- [ ] **Sortable Compare-table text columns.** The Compare modal's sortable
+      row labels (added for Acreage/Appraised value) only cover numeric
+      fields — `sortPins(pins,key,dir)` in `web/logic.js` compares with
+      `(av-bv)*sign`, which is NaN for strings, so wiring the same
+      click-to-sort affordance onto Owner/Land use/County would silently
+      misorder. Add a string-aware comparator (locale-aware `localeCompare`,
+      still missing-value-sorts-last) — either a `type` option on `sortPins`
+      or a small sibling helper — and make those three row labels clickable
+      the same way Acreage/Appraised value already are, with matching unit
+      tests for ascending/descending/missing-value-last on text data.
+- [ ] **21st land use: Bank Branch / Credit Union.** A common "where should
+      we put our next branch" siting question not yet covered. Same
+      established shape as `car_wash`/`drive_thru_coffee`/`pharmacy`: a
+      rooftop/commute-corridor demand radius (~3-4 km, wider than a coffee
+      kiosk's 2 km since branch banking draws from a bigger area), a real
+      AADT gate on the frontage road, `min_buildable_acres` for a small pad +
+      drive-thru ATM lane, and the inverted "farther is better"
+      `competition.min_distance_km_from_nearest` gate against existing
+      `amenity=bank`/`amenity=atm` OSM points — wire through the shared
+      `standardUseVerdict` helper (`web/logic.js`) the same way, so it needs
+      no new gate-shape or validator work, just a `data_sources/layers.yaml`
+      entry plus the `web/explore.html` `USE_DEMAND`/`maybeRender*Verdict`
+      wiring and label list.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
