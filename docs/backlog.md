@@ -3471,22 +3471,45 @@ Ground rules for each run:
       a live spot-check is a good human follow-up, same as every prior
       county.
 
-- [ ] **Bulk address import for Compare mode.** Compare mode
-      (`encodeComparePins`/`mergeComparePins` in `web/logic.js`) currently
-      only grows one pin at a time, via a map click or a pasted permalink.
-      Add a "paste a list of addresses" box that geocodes each line
-      sequentially through the existing Nominatim helper (`nominatimUrl`/
-      `parseNominatimResult`) — sequential with a real delay between
-      requests, never parallel or on-keystroke, per the same Nominatim
+- [x] **Bulk address import for Compare mode.** Added a "📋 Import a list of
+      addresses" toggle to the Compare modal (same `.searchPanel`
+      expand/collapse pattern as "🔍 Find candidate sites") with a textarea
+      and Import button. Added `parseBulkAddressList(text,maxLines)` to
+      `web/logic.js` — splits pasted text into trimmed, non-blank lines,
+      capped at `maxLines` (default 25) so a pasted spreadsheet column can't
+      fire an unbounded request burst, reporting whether it truncated and
+      the pre-cap total. Each line is resolved by `explore.html`'s new
+      `bulkGeocodeLine` — a raw "lat, lng" pair short-circuits through the
+      existing `parseCoordPair` (no network, same as the single address
+      box), anything else geocodes through the existing
+      `nominatimUrl`/`parseNominatimResult`/`netCache` helpers — chained
+      **sequentially** with a real `setTimeout` delay between actual network
+      requests (never parallel or on-keystroke, per the same Nominatim
       usage-policy constraint the existing address search box already
-      respects — and adds each successfully-geocoded result as a new
-      compare pin via the existing `mergeComparePins`, skipping (and listing
-      back to the user) any line that fails to geocode rather than aborting
-      the whole batch. Cap the list length so a pasted spreadsheet column
-      can't fire an unbounded request burst. This sandbox has no outbound
-      network to test live geocoding end-to-end — mock the Nominatim fetch
-      in unit tests and the headless-Chromium check, the same way the
-      address search box's own tests already do.
+      respects; a coordinate-pair line costs no delay since it never hits
+      the network). A line that fails to geocode is skipped, not aborting
+      the batch, and named back in the status line via the new pure
+      `bulkImportSummary(results)` (web/logic.js). Successfully-resolved
+      points carry only `{lat,lng,label}` (no owner/acreage/verdict — that
+      would need a full per-point parcel fan-out per line) and merge into
+      the existing pins via the same `mergeComparePins` a shared `#cmp=`
+      link already uses (dedupe + 6-pin cap). Added 7 new unit tests for
+      `parseBulkAddressList`/`bulkImportSummary` (newline/CRLF splitting,
+      blank-line filtering, cap + truncation reporting, default cap,
+      empty/non-string input, mixed success/failure summarizing, all-success,
+      empty/null results). Verified in headless Chromium: both pages load
+      with zero console/page errors; opening Compare → toggling the import
+      panel → pasting one coordinate pair, one geocodable address, and one
+      that fails to geocode (via a mocked `fetch` intercepting
+      `nominatim.openstreetmap.org`) → clicking Import ran the real
+      sequential flow end to end, correctly skipped the network call for the
+      coordinate-pair line, merged the 2 successful results into `pins` and
+      `localStorage`, and reported "Imported 2 of 3. ⚠ couldn't find: …" for
+      the failed line — all with zero console errors; and pasting
+      whitespace-only text showed the "paste at least one…" guard without
+      throwing. Outbound network to `nominatim.openstreetmap.org` is blocked
+      from this sandbox, so a live end-to-end bulk geocode on the real site
+      is a good human spot-check, same as the single address-search box.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

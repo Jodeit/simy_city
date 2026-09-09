@@ -361,6 +361,17 @@
     <h3 id="compareModalTitle">Compare pinned parcels</h3>
     <p>Pin a parcel from its analysis (📌 in the toolbar) to line it up against others here — size,
       value, and (in <b>Test a use</b>) the verdict.</p>
+    <button class="toolbtn" id="bulkImportToggle" type="button" aria-expanded="false">📋 Import a list of addresses</button>
+    <div class="searchPanel" id="bulkImportPanel" style="display:none">
+      <div class="lbl">One address, or a "lat, lng" pair, per line — up to 25</div>
+      <textarea id="bulkImportText" placeholder="123 Main St, Austin, TX
+30.3072, -97.9203
+456 Oak Ave, Phoenix, AZ"></textarea>
+      <div class="actions">
+        <button class="toolbtn" id="bulkImportGo" type="button">Import</button>
+      </div>
+      <div class="live" id="bulkImportStatus" style="display:none"></div>
+    </div>
     <div class="cmpScroll"><div id="compareBody"></div></div>
     <div class="privacy">🔒 Saved to local storage, never uploaded automatically. "Share list" puts these pins in a URL only when you copy it.</div>
     <div class="actions">
@@ -3988,6 +3999,78 @@ function downloadCompareGeoJson(){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),4000);
 }
+// "📋 Import a list of addresses" — bulk-grows the Compare pins list from a
+// pasted multi-line list instead of one pin at a time. Each line is either a
+// raw "lat, lng" pair (parseCoordPair, no network) or an address geocoded
+// through the same Nominatim helper the single address-search box already
+// uses (nominatimUrl/parseNominatimResult, netCache-shared) — sequentially,
+// with a real delay between actual network requests (never parallel or
+// on-keystroke), per the same Nominatim usage-policy constraint the address
+// box already respects. A line that fails to geocode is skipped, not
+// aborting the whole batch, and listed back via bulkImportSummary
+// (web/logic.js). A resolved point only carries {lat,lng,label} — no
+// owner/acreage/verdict, since that would mean a full per-point parcel
+// fan-out for every line — and merges into the existing pins via the same
+// mergeComparePins a shared #cmp= link already uses (dedupe + 6-pin cap).
+const BULK_IMPORT_DELAY_MS=1100;
+function bulkGeocodeLine(line){
+  const coords=parseCoordPair(line);
+  if(coords)return Promise.resolve({line,ok:true,pin:{lat:coords.lat,lng:coords.lng,label:line}});
+  const url=nominatimUrl(line);
+  return netCache(url, ()=>fetch(url,{headers:{"Accept":"application/json"}}).then(r=>r.ok?r.json():Promise.reject(r.status)))
+    .then(json=>{
+      const hit=parseNominatimResult(json);
+      return hit?{line,ok:true,pin:{lat:hit.lat,lng:hit.lng,label:hit.label||line}}:{line,ok:false};
+    })
+    .catch(()=>({line,ok:false}));
+}
+function runBulkImport(text){
+  const status=document.getElementById("bulkImportStatus");
+  status.style.display="block"; status.className="live";
+  const {lines,truncated,total}=parseBulkAddressList(text,25);
+  if(!lines.length){
+    status.innerHTML=errHTML("paste at least one address or \"lat, lng\" line.");
+    return Promise.resolve();
+  }
+  const results=[];
+  let chain=Promise.resolve();
+  lines.forEach((line,idx)=>{
+    chain=chain.then(()=>{
+      status.textContent=`Importing ${idx+1} of ${lines.length}…`;
+      return bulkGeocodeLine(line).then(r=>{
+        results.push(r);
+        const isLast=idx===lines.length-1, wasCoordPair=!!parseCoordPair(line);
+        if(isLast||wasCoordPair)return;
+        return new Promise(res=>setTimeout(res,BULK_IMPORT_DELAY_MS));
+      });
+    });
+  });
+  return chain.then(()=>{
+    const summary=bulkImportSummary(results);
+    pins=mergeComparePins(pins,results.filter(r=>r.ok).map(r=>r.pin));
+    savePins();
+    const truncNote=truncated?` (first ${lines.length} of ${total} lines — 25 max)`:"";
+    const head=`Imported ${summary.okCount} of ${lines.length}${truncNote}.`;
+    status.innerHTML=summary.failCount
+      ? `${esc(head)} `+errHTML(`couldn't find: ${esc(summary.failed.join("; "))}`)
+      : esc(head);
+  });
+}
+function wireBulkImport(){
+  const btn=document.getElementById("bulkImportToggle"); if(!btn)return;
+  const panel=document.getElementById("bulkImportPanel");
+  const go=document.getElementById("bulkImportGo"), ta=document.getElementById("bulkImportText");
+  btn.onclick=()=>{
+    const opening=panel.style.display==="none";
+    panel.style.display=opening?"block":"none";
+    btn.setAttribute("aria-expanded",opening?"true":"false");
+  };
+  go.onclick=()=>{
+    if(go.disabled)return;
+    go.disabled=true;
+    runBulkImport(ta.value).then(()=>{go.disabled=false;});
+  };
+}
 function wireCompare(){
   const modal=document.getElementById("compareModal");
   document.getElementById("compareOpen").onclick=e=>{e.preventDefault();renderCompare();openModal(modal);};
@@ -4252,7 +4335,7 @@ function wireTheme(){
   };
 }
 
-wireBYO(); loadBYO(); wireCompare(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); wireData(); applyHash();
+wireBYO(); loadBYO(); wireCompare(); wireBulkImport(); loadPins(); loadRecent(); loadSavedSearches(); wireCTA(); wireAddrSearch(); wireGeolocate(); wireTheme(); wireUnits(); wireHelp(); wireData(); applyHash();
 /* Re-apply a same-document hash change (e.g. pasting a fresh permalink into
    an already-open tab's address bar) — applyHash() only ran on cold load
    before. Safe to call repeatedly: writeHash() (called from analyze()) uses

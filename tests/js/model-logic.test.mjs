@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
-  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
@@ -1170,6 +1170,68 @@ test("geolocationErrorMessage: missing/malformed error object falls back to the 
   assert.equal(geolocationErrorMessage(null), generic);
   assert.equal(geolocationErrorMessage(undefined), generic);
   assert.equal(geolocationErrorMessage({}), generic);
+});
+
+// ---- parseBulkAddressList / bulkImportSummary (bulk address import for Compare) ----
+test("parseBulkAddressList: splits on newlines, trims, and drops blank lines", () => {
+  const { lines, truncated, total } = parseBulkAddressList("  123 Main St  \n\nAustin, TX\n  ");
+  assert.deepEqual(lines, ["123 Main St", "Austin, TX"]);
+  assert.equal(truncated, false);
+  assert.equal(total, 2);
+});
+
+test("parseBulkAddressList: handles CRLF line endings", () => {
+  const { lines } = parseBulkAddressList("one\r\ntwo\r\nthree");
+  assert.deepEqual(lines, ["one", "two", "three"]);
+});
+
+test("parseBulkAddressList: caps at maxLines and reports truncation", () => {
+  const text = Array.from({ length: 30 }, (_, i) => `line ${i}`).join("\n");
+  const { lines, truncated, total } = parseBulkAddressList(text, 25);
+  assert.equal(lines.length, 25);
+  assert.equal(lines[24], "line 24");
+  assert.equal(truncated, true);
+  assert.equal(total, 30);
+});
+
+test("parseBulkAddressList: defaults the cap to 25 when maxLines is omitted", () => {
+  const text = Array.from({ length: 26 }, (_, i) => `line ${i}`).join("\n");
+  const { lines, truncated } = parseBulkAddressList(text);
+  assert.equal(lines.length, 25);
+  assert.equal(truncated, true);
+});
+
+test("parseBulkAddressList: empty/whitespace-only/non-string input yields no lines", () => {
+  assert.deepEqual(parseBulkAddressList("").lines, []);
+  assert.deepEqual(parseBulkAddressList("   \n  \n").lines, []);
+  assert.deepEqual(parseBulkAddressList(null).lines, []);
+  assert.deepEqual(parseBulkAddressList(undefined).lines, []);
+});
+
+test("bulkImportSummary: counts successes and lists failed lines", () => {
+  const results = [
+    { line: "123 Main St", ok: true, pin: { lat: 1, lng: 2, label: "123 Main St" } },
+    { line: "nowhere, nowhere", ok: false },
+    { line: "30, -97", ok: true, pin: { lat: 30, lng: -97, label: "30, -97" } },
+  ];
+  const summary = bulkImportSummary(results);
+  assert.equal(summary.okCount, 2);
+  assert.equal(summary.failCount, 1);
+  assert.deepEqual(summary.failed, ["nowhere, nowhere"]);
+});
+
+test("bulkImportSummary: all-success list has no failures", () => {
+  const results = [{ line: "a", ok: true, pin: {} }, { line: "b", ok: true, pin: {} }];
+  const summary = bulkImportSummary(results);
+  assert.equal(summary.okCount, 2);
+  assert.equal(summary.failCount, 0);
+  assert.deepEqual(summary.failed, []);
+});
+
+test("bulkImportSummary: empty or missing results list summarizes to all zeros", () => {
+  assert.deepEqual(bulkImportSummary([]), { okCount: 0, failCount: 0, failed: [] });
+  assert.deepEqual(bulkImportSummary(null), { okCount: 0, failCount: 0, failed: [] });
+  assert.deepEqual(bulkImportSummary(undefined), { okCount: 0, failCount: 0, failed: [] });
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----

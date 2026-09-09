@@ -595,6 +595,37 @@ function geolocationErrorMessage(err){
   return "Couldn't get your location — try searching an address instead.";
 }
 
+/* ---- bulk address import for Compare mode ----
+   Compare mode previously only grew one pin at a time — a map click + 📌,
+   or a pasted #cmp= permalink. `parseBulkAddressList` turns a pasted
+   multi-line list (one address, or a "lat, lng" pair, per line) into a
+   capped array of non-blank trimmed lines: `maxLines` (default 25) caps how
+   many a pasted spreadsheet column can queue up, since each line becomes its
+   own sequential Nominatim request in explore.html's runBulkImport —
+   unbounded input would mean an unbounded request burst against a free,
+   keyless, rate-limited API. `truncated` tells the caller whether lines
+   past the cap were dropped, and `total` is the pre-cap count, so the
+   caller can say "processing the first 25 of 40 lines" rather than silently
+   dropping the rest. The actual sequential geocoding (real delay between
+   requests, per the same Nominatim usage-policy constraint the single
+   address-search box already respects) needs fetch/setTimeout and so lives
+   in explore.html, not here — this only parses the pasted text.
+   `bulkImportSummary` turns the resulting per-line outcomes
+   (`{line, ok, pin?}` — a coordinate-pair line or a successful geocode is
+   `ok`, anything else isn't) into the counts and failed-line list
+   explore.html renders back to the user, so a few bad addresses in the
+   pasted list don't abort the whole batch or get silently swallowed. */
+function parseBulkAddressList(text,maxLines){
+  const cap=(maxLines>0)?maxLines:25;
+  const all=String(text||"").split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  return {lines:all.slice(0,cap), truncated:all.length>cap, total:all.length};
+}
+function bulkImportSummary(results){
+  const list=Array.isArray(results)?results:[];
+  const failed=list.filter(r=>r&&!r.ok).map(r=>r.line);
+  return {okCount:list.length-failed.length, failCount:failed.length, failed};
+}
+
 /* ---- CSV export for the Compare list ----
    `toCsvRow` quotes a single field per RFC 4180: wrapped in double quotes
    whenever it contains a comma, a double quote (itself doubled), or a
@@ -1215,5 +1246,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
 }
