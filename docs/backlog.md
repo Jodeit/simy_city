@@ -3511,6 +3511,36 @@ Ground rules for each run:
       from this sandbox, so a live end-to-end bulk geocode on the real site
       is a good human spot-check, same as the single address-search box.
 
+## Now (high value) — newly added (14)
+- [x] **`aria-live` on the async verdict region.** The earlier accessibility
+      pass added `role="status" aria-live="polite"` to `addrStatus` and
+      `dataMsg`, but missed the one status region that matters most: every
+      land use's PASS/SHORT/FAIL verdict — the actual answer to "can this go
+      here?" — renders into a single shared `#demandVerdict` div (all 20
+      `maybeRender*Verdict` functions in `web/explore.html` write into the
+      same element) well after the panel's initial paint, once the
+      Overpass/ArcGIS reads resolve. Without a live region, a screen-reader
+      user who tabs into the panel right after clicking a parcel hears
+      nothing when that verdict text actually appears — the single most
+      important sentence on the page was accessible only to sighted users
+      who could see it pop in. Added `role="status" aria-live="polite"` to
+      the div's initial markup (`web/explore.html`); no JS changes needed
+      since every verdict function already targets this one element by id,
+      and the attributes persist across the `innerHTML`/`className`
+      mutations those functions make (they never replace the element
+      itself). Verified in headless Chromium: both pages load with zero
+      console/page errors; after a real `applyModeUI('build')` →
+      `selectUse('data_center')` → `analyze(latlng)` flow, `#demandVerdict`
+      carries `role="status"`/`aria-live="polite"` in the live DOM (not just
+      the initial template string); `python -m pytest -q` (22 passed),
+      `simy validate` (OK, 32 sources/16 layers/20 land uses), and
+      `node --test tests/js/*.test.mjs` (344 passed, no new pure-logic
+      helper needed — this is a markup-only accessibility fix, nothing to
+      unit-test at the `logic.js` layer). A similar gap likely exists on the
+      `roofVal`/`compVal` "counting rooftops…"/"scanning for…" loading rows
+      (also async, also currently silent to screen readers) — left as a
+      natural follow-up rather than widening this fix.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
