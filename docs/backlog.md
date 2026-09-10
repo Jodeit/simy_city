@@ -3542,17 +3542,21 @@ Ground rules for each run:
       natural follow-up rather than widening this fix.
 
 ## Now (high value) — newly added (15)
-- [ ] **`aria-live` on the `roofVal`/`compVal` loading rows.** The earlier
+- [x] **`aria-live` on the `roofVal`/`compVal` loading rows.** The earlier
       `aria-live` fix covered the shared `#demandVerdict` region, but each
       verdict function first paints `#roofVal`/`#compVal` with a loading
       string ("counting rooftops in the trade area…", "scanning for …") and
       only later overwrites them with the resolved count/error via `setHTML`
-      (`web/explore.html`, e.g. lines ~1744-1745, ~1851/1870, ~1962/2060) —
-      currently silent to screen readers the same way `#demandVerdict` used
-      to be. Add `role="status" aria-live="polite"` to both rows' initial
-      markup, same fix shape as the `#demandVerdict` change, and re-verify in
-      headless Chromium that a real `analyze()` run still produces zero
-      console errors.
+      — currently silent to screen readers the same way `#demandVerdict` used
+      to be. Added `role="status" aria-live="polite"` to both rows' initial
+      markup in `renderBuild()` (`web/explore.html`) — `setHTML` only touches
+      `class`/`innerHTML`, never `role`/`aria-*`, so the attributes survive
+      every later rewrite from `runDemand`'s rooftop/competitor callbacks,
+      same fix shape as the `#demandVerdict` change. Verified in headless
+      Chromium: both pages load with zero console/page errors; a real
+      `analyze()` run with a use selected confirmed both `#roofVal` and
+      `#compVal` carry `role="status"`/`aria-live="polite"` after render,
+      with zero console errors produced end to end.
 - [ ] **Sortable Compare-table text columns.** The Compare modal's sortable
       row labels (added for Acreage/Appraised value) only cover numeric
       fields — `sortPins(pins,key,dir)` in `web/logic.js` compares with
