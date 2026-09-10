@@ -3908,14 +3908,15 @@ function undoRemovedPin(){
 // two numeric fields — clicking re-sorts pins and re-renders; a second click
 // on the same field flips direction.
 let cmpSort={key:null,dir:"asc"};
-const CMP_SORT_KEYS={"Acreage":"acres","Appraised value":"value"};
+const CMP_SORT_KEYS={"Acreage":"acres","Appraised value":"value","Owner":"owner","Land use":"land","County":"county"};
+const CMP_SORT_TYPES={acres:"number",value:"number",owner:"string",land:"string",county:"string"};
 function renderCompare(){
   const el=document.getElementById("compareBody"); if(!el)return;
   const undoBar=pinRemoved?`<p class="cmpUndoBar">Removed <b>${esc(pinRemoved.pin.label||`${pinRemoved.pin.lat.toFixed(4)}, ${pinRemoved.pin.lng.toFixed(4)}`)}</b> — <a href="#" id="cmpUndo">Undo</a></p>`:"";
   if(!pins.length){el.innerHTML=undoBar+`<p class="cmpEmpty">No pins yet. Analyze a parcel, then click 📌 <b>Pin to compare</b> in its toolbar.</p>`;
     if(pinRemoved)el.querySelector("#cmpUndo").onclick=e=>{e.preventDefault();undoRemovedPin();};
     return;}
-  const sorted=cmpSort.key?sortPins(pins,cmpSort.key,cmpSort.dir):pins;
+  const sorted=cmpSort.key?sortPins(pins,cmpSort.key,cmpSort.dir,CMP_SORT_TYPES[cmpSort.key]):pins;
   const fmtAcres=a=>a!=null?fmtAc(a):"—";
   const fmtVal=v=>v!=null?"$"+v.toLocaleString():"—";
   const lbl=(text)=>{
@@ -3928,11 +3929,11 @@ function renderCompare(){
   const rows=[
     ["", sorted.map((p,i)=>`<button class="cmpX" title="remove" aria-label="Remove pinned parcel: ${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}" data-i="${pins.indexOf(p)}">✕</button>`)],
     ["Site", sorted.map(p=>`<a href="#" class="cmpGo" data-lat="${p.lat}" data-lng="${p.lng}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`)],
-    ["Owner", sorted.map(p=>esc(p.owner||"—"))],
+    [lbl("Owner"), sorted.map(p=>esc(p.owner||"—"))],
     [lbl("Acreage"), sorted.map(p=>fmtAcres(p.acres))],
     [lbl("Appraised value"), sorted.map(p=>fmtVal(p.value))],
-    ["Land use", sorted.map(p=>esc(p.land||"—"))],
-    ["County", sorted.map(p=>esc(p.county||"—"))],
+    [lbl("Land use"), sorted.map(p=>esc(p.land||"—"))],
+    [lbl("County"), sorted.map(p=>esc(p.county||"—"))],
     ["Testing", sorted.map(p=>esc(p.use||"—"))],
     ["Verdict", sorted.map(p=>esc(p.verdict||"—"))],
   ];

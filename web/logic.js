@@ -738,21 +738,25 @@ function removeSavedSearch(list,i){
 /* ---- sorting the Compare-parcels list ----
    Compare's table is transposed (fields as rows, pins as columns), so
    "sortable columns" means reordering the underlying `pins` array — the
-   render just re-draws with the new order. Numeric-aware: a pin missing the
-   sort field (null/undefined, e.g. a county whose GIS layer doesn't expose
-   appraised value) always sorts to the end, regardless of direction, rather
-   than landing at the front on a "desc" sort (treating "unknown" as bigger
-   than every real value would be misleading). */
-function sortPins(pins,key,dir){
+   render just re-draws with the new order. Numeric-aware by default: a pin
+   missing the sort field (null/undefined, e.g. a county whose GIS layer
+   doesn't expose appraised value) always sorts to the end, regardless of
+   direction, rather than landing at the front on a "desc" sort (treating
+   "unknown" as bigger than every real value would be misleading). Pass
+   `type:"string"` for text fields (Owner/Land use/County) — a locale-aware
+   `localeCompare` instead of numeric subtraction (which is NaN, and so
+   misorders, on strings) — same missing-value-sorts-last rule either way. */
+function sortPins(pins,key,dir,type){
   const list=(pins||[]).slice();
   const sign=dir==="desc"?-1:1;
+  const isString=type==="string";
   list.sort((a,b)=>{
     const av=a?a[key]:null, bv=b?b[key]:null;
     const aMissing=av==null, bMissing=bv==null;
     if(aMissing&&bMissing) return 0;
     if(aMissing) return 1;
     if(bMissing) return -1;
-    return (av-bv)*sign;
+    return isString?String(av).localeCompare(String(bv))*sign:(av-bv)*sign;
   });
   return list;
 }

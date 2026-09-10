@@ -3557,16 +3557,30 @@ Ground rules for each run:
       `analyze()` run with a use selected confirmed both `#roofVal` and
       `#compVal` carry `role="status"`/`aria-live="polite"` after render,
       with zero console errors produced end to end.
-- [ ] **Sortable Compare-table text columns.** The Compare modal's sortable
-      row labels (added for Acreage/Appraised value) only cover numeric
-      fields — `sortPins(pins,key,dir)` in `web/logic.js` compares with
-      `(av-bv)*sign`, which is NaN for strings, so wiring the same
-      click-to-sort affordance onto Owner/Land use/County would silently
-      misorder. Add a string-aware comparator (locale-aware `localeCompare`,
-      still missing-value-sorts-last) — either a `type` option on `sortPins`
-      or a small sibling helper — and make those three row labels clickable
-      the same way Acreage/Appraised value already are, with matching unit
-      tests for ascending/descending/missing-value-last on text data.
+- [x] **Sortable Compare-table text columns.** The Compare modal's sortable
+      row labels (added for Acreage/Appraised value) previously only covered
+      numeric fields — `sortPins(pins,key,dir)` in `web/logic.js` compared
+      with `(av-bv)*sign`, which is NaN for strings, so wiring the same
+      click-to-sort affordance onto Owner/Land use/County would have
+      silently misordered. Added a 4th `type` argument to `sortPins`
+      (`type:"string"` uses a locale-aware `localeCompare` instead of
+      numeric subtraction; omitted/anything else keeps the existing numeric
+      behavior, so every pre-existing call site is unaffected) — same
+      missing-value-sorts-last rule either way, regardless of direction.
+      Made the Owner/Land use/County row labels in `web/explore.html`'s
+      Compare modal clickable the same way Acreage/Appraised value already
+      were, via a new `CMP_SORT_TYPES` map (`{acres:"number", value:"number",
+      owner:"string", land:"string", county:"string"}`) read by
+      `renderCompare()` so each column's `sortPins` call passes the right
+      type automatically. Added 5 new unit tests (string ascending,
+      descending, missing-value-last in both directions, all-missing list,
+      and a regression check confirming the pre-existing 3-arg numeric call
+      shape is unchanged). Verified in headless Chromium: both pages load
+      with zero console/page errors; seeding three Compare pins (mixed
+      owner/land-use/county text, one with a missing owner) and driving the
+      real Owner/Land use/County sort-button clicks end to end produced
+      correct alphabetical ascending/descending order each time, with the
+      missing-owner pin correctly sorting last in both directions.
 - [ ] **21st land use: Bank Branch / Credit Union.** A common "where should
       we put our next branch" siting question not yet covered. Same
       established shape as `car_wash`/`drive_thru_coffee`/`pharmacy`: a

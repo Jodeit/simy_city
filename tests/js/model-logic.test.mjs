@@ -1593,6 +1593,37 @@ test("sortPins: handles a missing/null pins list gracefully", () => {
   assert.deepEqual(sortPins(undefined, "acres", "asc"), []);
 });
 
+// ---- sortPins with type:"string" (text columns: Owner/Land use/County) ----
+
+test("sortPins: type 'string' sorts ascending with localeCompare, not numeric subtraction", () => {
+  const pins = [{ label: "B", owner: "Smith" }, { label: "A", owner: "Jones" }, { label: "C", owner: "Zamora" }];
+  const sorted = sortPins(pins, "owner", "asc", "string");
+  assert.deepEqual(sorted.map(p => p.label), ["A", "B", "C"]);
+});
+
+test("sortPins: type 'string' sorts descending", () => {
+  const pins = [{ label: "B", county: "Bexar" }, { label: "A", county: "Adams" }, { label: "C", county: "Cook" }];
+  const sorted = sortPins(pins, "county", "desc", "string");
+  assert.deepEqual(sorted.map(p => p.label), ["C", "B", "A"]);
+});
+
+test("sortPins: type 'string' still sorts missing values last in both directions", () => {
+  const pins = [{ label: "known", land: "Retail" }, { label: "unknown" }, { label: "known2", land: "Ag" }];
+  assert.deepEqual(sortPins(pins, "land", "asc", "string").map(p => p.label), ["known2", "known", "unknown"]);
+  assert.deepEqual(sortPins(pins, "land", "desc", "string").map(p => p.label), ["known", "known2", "unknown"]);
+});
+
+test("sortPins: type 'string' on all-missing values leaves every pin, in original relative order", () => {
+  const pins = [{ label: "A" }, { label: "B" }];
+  const sorted = sortPins(pins, "owner", "asc", "string");
+  assert.deepEqual(sorted.map(p => p.label), ["A", "B"]);
+});
+
+test("sortPins: without a type argument, numeric behavior is unchanged (backward compatible)", () => {
+  const pins = [{ acres: 3 }, { acres: 1 }, { acres: 2 }];
+  assert.deepEqual(sortPins(pins, "acres", "asc").map(p => p.acres), [1, 2, 3]);
+});
+
 // ---- sortPins reused for the "Sortable reverse-search candidate results"
 // backlog item — sortPins is already a generic numeric-field sorter, so no
 // new sortCandidates helper was needed, just new call sites keyed on the
