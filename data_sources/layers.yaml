@@ -820,6 +820,59 @@ land_uses:
       already documented, just filtered tighter here since the base tag alone
       would be far too broad.
 
+  bank_branch:            # bank branch / credit union, with drive-thru ATM lane
+    label: Bank Branch / Credit Union
+    requires:
+      # Branch banking draws from a wider area than a coffee kiosk's purely
+      # local commute-corridor base — people will drive a bit further for
+      # their bank than for a daily coffee, closer to car_wash's radius.
+      demand:      { min_households_drive_time: 8000, drive_time_min: 8 }
+      # Frontage visibility matters for a branch too — same `minAadt` gate
+      # mechanism (`standardUseVerdict`'s AADT leg, web/logic.js)
+      # car_wash/pharmacy/convenience_store/drive_thru_coffee already
+      # established, at car_wash/pharmacy's own threshold: a busy arterial,
+      # not necessarily interstate frontage.
+      transportation: { near_arterial_aadt: 25000 }
+      # A small branch building + drive-thru ATM lane + parking — between
+      # convenience_store's 0.75-acre pad and car_wash's 1.0-acre wash tunnel
+      # + stacking lanes.
+      parcel:      { min_buildable_acres: 1.0 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court/ev_charging_hub/senior_living/urgent_care/
+      # self_storage/child_care_center/hotel/grocery_store/car_wash/pharmacy/
+      # convenience_store/home_improvement_store/fitness_center/
+      # drive_thru_coffee established: a second branch/ATM a kilometer from an
+      # existing one is splitting an already-served pool of customers, not
+      # opening up a new one.
+      competition: { min_distance_km_from_nearest: 1.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low          # a small pad site + drive-thru lane, well under a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      A rooftop-headcount demand read like car_wash, at a slightly wider
+      radius (4 km) — a bank branch draws a bit more of a commute-corridor
+      crowd than a coffee kiosk's purely local 2 km base, though not as wide
+      as pharmacy's 6 km. min_households_drive_time (8000),
+      min_buildable_acres (1.0, a small pad + drive-thru ATM lane, between
+      convenience_store's 0.75 and car_wash's 1.0), near_arterial_aadt
+      (25000, same threshold as car_wash/pharmacy), and
+      min_distance_km_from_nearest (1.0, same as pharmacy/convenience_store/
+      drive_thru_coffee) are first-draft heuristics — refine freely, same as
+      every other threshold here. Wired up via `standardUseVerdict` directly
+      (same demand+site-size+AADT+competitor-distance shape car_wash/
+      pharmacy/convenience_store/drive_thru_coffee already established), no
+      new gate-shape work needed. OSM tags this with two live tags —
+      `amenity=bank` and `amenity=atm` — both queried with an OR-fallback for
+      the live competitor/site read, same messy-tagging caveat
+      urgent_care/child_care_center/car_wash/pharmacy/convenience_store
+      already documented (a standalone drive-thru ATM and a full branch are
+      tagged differently, but both compete for the same "closest place to
+      bank" trip, same reasoning convenience_store's fuel+shop pairing
+      already established).
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

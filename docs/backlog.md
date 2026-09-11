@@ -3581,19 +3581,44 @@ Ground rules for each run:
       real Owner/Land use/County sort-button clicks end to end produced
       correct alphabetical ascending/descending order each time, with the
       missing-owner pin correctly sorting last in both directions.
-- [ ] **21st land use: Bank Branch / Credit Union.** A common "where should
-      we put our next branch" siting question not yet covered. Same
-      established shape as `car_wash`/`drive_thru_coffee`/`pharmacy`: a
-      rooftop/commute-corridor demand radius (~3-4 km, wider than a coffee
-      kiosk's 2 km since branch banking draws from a bigger area), a real
-      AADT gate on the frontage road, `min_buildable_acres` for a small pad +
-      drive-thru ATM lane, and the inverted "farther is better"
-      `competition.min_distance_km_from_nearest` gate against existing
-      `amenity=bank`/`amenity=atm` OSM points — wire through the shared
-      `standardUseVerdict` helper (`web/logic.js`) the same way, so it needs
-      no new gate-shape or validator work, just a `data_sources/layers.yaml`
-      entry plus the `web/explore.html` `USE_DEMAND`/`maybeRender*Verdict`
-      wiring and label list.
+- [x] **21st land use: Bank Branch / Credit Union.** Added `bank_branch` to
+      `data_sources/layers.yaml` — same established shape as
+      `car_wash`/`pharmacy`/`convenience_store`/`drive_thru_coffee`: a
+      4 km rooftop/commute-corridor demand radius (wider than
+      `drive_thru_coffee`'s 2 km, tighter than `pharmacy`'s 6 km — branch
+      banking draws a bit more of a commute-corridor crowd than a coffee
+      kiosk's purely local base), `transportation.near_arterial_aadt: 25000`
+      (same threshold as `car_wash`/`pharmacy`), `parcel.min_buildable_acres:
+      1.0` (a small pad + drive-thru ATM lane, between `convenience_store`'s
+      0.75 and `car_wash`'s 1.0), and the inverted "farther is better"
+      `competition.min_distance_km_from_nearest: 1.0` gate against existing
+      `amenity=bank`/`amenity=atm` OSM points (OR-fallback for the messy
+      standalone-ATM-vs-full-branch tagging, same pattern
+      `convenience_store`'s fuel+shop pairing already established). Wired
+      through the shared `standardUseVerdict` helper (`web/logic.js`)
+      directly — needed no new gate-shape or validator work, just the
+      `layers.yaml` entry plus `web/explore.html`'s `USE_DEMAND`/`ALL_USE_KEYS`/
+      `BEST_FIT_USES`/`VERDICT_REFRESH` wiring and a new `maybeRenderBBVerdict`
+      (mirrors `maybeRenderDTCVerdict` exactly: waits for the rooftop, acreage,
+      AADT, and competitor-distance legs before rendering one verdict).
+      `reverseSearchSignals`/`updateSearchAvailability` (the "🔍 Find candidate
+      sites" reverse search) read `layers.yaml`'s `requires` shape generically,
+      so bank_branch got both `preferFar` and `preferNear` reverse-search
+      signals and an enabled search button for free — no reverse-search code
+      changes needed. Verified: `python -m pytest -q` (22 passed), `simy
+      validate` (OK, 21 land uses), `node --test tests/js/*.test.mjs` (349
+      passed, unchanged — this item touches no pure `web/logic.js` functions,
+      just data + UI wiring that already has generic test coverage), and
+      headless Chromium confirms both pages load with zero console/page
+      errors; a real simulated map click with `bank_branch` selected renders
+      the full result panel end-to-end; directly driving
+      `maybeRenderBBVerdict` through PASS / SHORT-on-demand /
+      SHORT-on-site-size / SHORT-on-AADT / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws; and `reverseSearchSignals` on
+      `MODEL.land_uses.bank_branch` confirmed both `preferFar`/`preferNear`
+      came through correctly.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
