@@ -3621,18 +3621,17 @@ Ground rules for each run:
       came through correctly.
 
 ## Now (high value) — newly added (16)
-- [ ] **"Get directions" link for a selected parcel.** `fillTools(latlng)`
-      (`web/explore.html`, ~line 1627) renders the always-present tool row
-      (🔗 Copy share link / 📌 Pin to compare, plus the build-mode "make the
-      case" box) for whatever point was just clicked, but there's no way to
-      actually get there — a visitor has to copy the coordinates out by hand.
-      Add a `🧭 Get directions` link/button next to the existing ones that
-      opens `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
-      in a new tab (`target="_blank" rel="noopener"`, same pattern as the
-      existing county-record/listing deep-links). No network call, no new
-      dependency — just a URL builder off `latlng`, ideally a small pure
-      `directionsUrl(lat,lng)` helper in `web/logic.js` so it gets a unit
-      test like `permalink`/`encodeHash` already have.
+- [x] **"Get directions" link for a selected parcel.** Added a pure
+      `directionsUrl(lat,lng)` helper to `web/logic.js` (next to
+      `encodeHash`/`decodeHash`, rounds to 5 decimals the same way, no API
+      key, no origin so Google Maps prompts the visitor for their own
+      starting point) with two unit tests. Wired a `🧭 Get directions`
+      `<a target="_blank" rel="noopener">` into `fillTools()`
+      (`web/explore.html`) alongside the existing 🔗 Copy share link / 📌 Pin
+      to compare buttons, same deep-link pattern as the county-record/
+      listing links. Verified in a headless-Chromium click-through: the link
+      renders with the correct href after clicking a point on the map, no JS
+      errors.
 - [ ] **Ruler / distance-measurement tool on the map.** There's no way to do
       an ad hoc "how far is this parcel from the highway on-ramp" check
       without leaving the page. Add a toggleable `📏 Measure` control near

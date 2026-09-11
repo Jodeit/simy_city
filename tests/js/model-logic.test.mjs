@@ -14,7 +14,7 @@ const {
   countOf, haversine, inBbox, pick, blendedDemand, seniorDemandRead,
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
   aggregateAcsTracts, makeSessionCache, wrapText, debounce,
-  encodeHash, decodeHash, hasWebShare, sharePayloadForLink, sharePayloadForCase,
+  encodeHash, decodeHash, directionsUrl, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, toCsvField, toCsvRow, toCsv, addRecentSite,
@@ -905,6 +905,19 @@ test("decodeHash: missing/unparseable lat or lng comes back null, not NaN", () =
 test("decodeHash: a use value is URI-decoded", () => {
   const q = decodeHash(`mode=build&use=${encodeURIComponent("fast_casual")}&lat=1&lng=2`);
   assert.equal(q.use, "fast_casual");
+});
+
+// ---- directionsUrl (Google Maps "Get directions" link) ----
+
+test("directionsUrl: builds a no-API-key Google Maps directions link to the point", () => {
+  const url = directionsUrl(30.372, -97.982);
+  assert.equal(url, "https://www.google.com/maps/dir/?api=1&destination=30.37200,-97.98200");
+});
+
+test("directionsUrl: rounds to 5 decimals same as encodeHash, no origin so Maps asks the visitor", () => {
+  const url = directionsUrl(30.1234567, -97.9999999);
+  assert.equal(url, "https://www.google.com/maps/dir/?api=1&destination=30.12346,-98.00000");
+  assert.ok(!url.includes("origin="));
 });
 
 // ---- hasWebShare / sharePayloadForLink / sharePayloadForCase (Web Share API) ----

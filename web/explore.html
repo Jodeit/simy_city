@@ -1630,7 +1630,8 @@ function fillTools(latlng){
   const canShare=hasWebShare(navigator);
   let h=`<button class="toolbtn" id="shareBtn">🔗 Copy share link</button>`+
     (canShare?`<button class="toolbtn" id="shareNativeBtn">📤 Share…</button>`:"")+
-    `<button class="toolbtn" id="pinBtn">📌 Pin to compare</button><span class="ok" id="pinMsg"></span>`;
+    `<button class="toolbtn" id="pinBtn">📌 Pin to compare</button><span class="ok" id="pinMsg"></span>`+
+    `<a class="toolbtn" id="directionsBtn" href="${directionsUrl(latlng.lat,latlng.lng)}" target="_blank" rel="noopener">🧭 Get directions</a>`;
   if(mode==="build"){
     const txt=buildCaseText(MODEL.land_uses[current],latlng);
     h+=`<details class="casebox"><summary>📣 Make the case (copy for council, a flyer, or a client)</summary>`+
