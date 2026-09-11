@@ -3620,6 +3620,52 @@ Ground rules for each run:
       `MODEL.land_uses.bank_branch` confirmed both `preferFar`/`preferNear`
       came through correctly.
 
+## Now (high value) — newly added (16)
+- [ ] **"Get directions" link for a selected parcel.** `fillTools(latlng)`
+      (`web/explore.html`, ~line 1627) renders the always-present tool row
+      (🔗 Copy share link / 📌 Pin to compare, plus the build-mode "make the
+      case" box) for whatever point was just clicked, but there's no way to
+      actually get there — a visitor has to copy the coordinates out by hand.
+      Add a `🧭 Get directions` link/button next to the existing ones that
+      opens `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+      in a new tab (`target="_blank" rel="noopener"`, same pattern as the
+      existing county-record/listing deep-links). No network call, no new
+      dependency — just a URL builder off `latlng`, ideally a small pure
+      `directionsUrl(lat,lng)` helper in `web/logic.js` so it gets a unit
+      test like `permalink`/`encodeHash` already have.
+- [ ] **Ruler / distance-measurement tool on the map.** There's no way to do
+      an ad hoc "how far is this parcel from the highway on-ramp" check
+      without leaving the page. Add a toggleable `📏 Measure` control near
+      the existing base-map switcher: once armed, the next two map clicks
+      (instead of triggering the normal `analyze()` click handler wired at
+      `map.on("click", debounce(e=>analyze(e.latlng),200))`, ~line 1525) drop
+      two temporary markers, draw a connecting `L.polyline`, and label it
+      with the straight-line distance via the existing `haversine()` helper
+      (`web/logic.js`, ~line 67) formatted in the user's current
+      acres/hectares-style unit preference (miles/km — reuse the `areaUnit`
+      toggle's persisted choice as the default, mi vs km). A third click (or
+      a "✕ clear" button) resets the tool and hands the click handler back to
+      `analyze()`. Pure-function `formatDistance(km, unit)` belongs in
+      `web/logic.js` with unit tests; the map-drawing/state-toggle part stays
+      in `web/explore.html` same as the other map-only tools.
+- [ ] **22nd land use: Veterinary Clinic / Animal Hospital.** A common small-
+      format siting question not yet covered. Same established
+      `standardUseVerdict` shape as `bank_branch`/`urgent_care`: a
+      neighborhood-scale rooftop demand radius (~3 km, similar order to
+      `urgent_care`'s draw — pet owners don't drive across town for routine
+      care), `parcel.min_buildable_acres` sized for a small clinic + parking
+      (comparable to `bank_branch`'s ~1.0 acre), and a competition gate
+      against existing OSM `amenity=veterinary` points (a standard, well-
+      populated OSM tag, same "farther is better" or "avoid oversaturation"
+      framing as the other point-competitor land uses — pick whichever
+      matches how the other small-format uses like `car_wash`/`pharmacy` are
+      gated). Needs just a `data_sources/layers.yaml` entry plus the same
+      `web/explore.html` wiring (`USE_DEMAND`/`ALL_USE_KEYS`/`BEST_FIT_USES`/
+      `VERDICT_REFRESH` + a `maybeRenderVetVerdict` mirroring
+      `maybeRenderBBVerdict`) — no new gate shape or Python validator changes
+      expected, so `simy validate` should pass unchanged aside from the land-
+      use count.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
