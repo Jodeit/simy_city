@@ -3647,23 +3647,35 @@ Ground rules for each run:
       `analyze()`. Pure-function `formatDistance(km, unit)` belongs in
       `web/logic.js` with unit tests; the map-drawing/state-toggle part stays
       in `web/explore.html` same as the other map-only tools.
-- [ ] **22nd land use: Veterinary Clinic / Animal Hospital.** A common small-
-      format siting question not yet covered. Same established
-      `standardUseVerdict` shape as `bank_branch`/`urgent_care`: a
-      neighborhood-scale rooftop demand radius (~3 km, similar order to
-      `urgent_care`'s draw — pet owners don't drive across town for routine
-      care), `parcel.min_buildable_acres` sized for a small clinic + parking
-      (comparable to `bank_branch`'s ~1.0 acre), and a competition gate
-      against existing OSM `amenity=veterinary` points (a standard, well-
-      populated OSM tag, same "farther is better" or "avoid oversaturation"
-      framing as the other point-competitor land uses — pick whichever
-      matches how the other small-format uses like `car_wash`/`pharmacy` are
-      gated). Needs just a `data_sources/layers.yaml` entry plus the same
-      `web/explore.html` wiring (`USE_DEMAND`/`ALL_USE_KEYS`/`BEST_FIT_USES`/
-      `VERDICT_REFRESH` + a `maybeRenderVetVerdict` mirroring
-      `maybeRenderBBVerdict`) — no new gate shape or Python validator changes
-      expected, so `simy validate` should pass unchanged aside from the land-
-      use count.
+- [x] **22nd land use: Veterinary Clinic / Animal Hospital.** Added `vet_clinic`
+      to `data_sources/layers.yaml` — same established `standardUseVerdict`
+      shape as `bank_branch`/`urgent_care`: a neighborhood-scale rooftop
+      demand read at `urgent_care`'s own radius/threshold (3 km / 4000, since
+      both are appointment-driven routine care, not an emergency-room-style
+      citywide pull), `parcel.min_buildable_acres: 1.0` (a small clinic +
+      parking, same small-pad footprint as `bank_branch`), and the same
+      farther-is-better `competition.min_distance_km_from_nearest: 2.0` read
+      (matching `urgent_care`'s magnitude) against existing OSM
+      `amenity=veterinary` points — a single, unambiguous tag, so no
+      OR-fallback needed, same as `self_storage`/`grocery_store`/
+      `fitness_center`. No AADT gate (a vet visit is a destination trip, not
+      a drive-by-frontage business). Wired into `web/explore.html`:
+      `USE_DEMAND`/`ALL_USE_KEYS`/`BEST_FIT_USES`/`VERDICT_REFRESH`, the
+      `vcState` rooftop/competitor/acreage leg fan-out (mirroring
+      `urgent_care`'s three-leg wait), and `maybeRenderVCVerdict` built
+      directly on the shared `standardUseVerdict`, same as `maybeRenderBBVerdict`.
+      No new gate shape or Python validator changes needed — `simy validate`
+      passes with 22 land uses. Verified: `python -m pytest -q` (22 passed),
+      `simy validate` (OK), `node --test tests/js` (351 passed, no new tests
+      needed since `standardUseVerdict` itself is already exhaustively
+      tested and this use adds no new gate shape), and headless Chromium
+      confirms both pages load with zero console/page errors; driving
+      `maybeRenderVCVerdict` directly through PASS / SHORT-on-demand /
+      SHORT-on-site-size / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected all produced correct verdict text and CSS
+      classes; and a real simulated map click with `vet_clinic` selected
+      rendered the full result panel end-to-end with zero throws.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

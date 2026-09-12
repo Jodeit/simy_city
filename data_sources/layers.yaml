@@ -873,6 +873,46 @@ land_uses:
       bank" trip, same reasoning convenience_store's fuel+shop pairing
       already established).
 
+  vet_clinic:             # veterinary clinic / animal hospital
+    label: Veterinary Clinic / Animal Hospital
+    requires:
+      # A neighborhood-scale draw like urgent_care's — pet owners don't drive
+      # across town for routine/walk-in care, but it's not as purely local as
+      # child_care_center's drop-off radius either.
+      demand:      { min_households_drive_time: 4000, drive_time_min: 8 }
+      # A small clinic building + exam rooms + parking, comparable to
+      # bank_branch's small-pad footprint.
+      parcel:      { min_buildable_acres: 1.0 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court/ev_charging_hub/senior_living/urgent_care/
+      # self_storage/child_care_center/hotel/grocery_store/car_wash/pharmacy/
+      # convenience_store/home_improvement_store/fitness_center/
+      # drive_thru_coffee/bank_branch established, against existing vet
+      # clinics — same magnitude as urgent_care's threshold (both are
+      # routine, appointment-driven care, not the emergency-room-style pull
+      # a hospital has).
+      competition: { min_distance_km_from_nearest: 2.0 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a single-story clinic + small lot, not a big-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      Same established `standardUseVerdict` shape as bank_branch/urgent_care
+      — a rooftop-headcount demand read at urgent_care's own radius/threshold
+      (3 km / 4000, since both are appointment-driven neighborhood-scale
+      care, not an emergency-room-style citywide pull), a site-size gate
+      (min_buildable_acres 1.0, same as bank_branch's small pad), and the
+      same farther-is-better competition read every use since
+      food_truck_court has established, against existing vet clinics.
+      Unlike urgent_care/child_care_center/car_wash/pharmacy, OSM tags this
+      unambiguously (`amenity=veterinary` is a single, well-populated tag) —
+      no OR-fallback needed, same as self_storage/grocery_store/
+      fitness_center. No AADT gate — a vet clinic is a destination trip, not
+      a drive-by-frontage business, same reasoning grocery_store/
+      home_improvement_store/fitness_center already established.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
