@@ -3632,21 +3632,28 @@ Ground rules for each run:
       listing links. Verified in a headless-Chromium click-through: the link
       renders with the correct href after clicking a point on the map, no JS
       errors.
-- [ ] **Ruler / distance-measurement tool on the map.** There's no way to do
-      an ad hoc "how far is this parcel from the highway on-ramp" check
-      without leaving the page. Add a toggleable `📏 Measure` control near
-      the existing base-map switcher: once armed, the next two map clicks
-      (instead of triggering the normal `analyze()` click handler wired at
-      `map.on("click", debounce(e=>analyze(e.latlng),200))`, ~line 1525) drop
-      two temporary markers, draw a connecting `L.polyline`, and label it
-      with the straight-line distance via the existing `haversine()` helper
-      (`web/logic.js`, ~line 67) formatted in the user's current
-      acres/hectares-style unit preference (miles/km — reuse the `areaUnit`
-      toggle's persisted choice as the default, mi vs km). A third click (or
-      a "✕ clear" button) resets the tool and hands the click handler back to
-      `analyze()`. Pure-function `formatDistance(km, unit)` belongs in
-      `web/logic.js` with unit tests; the map-drawing/state-toggle part stays
-      in `web/explore.html` same as the other map-only tools.
+- [x] **Ruler / distance-measurement tool on the map.** Added a toggleable
+      `📏` `L.Control` (topright, next to the layer switcher) that arms a
+      ruler mode: `map.on("click", ...)` now branches on `measureArmed` —
+      armed, the next two clicks drop `L.circleMarker` points into a
+      dedicated `measureLayer` instead of calling `analyze()`; once both
+      land, an `L.polyline` connects them with a permanent tooltip showing
+      the straight-line distance. Distance math is `haversine()` (already in
+      `web/logic.js`) formatted by two new pure functions in `web/logic.js`:
+      `formatDistance(km, unit)` (mi/km display, 2 decimals under 10 else 1,
+      null-in/null-out like `formatArea`) and `distanceUnitForAreaUnit
+      (areaUnit)` (hectares → km, acres/sq ft → mi, reusing the existing
+      `areaUnit` toggle's persisted choice as the default) — 6 new unit
+      tests. A third click, or clicking the `📏`/`✕` control again, clears
+      the markers/line and disarms back to normal `analyze()` clicks.
+      Toggling area units while a measurement is showing live-updates its
+      label via `refreshAreaDisplays()` (`measureLine.setTooltipContent`).
+      Verified: `python -m pytest -q` (22 passed), `simy validate` (OK),
+      `node --test tests/js` (357 passed, 6 new), and a headless-Chromium
+      run driving `toggleMeasure()`/`handleMeasureClick()` directly confirmed
+      the full arm → 2 points → labeled line (0.91 mi / 1.47 km, unit-toggle
+      relabel verified) → third-click-clears flow end-to-end with zero page
+      errors on both `explore.html` and `index.html`.
 - [x] **22nd land use: Veterinary Clinic / Animal Hospital.** Added `vet_clinic`
       to `data_sources/layers.yaml` — same established `standardUseVerdict`
       shape as `bank_branch`/`urgent_care`: a neighborhood-scale rooftop

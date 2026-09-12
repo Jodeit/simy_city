@@ -26,7 +26,7 @@ const {
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
   standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
-  areaUnitLabel, convertArea, formatArea,
+  areaUnitLabel, convertArea, formatArea, formatDistance, distanceUnitForAreaUnit,
   APP_STATE_KEYS, buildAppStateExport, parseAppStateImport,
 } = logic;
 
@@ -2457,6 +2457,37 @@ test("formatArea: returns null for null/non-finite acres (caller decides the fal
 
 test("formatArea: defaults to acres when no unit is given", () => {
   assert.equal(formatArea(1), "1.00 ac");
+});
+
+// ---- distance display formatting (formatDistance/distanceUnitForAreaUnit) ----
+
+test("formatDistance: formats km to 2 decimals under 10, with unit suffix", () => {
+  assert.equal(formatDistance(3.456, "km"), "3.46 km");
+});
+
+test("formatDistance: formats km to 1 decimal at 10 and above", () => {
+  assert.equal(formatDistance(12.34, "km"), "12.3 km");
+});
+
+test("formatDistance: converts km to miles", () => {
+  assert.equal(formatDistance(1, "mi"), "0.62 mi");
+});
+
+test("formatDistance: returns null for null/undefined/non-finite km", () => {
+  assert.equal(formatDistance(null, "km"), null);
+  assert.equal(formatDistance(undefined, "mi"), null);
+  assert.equal(formatDistance(NaN, "mi"), null);
+});
+
+test("formatDistance: an unrecognized unit falls back to km", () => {
+  assert.equal(formatDistance(5, "furlongs"), "5.00 km");
+});
+
+test("distanceUnitForAreaUnit: hectares defaults to km, acres/sq ft default to miles", () => {
+  assert.equal(distanceUnitForAreaUnit("ha"), "km");
+  assert.equal(distanceUnitForAreaUnit("ac"), "mi");
+  assert.equal(distanceUnitForAreaUnit("sqft"), "mi");
+  assert.equal(distanceUnitForAreaUnit("bogus"), "mi");
 });
 
 // ---- backup/restore all local app state (buildAppStateExport/parseAppStateImport) ----

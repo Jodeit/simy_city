@@ -1056,6 +1056,30 @@ function formatArea(acres,unit){
   return `${val.toLocaleString(undefined,{minimumFractionDigits:u.decimals,maximumFractionDigits:u.decimals})} ${u.label}`;
 }
 
+/* ---- distance display formatting (map ruler tool) ----
+   haversine() above always returns km; formatDistance is the same kind of
+   display-only conversion as formatArea — km stays the one unit every
+   caller computes in, only the rendered string switches between mi/km. A
+   null/non-finite input returns null, same contract as formatArea. Under
+   10 (mi or km) gets 2 decimals, since ruler measurements are often short
+   hops where a 1-decimal round would read as "0 mi"; 10 and up gets 1
+   decimal, since sub-tenth precision isn't meaningful at that range. An
+   unrecognized unit falls back to km, same "acres is the safe default"
+   pattern as convertArea falling back to "ac". */
+const KM_TO_MI=0.621371;
+function formatDistance(km,unit){
+  if(km==null||!isFinite(km))return null;
+  const mi=unit==="mi";
+  const v=mi?km*KM_TO_MI:km;
+  return `${v.toFixed(v<10?2:1)} ${mi?"mi":"km"}`;
+}
+// Default distance unit for a ruler measurement, derived from the user's
+// existing areaUnit preference so the two toggles agree: hectares (metric)
+// implies km, both imperial choices (acres/sq ft) imply miles.
+function distanceUnitForAreaUnit(areaUnit){
+  return areaUnit==="ha"?"km":"mi";
+}
+
 // Builds the text for a printable/exportable report summarizing the pinned
 // Compare list (same fields renderCompare()'s table shows, one pin per
 // section) — mirrors buildCandidatesReportText's role for the reverse-search
@@ -1258,5 +1282,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
 }

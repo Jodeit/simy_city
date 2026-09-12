@@ -176,6 +176,9 @@
   .themebtn{font:inherit;font-size:.85rem;border:1px solid #38514c;background:#1f2c2a;color:#cfe6d3;
     padding:.4em .6em;border-radius:9px;cursor:pointer;line-height:1}
   .themebtn:hover{border-color:var(--leaf)}
+  /* ruler / distance-measurement map control (📏, topright next to the layer switcher) */
+  #measureBtn.active{background:var(--garden);color:#06210d}
+  .measure-label{font-weight:600;font-size:.8rem}
   /* use selector card (side panel, "test a use" mode) */
   .usebar{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px;margin-bottom:12px}
   .usebar .lbl{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate);margin-bottom:7px}
@@ -1533,11 +1536,73 @@ L.control.layers(
   {"TCAD parcel lines":parcelTiles,"FEMA flood zones":floodTiles,"USGS slope map":slopeTiles},
   {position:"topright",collapsed:IS_MOBILE}   // expanded control would eat the small map
 ).addTo(map);
+// ---- ruler / distance-measurement tool ----
+// A toggleable map tool, armed via the 📏 control below (near the layer
+// switcher). While armed, the next two clicks — instead of the normal
+// analyze() click a few lines down — drop temporary markers; once both are
+// placed, a connecting line is drawn and labeled with the straight-line
+// distance (haversine(), web/logic.js) in the user's current mi/km
+// preference (distanceUnitForAreaUnit(areaUnit), web/logic.js — mirrors the
+// existing ac/ha/sqft areaUnit toggle). A third click, or clicking the
+// control again, clears the measurement and hands the click handler back
+// to analyze().
+let measureArmed=false;
+let measurePts=[];
+let measureLine=null;
+let measureKm=null;
+const measureLayer=L.layerGroup().addTo(map);
+const MeasureControl=L.Control.extend({
+  options:{position:"topright"},
+  onAdd(){
+    const div=L.DomUtil.create("div","leaflet-bar");
+    const btn=L.DomUtil.create("a","",div);
+    btn.href="#"; btn.id="measureBtn"; btn.setAttribute("role","button");
+    btn.textContent="📏"; btn.title="Measure distance on the map";
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.on(btn,"click",e=>{L.DomEvent.preventDefault(e);toggleMeasure();});
+    return div;
+  },
+});
+new MeasureControl().addTo(map);
+function paintMeasureBtn(){
+  const btn=document.getElementById("measureBtn");
+  if(!btn)return;
+  btn.classList.toggle("active",measureArmed);
+  if(!measureArmed){btn.textContent="📏";btn.title="Measure distance on the map";}
+  else if(measurePts.length<2){btn.textContent="✕";btn.title="Cancel measuring";}
+  else{btn.textContent="✕";btn.title="Clear measurement";}
+}
+function clearMeasure(){
+  measureLayer.clearLayers();
+  measurePts=[];measureLine=null;measureKm=null;measureArmed=false;
+  paintMeasureBtn();
+}
+function toggleMeasure(){
+  if(measureArmed)clearMeasure();
+  else{measureArmed=true;measurePts=[];measureLayer.clearLayers();measureLine=null;measureKm=null;paintMeasureBtn();}
+}
+function handleMeasureClick(latlng){
+  if(measurePts.length>=2){clearMeasure();return;}
+  measurePts.push(latlng);
+  L.circleMarker(latlng,{radius:5,color:"#e8b339",weight:2,fillOpacity:0.9}).addTo(measureLayer);
+  if(measurePts.length===2){
+    measureKm=haversine(measurePts[0].lat,measurePts[0].lng,measurePts[1].lat,measurePts[1].lng);
+    measureLine=L.polyline(measurePts,{color:"#e8b339",weight:3,dashArray:"6 6"})
+      .bindTooltip(formatDistance(measureKm,distanceUnitForAreaUnit(areaUnit)),
+        {permanent:true,direction:"center",className:"measure-label"})
+      .addTo(measureLayer);
+    measureLine.openTooltip();
+  }
+  paintMeasureBtn();
+}
 // Debounced (trailing-edge): a fast double/triple-click on the map only
 // kicks off one Overpass/ArcGIS/USGS/Census fan-out, for the last click in
 // the burst, instead of one per click (the reqSeq staleness check already
 // discarded the earlier ones' *rendering*, but not their in-flight requests).
-map.on("click",debounce(e=>analyze(e.latlng),200));
+map.on("click",debounce(e=>{
+  if(measureArmed)handleMeasureClick(e.latlng);
+  else analyze(e.latlng);
+},200));
 
 function analyze(latlng){
   document.getElementById("empty").style.display="none";
@@ -4429,6 +4494,7 @@ const VERDICT_REFRESH={
 };
 function refreshAreaDisplays(){
   if(mode==="build"&&VERDICT_REFRESH[current])VERDICT_REFRESH[current]();
+  if(measureLine&&measureKm!=null)measureLine.setTooltipContent(formatDistance(measureKm,distanceUnitForAreaUnit(areaUnit)));
   const acB=document.getElementById("parcelAcreageVal");
   if(acB&&lastParcelSummary&&lastParcelSummary.acres!=null)acB.textContent=fmtAc(lastParcelSummary.acres);
   if(mode==="explore"&&lastParcelSummary)fillFit(lastParcelSummary.acres);
