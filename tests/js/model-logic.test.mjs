@@ -26,7 +26,7 @@ const {
   toPdfSafeText, escapePdfString, buildSimplePdf,
   parseAadtFeatures, maxAadtWithinRadius,
   standardUseVerdict, rankLandUseVerdicts, countDemandRead, schoolLoadDemandRead,
-  areaUnitLabel, convertArea, formatArea,
+  areaUnitLabel, convertArea, formatArea, formatDistance,
   APP_STATE_KEYS, buildAppStateExport, parseAppStateImport,
 } = logic;
 
@@ -2457,6 +2457,29 @@ test("formatArea: returns null for null/non-finite acres (caller decides the fal
 
 test("formatArea: defaults to acres when no unit is given", () => {
   assert.equal(formatArea(1), "1.00 ac");
+});
+
+// ---- distance-unit display formatting (formatDistance, the ruler tool) ----
+
+test("formatDistance: formats km to 2 decimals", () => {
+  assert.equal(formatDistance(3.456, "km"), "3.46 km");
+});
+
+test("formatDistance: converts km to miles by default (any non-\"km\" unit)", () => {
+  assert.equal(formatDistance(1.60934, "mi"), "1.00 mi");
+});
+
+test("formatDistance: switches sub-tenth-of-a-km distances to whole meters", () => {
+  assert.equal(formatDistance(0.08, "km"), "80 m");
+});
+
+test("formatDistance: switches sub-tenth-of-a-mile distances to whole feet", () => {
+  assert.equal(formatDistance(0.05, "mi"), "164 ft"); // 0.05 km ≈ 0.031 mi ≈ 164 ft
+});
+
+test("formatDistance: returns null for null/non-finite km (caller decides the fallback text)", () => {
+  assert.equal(formatDistance(null, "km"), null);
+  assert.equal(formatDistance(NaN, "mi"), null);
 });
 
 // ---- backup/restore all local app state (buildAppStateExport/parseAppStateImport) ----
