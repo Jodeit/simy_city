@@ -1056,6 +1056,21 @@ function formatArea(acres,unit){
   return `${val.toLocaleString(undefined,{minimumFractionDigits:u.decimals,maximumFractionDigits:u.decimals})} ${u.label}`;
 }
 
+/* ---- distance-unit display formatting (the ruler tool) ----
+   haversine() (above) always returns km — same "compute in one unit, format
+   for display" split as formatArea/convertArea above this. `unit` is "mi" or
+   "km" (explore.html derives a default from the areaUnit toggle: "ha", the
+   one metric area unit, implies km; anything else implies mi). Sub-tenth-
+   of-a-unit distances — a ruler measuring across one small parcel — switch
+   to feet/meters, since "0.02 mi" is a worse answer than "106 ft" for that
+   case. A null/non-finite input returns null, same contract as formatArea. */
+function formatDistance(km,unit){
+  if(km==null||!isFinite(km))return null;
+  if(unit==="km")return km<0.1 ? `${Math.round(km*1000)} m` : `${km.toFixed(2)} km`;
+  const mi=km*0.621371;
+  return mi<0.1 ? `${Math.round(mi*5280)} ft` : `${mi.toFixed(2)} mi`;
+}
+
 // Builds the text for a printable/exportable report summarizing the pinned
 // Compare list (same fields renderCompare()'s table shows, one pin per
 // section) — mirrors buildCandidatesReportText's role for the reverse-search
@@ -1258,5 +1273,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance};
 }
