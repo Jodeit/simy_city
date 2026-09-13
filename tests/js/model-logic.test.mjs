@@ -18,7 +18,7 @@ const {
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, toCsvField, toCsvRow, toCsv, addRecentSite,
-  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
+  removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
@@ -1635,6 +1635,38 @@ test("sortPins: type 'string' on all-missing values leaves every pin, in origina
 test("sortPins: without a type argument, numeric behavior is unchanged (backward compatible)", () => {
   const pins = [{ acres: 3 }, { acres: 1 }, { acres: 2 }];
   assert.deepEqual(sortPins(pins, "acres", "asc").map(p => p.acres), [1, 2, 3]);
+});
+
+// ---- bestValueIndices (Compare table: highlight the best value per numeric row) ----
+
+test("bestValueIndices: returns the index of the single max value", () => {
+  const pins = [{ acres: 5 }, { acres: 9 }, { acres: 2 }];
+  assert.deepEqual(bestValueIndices(pins, "acres"), [1]);
+});
+
+test("bestValueIndices: returns every index on an exact tie for the max", () => {
+  const pins = [{ value: 100 }, { value: 900 }, { value: 900 }, { value: 300 }];
+  assert.deepEqual(bestValueIndices(pins, "value"), [1, 2]);
+});
+
+test("bestValueIndices: returns an empty array when every pin is missing the field", () => {
+  const pins = [{ label: "A" }, { label: "B" }];
+  assert.deepEqual(bestValueIndices(pins, "acres"), []);
+});
+
+test("bestValueIndices: ignores null/undefined values when finding the max", () => {
+  const pins = [{ acres: 3 }, { acres: null }, { acres: 7 }, {}];
+  assert.deepEqual(bestValueIndices(pins, "acres"), [2]);
+});
+
+test("bestValueIndices: a single pin is its own max", () => {
+  assert.deepEqual(bestValueIndices([{ acres: 4 }], "acres"), [0]);
+});
+
+test("bestValueIndices: handles a missing/empty pins list gracefully", () => {
+  assert.deepEqual(bestValueIndices(null, "acres"), []);
+  assert.deepEqual(bestValueIndices(undefined, "acres"), []);
+  assert.deepEqual(bestValueIndices([], "acres"), []);
 });
 
 // ---- sortPins reused for the "Sortable reverse-search candidate results"

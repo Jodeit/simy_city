@@ -3730,7 +3730,7 @@ Ground rules for each run:
       Check the new entry's bbox for overlap with existing entries before
       appending it to the array — `inBbox` resolves to the *first* match, so
       ordering matters, not just presence.
-- [ ] **Compare table: highlight the best value per numeric row.** The
+- [x] **Compare table: highlight the best value per numeric row.** The
       pinned-parcels Compare table (`renderCompare()` in `web/explore.html`)
       already has sortable Acreage/Appraised-value columns
       (`cmpSort`/`CMP_SORT_KEYS`), but scanning for the biggest lot or

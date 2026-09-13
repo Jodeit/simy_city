@@ -145,6 +145,7 @@
   .cmpTable th,.cmpTable td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
   .cmpTable th{color:var(--slate);font-weight:600;white-space:nowrap}
   .cmpTable td.lbl{color:var(--slate);white-space:nowrap}
+  .cmpTable td.cmpBest{background:var(--aligned-bg);color:var(--aligned-fg);font-weight:600}
   .cmpX{background:none;border:none;color:var(--slate);cursor:pointer;font-size:1rem;padding:0 4px}
   .cmpX:hover{color:var(--danger-fg)}
   .cmpSortBtn{background:none;border:none;color:var(--slate);cursor:pointer;font:inherit;font-weight:inherit;padding:0;text-decoration:underline dotted}
@@ -4124,19 +4125,21 @@ function renderCompare(){
     const arrow=active?(cmpSort.dir==="desc"?" ▼":" ▲"):"";
     return `<button type="button" class="cmpSortBtn" data-key="${key}" aria-pressed="${active}">${text}${arrow}</button>`;
   };
+  const acresBest=new Set(bestValueIndices(sorted,"acres"));
+  const valueBest=new Set(bestValueIndices(sorted,"value"));
   const rows=[
     ["", sorted.map((p,i)=>`<button class="cmpX" title="remove" aria-label="Remove pinned parcel: ${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}" data-i="${pins.indexOf(p)}">✕</button>`)],
     ["Site", sorted.map(p=>`<a href="#" class="cmpGo" data-lat="${p.lat}" data-lng="${p.lng}">${esc(p.label||`${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`)}</a>`)],
     [lbl("Owner"), sorted.map(p=>esc(p.owner||"—"))],
-    [lbl("Acreage"), sorted.map(p=>fmtAcres(p.acres))],
-    [lbl("Appraised value"), sorted.map(p=>fmtVal(p.value))],
+    [lbl("Acreage"), sorted.map(p=>fmtAcres(p.acres)), acresBest],
+    [lbl("Appraised value"), sorted.map(p=>fmtVal(p.value)), valueBest],
     [lbl("Land use"), sorted.map(p=>esc(p.land||"—"))],
     [lbl("County"), sorted.map(p=>esc(p.county||"—"))],
     ["Testing", sorted.map(p=>esc(p.use||"—"))],
     ["Verdict", sorted.map(p=>esc(p.verdict||"—"))],
   ];
   el.innerHTML=undoBar+`<table class="cmpTable"><tbody>`+
-    rows.map(([label,cells])=>`<tr><td class="lbl">${label}</td>${cells.map(c=>`<td>${c}</td>`).join("")}</tr>`).join("")+
+    rows.map(([label,cells,best])=>`<tr><td class="lbl">${label}</td>${cells.map((c,i)=>`<td${best&&best.has(i)?' class="cmpBest"':""}>${c}</td>`).join("")}</tr>`).join("")+
     `</tbody></table>`;
   if(pinRemoved)el.querySelector("#cmpUndo").onclick=e=>{e.preventDefault();undoRemovedPin();};
   el.querySelectorAll(".cmpX").forEach(b=>b.onclick=()=>removePin(+b.dataset.i));
