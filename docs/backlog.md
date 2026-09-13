@@ -3685,35 +3685,35 @@ Ground rules for each run:
       rendered the full result panel end-to-end with zero throws.
 
 ## Now (high value) — newly added (17)
-- [ ] **23rd land use: New K-12 School Site.** A distinct question from every
-      existing land use: not "is there enough nearby demand for a business,"
-      but "does this vacant/large parcel make sense as a *new school*
-      site" — nearby school-age population big enough to fill it, **not**
-      already well-served by an existing school, and a big-enough flat pad
-      for a building + playing fields. Add `school_site` to
-      `data_sources/layers.yaml`: `requires.demand` reuses the same
-      nearby-rooftop trade-area read `residential_subdivision` already does
-      (rooftops as a population proxy) at a walkable/school-bus-ish radius
-      (try 2–2.5 km, tighter than `residential_subdivision`'s citywide pull —
-      a school draws its own attendance zone, not a whole metro),
-      `requires.parcel.min_buildable_acres: 8` (a real K-12 campus + fields,
-      bigger than any existing use's site-size gate — `warehouse_club`'s 15
-      is the only bigger one), and the **inverted** "farther is better"
-      `requires.competition.min_distance_km_from_nearest: 1.5` against
-      existing OSM `amenity=school` points — this is the exact
-      `preferFar`-eligible shape `food_truck_court`/`ev_charging_hub`
-      already established (see `reverseSearchSignals` in `web/logic.js`), and
-      combined with the rooftop-demand `preferNear` signal, this use gets
-      **both** reverse-search signals for free — a great "🔍 Find candidate
-      sites" test case once wired (nowhere else combines both signals on a
-      residential-count demand read; `food_truck_court`'s demand read is
-      commercial foot traffic, not rooftops). Wire the verdict into
-      `web/explore.html` exactly like `vet_clinic`/`urgent_care`
-      (`USE_DEMAND`/`ALL_USE_KEYS`/`BEST_FIT_USES`/`VERDICT_REFRESH`, a
-      three-leg rooftop+competitor+acreage wait, `maybeRenderSchoolVerdict`
-      built on `standardUseVerdict`). No new Python validator changes should
-      be needed (`competition`/`parcel`/`demand` are all already-registered
-      layer shapes).
+- [x] **23rd land use: New K-12 School Site.** Added `school_site` to
+      `data_sources/layers.yaml` — a distinct question from every existing
+      land use: not "is there enough nearby demand for a business," but
+      "does this parcel make sense as a *new school* site." Reuses the same
+      established `standardUseVerdict` shape as `vet_clinic`/`urgent_care`: a
+      rooftop-headcount demand read (`min_households_drive_time: 1800`) at a
+      tighter attendance-zone radius (2.2 km, vs `residential_subdivision`'s
+      citywide 5 km pull), `parcel.min_buildable_acres: 8` (a real K-12
+      campus + fields — bigger than any other use's site-size gate except
+      `warehouse_club`'s 15), and the **inverted** "farther is better"
+      `competition.min_distance_km_from_nearest: 1.5` against existing OSM
+      `amenity=school` points. Because it has both a rooftop-demand leg and a
+      `min_distance_km_from_nearest` competition leg, `reverseSearchSignals`
+      (`web/logic.js`) picks up `preferNear`+`preferFar` automatically — no
+      logic.js changes needed — making this the first land use to combine
+      both reverse-search signals on a residential-rooftop demand read. Wired
+      into `web/explore.html` exactly like `vet_clinic`: added to
+      `ALL_USE_KEYS`/`USE_DEMAND`/`BEST_FIT_USES`, a `schState`
+      three-leg (rooftop/acreage/competitor) wait feeding a new
+      `maybeRenderSCHVerdict` built on `standardUseVerdict`, and a
+      `VERDICT_REFRESH` entry for unit-toggle relabeling. No Python validator
+      changes needed (`competition`/`parcel`/`demand` are all
+      already-registered layer shapes). Verified: `simy validate` (OK, 23
+      land uses), `python -m pytest -q` (22 passed), `node --test tests/js`
+      (363 passed, unchanged — the new use is exercised entirely through
+      already-generic `standardUseVerdict`/`reverseSearchSignals` coverage),
+      and a headless-Chromium run selecting `school_site` and simulating a
+      map click confirmed zero page errors on both `explore.html` and
+      `index.html`.
 - [ ] **24th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 23 (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
       Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/

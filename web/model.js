@@ -1191,6 +1191,29 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "Same established `standardUseVerdict` shape as bank_branch/urgent_care \u2014 a rooftop-headcount demand read at urgent_care's own radius/threshold (3 km / 4000, since both are appointment-driven neighborhood-scale care, not an emergency-room-style citywide pull), a site-size gate (min_buildable_acres 1.0, same as bank_branch's small pad), and the same farther-is-better competition read every use since food_truck_court has established, against existing vet clinics. Unlike urgent_care/child_care_center/car_wash/pharmacy, OSM tags this unambiguously (`amenity=veterinary` is a single, well-populated tag) \u2014 no OR-fallback needed, same as self_storage/grocery_store/ fitness_center. No AADT gate \u2014 a vet clinic is a destination trip, not a drive-by-frontage business, same reasoning grocery_store/ home_improvement_store/fitness_center already established.\n"
+    },
+    "school_site": {
+      "label": "New K-12 School Site",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 1800,
+          "drive_time_min": 5
+        },
+        "parcel": {
+          "min_buildable_acres": 8
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.5
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "medium",
+        "land_cover": "medium",
+        "carbon": "low",
+        "traffic": "medium"
+      },
+      "notes": "Same established `standardUseVerdict` shape as vet_clinic/urgent_care \u2014 a rooftop-headcount demand read at a tighter attendance-zone radius (2.2 km / 1800 rooftops) than residential_subdivision's citywide pull, a site-size gate (min_buildable_acres 8 \u2014 a real campus + fields, smaller only than warehouse_club's 15), and the same farther-is-better competition read every use since food_truck_court has established, against existing OSM `amenity=school` points (1.5 km \u2014 this site should sit outside an existing school's own walk zone, not duplicate it). The 1800-rooftop need is the same ~0.5-students-per-home proxy documented on residential_subdivision's `induces.education` run backward: an 8-acre K-12 campus (roughly a single combined elementary+middle enrollment, ~900 students) needs about that many nearby households to fill it. Unlike every business use here, this is a *public-siting* question (\"does this parcel make sense as a new school\"), not \"is there paying demand\" \u2014 but the same rooftop-count proxy still answers it, just read as \"enough kids, not already served\" instead of \"enough customers.\" Reuses the exact same nearby-schools Overpass query residential_subdivision/multifamily already fetch for their own school-load reads (`compQ:'nwr[\"amenity\"=\"school\"]'`), so no new query shape. Both `preferNear` (rooftop demand) and `preferFar` (competition) resolve automatically via `reverseSearchSignals` (web/logic.js) once `requires.demand`/`requires.competition` are set \u2014 the first land use to combine both signals on a residential-rooftop demand read (every other `preferFar` use's `preferNear` leg reads commercial foot traffic, or a substation/school amenity, not rooftops).\n"
     }
   },
   "actor_uses": {

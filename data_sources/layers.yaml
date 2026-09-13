@@ -913,6 +913,58 @@ land_uses:
       a drive-by-frontage business, same reasoning grocery_store/
       home_improvement_store/fitness_center already established.
 
+  school_site:            # new K-12 school site — a public-siting question, not a business one
+    label: New K-12 School Site
+    requires:
+      # Nearby school-age household base, the same rooftop-count demand read
+      # every use since food_truck_court established, but at a tighter
+      # attendance-zone-scale radius (2.2 km) than residential_subdivision's
+      # citywide 5 km pull — a school draws its own walkable/school-bus
+      # catchment, not a whole metro.
+      demand:      { min_households_drive_time: 1800, drive_time_min: 5 }
+      # A real K-12 campus (building + playing fields) — bigger than any
+      # other use's site-size gate except warehouse_club's 15.
+      parcel:      { min_buildable_acres: 8 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court/ev_charging_hub/.../vet_clinic established, but
+      # against existing *schools* rather than a competing business — the
+      # closer an existing school, the more this site would just duplicate an
+      # attendance zone already served, not open up an underserved one.
+      competition: { min_distance_km_from_nearest: 1.5 }
+    induces: {}
+    impacts:
+      habitat: medium        # a multi-acre campus + fields clears more than a single-story clinic/store
+      land_cover: medium
+      carbon: low
+      traffic: medium         # twice-daily drop-off/pickup traffic
+    notes: >
+      Same established `standardUseVerdict` shape as vet_clinic/urgent_care —
+      a rooftop-headcount demand read at a tighter attendance-zone radius
+      (2.2 km / 1800 rooftops) than residential_subdivision's citywide pull,
+      a site-size gate (min_buildable_acres 8 — a real campus + fields,
+      smaller only than warehouse_club's 15), and the same farther-is-better
+      competition read every use since food_truck_court has established,
+      against existing OSM `amenity=school` points (1.5 km — this site
+      should sit outside an existing school's own walk zone, not duplicate
+      it). The 1800-rooftop need is the same ~0.5-students-per-home proxy
+      documented on residential_subdivision's `induces.education` run
+      backward: an 8-acre K-12 campus (roughly a single combined
+      elementary+middle enrollment, ~900 students) needs about that many
+      nearby households to fill it. Unlike every business use here, this is
+      a *public-siting* question ("does this parcel make sense as a new
+      school"), not "is there paying demand" — but the same rooftop-count
+      proxy still answers it, just read as "enough kids, not already served"
+      instead of "enough customers." Reuses the exact same nearby-schools
+      Overpass query residential_subdivision/multifamily already fetch for
+      their own school-load reads (`compQ:'nwr["amenity"="school"]'`), so no
+      new query shape. Both `preferNear` (rooftop demand) and `preferFar`
+      (competition) resolve automatically via `reverseSearchSignals`
+      (web/logic.js) once `requires.demand`/`requires.competition` are set —
+      the first land use to combine both signals on a residential-rooftop
+      demand read (every other `preferFar` use's `preferNear` leg reads
+      commercial foot traffic, or a substation/school amenity, not
+      rooftops).
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
