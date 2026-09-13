@@ -3684,6 +3684,70 @@ Ground rules for each run:
       classes; and a real simulated map click with `vet_clinic` selected
       rendered the full result panel end-to-end with zero throws.
 
+## Now (high value) — newly added (17)
+- [ ] **23rd land use: New K-12 School Site.** A distinct question from every
+      existing land use: not "is there enough nearby demand for a business,"
+      but "does this vacant/large parcel make sense as a *new school*
+      site" — nearby school-age population big enough to fill it, **not**
+      already well-served by an existing school, and a big-enough flat pad
+      for a building + playing fields. Add `school_site` to
+      `data_sources/layers.yaml`: `requires.demand` reuses the same
+      nearby-rooftop trade-area read `residential_subdivision` already does
+      (rooftops as a population proxy) at a walkable/school-bus-ish radius
+      (try 2–2.5 km, tighter than `residential_subdivision`'s citywide pull —
+      a school draws its own attendance zone, not a whole metro),
+      `requires.parcel.min_buildable_acres: 8` (a real K-12 campus + fields,
+      bigger than any existing use's site-size gate — `warehouse_club`'s 15
+      is the only bigger one), and the **inverted** "farther is better"
+      `requires.competition.min_distance_km_from_nearest: 1.5` against
+      existing OSM `amenity=school` points — this is the exact
+      `preferFar`-eligible shape `food_truck_court`/`ev_charging_hub`
+      already established (see `reverseSearchSignals` in `web/logic.js`), and
+      combined with the rooftop-demand `preferNear` signal, this use gets
+      **both** reverse-search signals for free — a great "🔍 Find candidate
+      sites" test case once wired (nowhere else combines both signals on a
+      residential-count demand read; `food_truck_court`'s demand read is
+      commercial foot traffic, not rooftops). Wire the verdict into
+      `web/explore.html` exactly like `vet_clinic`/`urgent_care`
+      (`USE_DEMAND`/`ALL_USE_KEYS`/`BEST_FIT_USES`/`VERDICT_REFRESH`, a
+      three-leg rooftop+competitor+acreage wait, `maybeRenderSchoolVerdict`
+      built on `standardUseVerdict`). No new Python validator changes should
+      be needed (`competition`/`parcel`/`demand` are all already-registered
+      layer shapes).
+- [ ] **24th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+      covers 23 (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
+      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
+      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/Mecklenburg
+      NC). Pick a populous metro not yet covered with a public
+      ArcGIS-hosted parcel MapServer — worth checking first: Multnomah
+      County OR (Portland), Bernalillo County NM (Albuquerque), Marion
+      County IN (Indianapolis), or Wayne County MI (Detroit). Needs a web
+      search to find the live public parcel REST endpoint and its real field
+      names — same research-then-graceful-partial-coverage approach every
+      prior county here used (not every county exposes acreage/owner/value
+      on its public layer, and that's fine; don't guess a field that isn't
+      there, and don't guess a per-APN deep-link URL shape that might 404).
+      Check the new entry's bbox for overlap with existing entries before
+      appending it to the array — `inBbox` resolves to the *first* match, so
+      ordering matters, not just presence.
+- [ ] **Compare table: highlight the best value per numeric row.** The
+      pinned-parcels Compare table (`renderCompare()` in `web/explore.html`)
+      already has sortable Acreage/Appraised-value columns
+      (`cmpSort`/`CMP_SORT_KEYS`), but scanning for the biggest lot or
+      highest value across 6 columns still means reading every cell. Add a
+      small pure `bestValueIndices(pins, key)` to `web/logic.js` (given the
+      same `sortPins`-shaped pin array and a numeric key, returns the
+      index/indices of the max — plural in case of an exact tie, empty for
+      an all-null column) and use it in `renderCompare()` to add a
+      `.cmpBest` CSS class (bold, or a subtle highlight background) to the
+      winning Acreage and Appraised-value cells. Re-derive on every
+      `renderCompare()` call (including after a sort) so it always reflects
+      the current pin set, not a stale snapshot. Needs a couple of new unit
+      tests (a clear winner, a tie, an all-null column, a single pin) and a
+      headless-Chromium check that pinning 2+ parcels with different
+      acreage/value renders exactly one `.cmpBest` cell per row (or none, for
+      a tie or all-null).
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
