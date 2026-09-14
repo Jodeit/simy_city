@@ -1347,6 +1347,42 @@ const PARCEL_SOURCES=[
     county_state:"Mecklenburg County, NC",
     zoning_note:"unlike TX, NC counties do zone unincorporated land — check Mecklenburg County's unincorporated-area zoning, or the city/town if incorporated",
   },
+  {
+    name:"Bernalillo County Tax Assessor Parcels (Bernalillo County, NM)",
+    // Bernalillo County doesn't publish its own public parcel FeatureServer the
+    // way most counties here do (pdsgismaps.bernco.gov's public layers are
+    // boundaries/zoning, not the assessor roll itself) — the assessor's parcel
+    // geometry + attributes instead ship twice a year to the City of
+    // Albuquerque's own GIS server as a countywide (not city-limited) layer,
+    // same "lean on the neighboring government's copy when the county itself
+    // doesn't publish one" call the Colorado/Denver and MassGIS/Suffolk
+    // entries above already made.
+    urls:["https://coageo.cabq.gov/cabqgeo/rest/services/agis/AddressReport/MapServer/4"],
+    bbox:[-107.05,34.75,-106.05,35.35],
+    // Confirmed fields (via multiple independent search-indexed sources — this
+    // sandbox blocks direct ArcGIS REST introspection like every prior county
+    // here): UPC (the assessor's own parcel id, added to the shared id
+    // candidate list above), SITUSNUM/SITUSSTR/SITUSSTRTY/SITUSDIREC/
+    // SITUSCITY/SITUSSTATE/SITUSZIP plus a combined SITUSADD (added to the
+    // shared address candidate list above), and ACREAGE (alias "Assessed
+    // Acreage" — already matched by the shared acres candidate list, no
+    // change needed there) / CalculatedGISAcres. Owner name and appraised
+    // value field names weren't independently confirmed on this specific
+    // layer, so — same cautious call as Dallas/Fulton/Tarrant/Hennepin here —
+    // left unmapped rather than guessed (OWNER, already in the shared owner
+    // candidate list from other counties, will pick it up for free if that
+    // turns out to be the live field name).
+    // The Assessor's iasWorld Public Access portal
+    // (assessor.bernco.gov/public.access/search/commonsearch.aspx) is a
+    // search form with no documented per-UPC query-string deep link, so —
+    // same cautious call as Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/
+    // Allegheny/Fulton/Salt Lake/Franklin/Clark/Suffolk/Mecklenburg — send
+    // people to the search page instead of guessing a link shape that might 404.
+    record:()=>"https://assessor.bernco.gov/public.access/search/commonsearch.aspx?mode=realprop",
+    source_label:"Bernalillo County Tax Assessor",
+    county_state:"Bernalillo County, NM",
+    zoning_note:"unlike TX, NM counties do zone unincorporated land — check Bernalillo County's zoning ordinance, or the City of Albuquerque's Integrated Development Ordinance if the parcel is inside city limits",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3689,9 +3725,9 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);

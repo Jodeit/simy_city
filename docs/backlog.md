@@ -3714,22 +3714,41 @@ Ground rules for each run:
       and a headless-Chromium run selecting `school_site` and simulating a
       map click confirmed zero page errors on both `explore.html` and
       `index.html`.
-- [ ] **24th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 23 (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
-      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
-      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/Mecklenburg
-      NC). Pick a populous metro not yet covered with a public
-      ArcGIS-hosted parcel MapServer — worth checking first: Multnomah
-      County OR (Portland), Bernalillo County NM (Albuquerque), Marion
-      County IN (Indianapolis), or Wayne County MI (Detroit). Needs a web
-      search to find the live public parcel REST endpoint and its real field
-      names — same research-then-graceful-partial-coverage approach every
-      prior county here used (not every county exposes acreage/owner/value
-      on its public layer, and that's fine; don't guess a field that isn't
-      there, and don't guess a per-APN deep-link URL shape that might 404).
-      Check the new entry's bbox for overlap with existing entries before
-      appending it to the array — `inBbox` resolves to the *first* match, so
-      ordering matters, not just presence.
+- [x] **24th parcel county.** Added Bernalillo County, NM (Albuquerque) to
+      `PARCEL_SOURCES` in `web/explore.html`. Bernalillo County itself doesn't
+      publish a public parcel FeatureServer (its own GIS server's public
+      layers are boundaries/zoning, not the assessor roll) — the assessor's
+      parcel data instead ships twice a year to the City of Albuquerque's own
+      GIS server as a countywide layer (`agis/AddressReport/MapServer/4`),
+      same "lean on the neighboring government's copy" call the Colorado/
+      Denver and MassGIS/Suffolk entries already made. Confirmed via
+      multiple independent search-indexed sources (this sandbox blocks direct
+      ArcGIS REST introspection like every prior county here): `UPC` (parcel
+      id, added to the shared `id` candidate list), `SITUSADD` (combined site
+      address, added to the shared `situs` candidate list), and `ACREAGE`
+      (already matched by the existing shared acres candidate list — no
+      change needed there). Owner name and appraised value field names
+      weren't independently confirmed on this specific layer, so — same
+      graceful partial-field-coverage as Dallas/Fulton/Tarrant/Hennepin —
+      left unmapped rather than guessed (the existing generic `OWNER`
+      candidate will still pick it up for free if that turns out to be the
+      live field name). No documented per-UPC deep link for the assessor's
+      search portal, so `record()` sends people to the search page like
+      every other thin-schema county here. Checked the new bbox
+      (`[-107.05,34.75,-106.05,35.35]`) against all 23 existing entries for
+      overlap before appending — none (nearest is Clark County NV's
+      `[-115.90,-114.04]` longitude range, no overlap). Verified:
+      `python -m pytest -q` (22 passed), `simy validate` (OK), `node --test
+      tests/js` (363 passed, unchanged — this item touches only
+      `PARCEL_SOURCES`/shared field candidate lists, no new pure-function
+      logic), and headless Chromium confirmed both `explore.html` and
+      `index.html` load with zero console/page errors, `inBbox` correctly
+      resolves a downtown-Albuquerque point to the new entry (and not an
+      existing one), and a real simulated map click there renders the
+      existing graceful "couldn't reach the county parcel service" state
+      with zero throws (outbound network to ArcGIS is blocked from this
+      sandbox, so a live end-to-end parcel fetch on the real site is a good
+      human spot-check).
 - [x] **Compare table: highlight the best value per numeric row.** The
       pinned-parcels Compare table (`renderCompare()` in `web/explore.html`)
       already has sortable Acreage/Appraised-value columns
