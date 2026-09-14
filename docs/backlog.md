@@ -3767,6 +3767,29 @@ Ground rules for each run:
       acreage/value renders exactly one `.cmpBest` cell per row (or none, for
       a tie or all-null).
 
+## Now (high value) — newly added (18)
+- [x] **Direct unit tests for `simy_city/standoffs.py`.** The cycle-finding
+      algorithm (`find_standoffs`/`Standoff`) was only exercised indirectly —
+      through `test_registry.py`'s checks against the real, large
+      `layers.yaml` model (the canonical housing<->retail cycle, `present`
+      filtering, cheapest-breaker selection) and `test_cli.py`'s CLI-level
+      checks. Shapes that are easy to get wrong in a graph algorithm but rare
+      or absent in the one real model — a 3+ node cycle, two disjoint cycles
+      discovered from different start nodes without double-counting, a
+      self-loop (a use "enabling" itself, which correctly isn't a standoff),
+      a tie in `breaker_cost`, a missing `breaker_cost` field defaulting to
+      the lowest rank, `label_for`'s fallback to the raw id when a use isn't
+      in `land_uses`/`actor_uses`, and `describe()`'s raw-id vs.
+      labeled-via-`reg` output — had no coverage that would catch a
+      regression before it showed up against the real model. Added
+      `tests/test_standoffs.py` with 17 new tests against small synthetic
+      `Registry` objects built directly (no YAML I/O), same pattern
+      `web/logic.js`'s pure-function unit tests already use for the JS side.
+      Verified: `python -m pytest -q` (39 passed, up from 22), `simy
+      validate` (OK, unchanged model), `python tools/build_model_json.py`
+      (unchanged output), and `node --test tests/js/*.test.mjs` (363 passed,
+      unaffected — this item touches only Python test code).
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
