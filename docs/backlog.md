@@ -3714,22 +3714,34 @@ Ground rules for each run:
       and a headless-Chromium run selecting `school_site` and simulating a
       map click confirmed zero page errors on both `explore.html` and
       `index.html`.
-- [ ] **24th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 23 (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
-      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
-      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/Mecklenburg
-      NC). Pick a populous metro not yet covered with a public
-      ArcGIS-hosted parcel MapServer — worth checking first: Multnomah
-      County OR (Portland), Bernalillo County NM (Albuquerque), Marion
-      County IN (Indianapolis), or Wayne County MI (Detroit). Needs a web
-      search to find the live public parcel REST endpoint and its real field
-      names — same research-then-graceful-partial-coverage approach every
-      prior county here used (not every county exposes acreage/owner/value
-      on its public layer, and that's fine; don't guess a field that isn't
-      there, and don't guess a per-APN deep-link URL shape that might 404).
-      Check the new entry's bbox for overlap with existing entries before
-      appending it to the array — `inBbox` resolves to the *first* match, so
-      ordering matters, not just presence.
+- [x] **24th parcel county.** Added Bernalillo County, NM (Albuquerque) to
+      `PARCEL_SOURCES` in `web/explore.html`, backed by the City of
+      Albuquerque's public "Bernalillo County Tax Assessor Parcels" layer
+      (`coageo.cabq.gov/cabqgeo/rest/services/agis/AddressReport/MapServer/4`).
+      This sandbox blocks direct ArcGIS REST introspection like every prior
+      county here, so the two confirmed fields — `UPC` (parcel ID) and
+      `OWNER` — came from multiple independent search-indexed sources; `OWNER`
+      was already in the shared owner-field candidate list, `UPC` is new and
+      was added there. No confirmed address/acreage/value/land-use fields on
+      this specific layer, so those rows gracefully read blank, same
+      partial-field-coverage as Mecklenburg/Orange CA/King/Cook/Salt
+      Lake/Franklin/Clark here; no documented per-UPC deep-link on the
+      Assessor's public portal either, so — same call as Harris/Bexar/LA —
+      `record()` sends people to the portal's own search page instead of
+      guessing a URL shape that might 404. The bbox
+      (`[-107.19,34.86,-106.15,35.23]`) is the county's own published State
+      Plane (NAD83(HARN) NM Central, EPSG:2903, feet) boundary extent
+      converted to WGS84 via `pyproj` rather than eyeballed, and cross-checked
+      against an independently indexed south-bound coordinate (34.8655) for
+      the same boundary layer; confirmed no overlap with any existing entry's
+      bbox (all elsewhere in the country). Verified: `simy validate` (OK, 32
+      sources), `python -m pytest -q` (22 passed), `node --test tests/js`
+      (363 passed, unchanged — no logic.js changes), and headless Chromium
+      confirms both `explore.html`/`index.html` load with zero console/page
+      errors, plus a simulated `PARCEL_SOURCES`/`inBbox` lookup at an
+      Albuquerque coordinate resolves to this new entry. Outbound network to
+      `coageo.cabq.gov` is blocked from this sandbox, so a live end-to-end
+      parcel fetch on the real site is a good human spot-check.
 - [x] **Compare table: highlight the best value per numeric row.** The
       pinned-parcels Compare table (`renderCompare()` in `web/explore.html`)
       already has sortable Acreage/Appraised-value columns

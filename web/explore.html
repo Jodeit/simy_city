@@ -1347,6 +1347,32 @@ const PARCEL_SOURCES=[
     county_state:"Mecklenburg County, NC",
     zoning_note:"unlike TX, NC counties do zone unincorporated land — check Mecklenburg County's unincorporated-area zoning, or the city/town if incorporated",
   },
+  {
+    name:"City of Albuquerque GIS — Bernalillo County Tax Assessor Parcels (Bernalillo County, NM)",
+    urls:["https://coageo.cabq.gov/cabqgeo/rest/services/agis/AddressReport/MapServer/4"],
+    // County boundary extent converted from the county's own published State
+    // Plane (NAD83(HARN) NM Central, EPSG:2903, feet) bounds to WGS84 — more
+    // precise than an eyeballed rough box, and cross-checked against an
+    // independently indexed south-bound coordinate (34.8655) for the same
+    // boundary layer.
+    bbox:[-107.19,34.86,-106.15,35.23],
+    // Confirmed fields on this public layer, "Bernalillo County Tax Assessor
+    // Parcels" (via multiple independent search-indexed sources — this
+    // sandbox blocks direct ArcGIS REST introspection like every prior county
+    // here): UPC (the parcel ID Bernalillo/Albuquerque use everywhere, added
+    // to the shared id-field candidate list above) and OWNER (already in the
+    // shared owner-field list). No confirmed address/acreage/value/land-use
+    // fields on this specific layer, so those rows gracefully read blank,
+    // same partial-field-coverage as Mecklenburg/Orange CA/King/Cook/Salt
+    // Lake/Franklin/Clark here. No documented per-UPC deep-link on the
+    // Assessor's public portal either, so — same call as Harris/Bexar/LA —
+    // send people to its own search rather than guess a URL shape that might
+    // 404.
+    record:()=>"https://www.bernco.gov/assessor/find-a-property/assessor-property-record-search-portal/",
+    source_label:"City of Albuquerque GIS (Bernalillo County Tax Assessor Parcels)",
+    county_state:"Bernalillo County, NM",
+    zoning_note:"unlike TX, NM counties do zone unincorporated land — check Bernalillo County's unincorporated-area zoning, or the city (e.g. Albuquerque) if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3689,7 +3715,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
