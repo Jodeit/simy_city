@@ -3791,36 +3791,51 @@ Ground rules for each run:
       unaffected — this item touches only Python test code).
 
 ## Now (high value) — newly added (19)
-- [ ] **24th land use: Dollar store (Dollar General/Family Dollar-type).**
-      A small-box discount retailer distinct from every existing use here —
-      `convenience_store` gates on fuel/AADT visibility, `warehouse_club`
-      needs a huge trade area, but a dollar store's whole model is a small
-      footprint chasing a modest, purely-local rooftop count that's too
-      thin to draw a grocery store or warehouse_club, which is exactly the
-      site case worth surfacing. Add a `dollar_store` entry to
-      `data_sources/layers.yaml`: `requires.demand.min_households_drive_time`
-      at a looser radius than `convenience_store`'s 3 km (dollar stores
-      chase rural/underserved trade areas, so try ~8 km drive-time, tuned
-      lower on the headcount threshold than `grocery_store`'s — it's built
-      to work where a grocery store can't), `requires.parcel.
-      min_buildable_acres` around 0.8–1.0 (small standalone box + surface
+- [x] **24th land use: Dollar store (Dollar General/Family Dollar-type).**
+      Added a `dollar_store` entry to `data_sources/layers.yaml`: a wide-but-
+      thin rooftop trade area (`demand.min_households_drive_time: 4000` at an
+      8 km/12-min radius — looser than `convenience_store`'s 3 km, but tuned
+      to a lower headcount threshold than both `convenience_store`'s 6000 and
+      `grocery_store`'s 12000, since the whole point of a dollar store is
+      working off a thinner, more spread-out rooftop count than either),
+      `parcel.min_buildable_acres: 0.9` (a small standalone box + surface
       lot, in `convenience_store`/`car_wash`'s range), and the established
-      inverted `requires.competition.min_distance_km_from_nearest` gate
-      (~1.5 km — tighter competitor spacing than `grocery_store`'s, since
-      chains like Dollar General/Family Dollar/Dollar Tree deliberately
-      cluster closer together than full grocers do). No `transportation`
-      AADT gate needed — unlike `convenience_store`, visibility from a
-      passing arterial isn't the draw here, foot/short-drive convenience is.
-      OSM tags this as `shop=variety_store` primarily, with `shop=discount`
-      as a secondary/fallback tag to OR into the same live competitor/site
-      query — check both against Overpass before committing to one. Wire a
-      `maybeRenderDollarVerdict` in `web/explore.html` via the shared
-      `standardUseVerdict` helper (same demand+site-size+competitor-distance
-      shape most non-AADT-gated uses here already use). Verify to the
-      established bar: `simy validate`, `python -m pytest -q`, `node --test
-      tests/js/*.test.mjs`, headless-Chromium zero-console-errors load, and
-      driving the new verdict function directly through its PASS/SHORT/
-      missing-data states.
+      inverted `competition.min_distance_km_from_nearest: 1.5` gate (tighter
+      than `grocery_store`'s 2.0 — Dollar General/Family Dollar/Dollar Tree
+      deliberately cluster closer together than full grocers do). No
+      `transportation` AADT gate — unlike `convenience_store`, visibility
+      from a passing arterial isn't the draw, short-drive errand convenience
+      is. `simy_city/registry.py`'s validator only checks that `requires`
+      keys name a known layer id, so this needed no Python validator
+      changes — confirmed `simy validate` passes with 24 land uses and no
+      new errors. Wired up the full 15-touch-point pattern in
+      `web/explore.html` that every prior no-AADT `standardUseVerdict` use
+      (`grocery_store`/`home_improvement_store`/`fitness_center`/
+      `vet_clinic`) already established: `ALL_USE_KEYS`/`USE_DEMAND` entry
+      (OSM `shop=variety_store` primary tag, `shop=discount` OR'd in as a
+      secondary/fallback tag, same messy-tagging pattern `convenience_store`/
+      `home_improvement_store`/`bank_branch` already use), `DS_MIN_ACRES`/
+      `DS_MIN_COMPETITOR_KM` constants + `dsState`, a `BEST_FIT_USES` entry,
+      state reset on mode/parcel switch, the "Live area read" title/hover-text
+      ternaries, the `runDemand` rooftop/competitor-distance/error fan-out
+      branches, `maybeRenderDSVerdict` (via the shared `standardUseVerdict`
+      helper, no new gate-shape work needed), the acreage-leg wiring, and the
+      `VERDICT_REFRESH` dict entry for area-unit toggling. Verified: `simy
+      validate` (OK, 24 land uses), `python -m pytest -q` (39 passed), `node
+      --test tests/js/*.test.mjs` (363 passed, no JS logic changed so no new
+      test cases needed — `standardUseVerdict` itself is already covered),
+      headless Chromium confirms both `web/explore.html` and `web/index.html`
+      load with zero genuine console/page errors, driving
+      `maybeRenderDSVerdict` directly through PASS / SHORT-on-demand /
+      SHORT-on-site-size / SHORT-on-competitor-too-close /
+      no-competitor-in-range (passes) / acreage-unavailable / no-rooftop-read
+      / wrong-use-selected states all produced correct verdict text and CSS
+      classes with zero throws, and a real end-to-end simulated map click
+      with `dollar_store` selected (via `setMode`+`selectUse`+`analyze`)
+      rendered the full result panel without throwing. Outbound network to
+      Overpass is blocked from this sandbox, so live confirmation of the
+      `shop=variety_store`/`shop=discount` tag split on the real site is a
+      good human spot-check.
 
 - [ ] **25th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 24: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
