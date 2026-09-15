@@ -965,6 +965,51 @@ land_uses:
       commercial foot traffic, or a substation/school amenity, not
       rooftops).
 
+  dollar_store:           # small-box discount retailer (Dollar General/Family Dollar-type)
+    label: Dollar Store (Dollar General/Family Dollar-type)
+    requires:
+      # A much looser trade-area radius than convenience_store's 3 km (8 km —
+      # dollar stores chase rural/underserved trade areas a short drive
+      # apart, not a walk-in crowd), but tuned to a lower headcount threshold
+      # than either convenience_store's 6000 or grocery_store's 12000 — a
+      # dollar store's whole model is working where a grocery store or
+      # warehouse_club can't, off a thin, spread-out rooftop count.
+      demand:      { min_households_drive_time: 4000, drive_time_min: 12 }
+      # A small standalone box + surface lot, in convenience_store/car_wash's
+      # range — well under grocery_store's 5.0-acre mid-box footprint.
+      parcel:      { min_buildable_acres: 0.9 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court/.../vet_clinic/school_site established, but tighter
+      # than grocery_store's 2.0 km — Dollar General/Family Dollar/Dollar
+      # Tree deliberately cluster closer together than full grocers do.
+      competition: { min_distance_km_from_nearest: 1.5 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low          # a small standalone box + surface lot, well under a mid-box footprint
+      carbon: low
+      traffic: low
+    notes: >
+      A rooftop-headcount demand read at a wide-but-thin trade area (8 km),
+      min_households_drive_time (4000, lower than convenience_store's 6000
+      and grocery_store's 12000 — the whole point of a dollar store is
+      working off a thinner, more spread-out rooftop count than either),
+      min_buildable_acres (0.9, in convenience_store/car_wash's range), and
+      min_distance_km_from_nearest (1.5, tighter than grocery_store's 2.0 —
+      dollar-store chains cluster closer together than full grocers) are
+      first-draft heuristics — refine freely, same as every other threshold
+      here. No `transportation` AADT gate, unlike convenience_store — a
+      dollar store's draw is short-drive/errand convenience, not visibility
+      from a passing arterial. Wired up via `standardUseVerdict` directly
+      (same demand+site-size+competitor-distance shape grocery_store/
+      home_improvement_store/fitness_center/vet_clinic already established),
+      no new gate-shape work needed. OSM tags this with two live tags —
+      `shop=variety_store` primarily, with `shop=discount` as a secondary/
+      fallback tag OR'd into the same live competitor/site query — same
+      messy-tagging caveat urgent_care/child_care_center/car_wash/pharmacy/
+      convenience_store/home_improvement_store/bank_branch already
+      documented.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
