@@ -3845,7 +3845,7 @@ Ground rules for each run:
       in-sandbox — note that in the write-up, same as every prior county
       addition here).
 
-- [ ] **Real keyboard shortcuts for pin/compare, not just dialog nav.** The
+- [x] **Real keyboard shortcuts for pin/compare, not just dialog nav.** The
       existing `helpModal` (`web/explore.html`, `wireHelp()`) only documents
       passive navigation (Tab/Enter/Space/Esc/`?`) — there's no shortcut for
       the two most repeated actions in a comparison workflow: pinning the

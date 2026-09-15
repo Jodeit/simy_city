@@ -13,7 +13,7 @@ const {
   evaluate, isContested, findStandoffs, cheapest,
   countOf, haversine, inBbox, pick, blendedDemand, seniorDemandRead,
   parseFccBlockFips, parseAcsTractRow, sampleTradeAreaPoints, dedupeTracts,
-  aggregateAcsTracts, makeSessionCache, wrapText, debounce,
+  aggregateAcsTracts, makeSessionCache, wrapText, debounce, shouldIgnoreGlobalShortcut,
   encodeHash, decodeHash, directionsUrl, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
@@ -863,6 +863,31 @@ test("debounce: cancel() drops a pending trailing call", async () => {
   d.cancel();
   await new Promise((r) => setTimeout(r, 30));
   assert.deepEqual(calls, []);
+});
+
+// ---- shouldIgnoreGlobalShortcut (global keydown guard for ?/p/c) ----
+
+test("shouldIgnoreGlobalShortcut: ignores input/textarea/select targets", () => {
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "INPUT" }), true);
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "TEXTAREA" }), true);
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "SELECT" }), true);
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "input" }), true); // tagName casing shouldn't matter
+});
+
+test("shouldIgnoreGlobalShortcut: ignores contenteditable targets regardless of tag", () => {
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "DIV", isContentEditable: true }), true);
+});
+
+test("shouldIgnoreGlobalShortcut: does not ignore ordinary targets", () => {
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "BODY" }), false);
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "BUTTON" }), false);
+  assert.equal(shouldIgnoreGlobalShortcut({ tagName: "A" }), false);
+});
+
+test("shouldIgnoreGlobalShortcut: tolerates a missing/malformed target", () => {
+  assert.equal(shouldIgnoreGlobalShortcut(null), false);
+  assert.equal(shouldIgnoreGlobalShortcut(undefined), false);
+  assert.equal(shouldIgnoreGlobalShortcut({}), false);
 });
 
 // ---- encodeHash / decodeHash (shareable permalink) ----

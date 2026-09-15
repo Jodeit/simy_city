@@ -414,6 +414,8 @@
       <li><kbd>Tab</kbd> move between path cards, mode/use toggles, and buttons</li>
       <li><kbd>Enter</kbd> / <kbd>Space</kbd> activate the focused path card or toggle</li>
       <li><kbd>Esc</kbd> close the open dialog (this one, Compare, your data, or backup/restore)</li>
+      <li><kbd>p</kbd> pin the current parcel to Compare</li>
+      <li><kbd>c</kbd> open Compare</li>
       <li><kbd>?</kbd> open this help</li>
     </ul>
     <div class="actions">
@@ -4505,19 +4507,33 @@ function wireCTA(){
 
 // "?" help overlay — reuses the openModal()/closeModal() focus-trap pair
 // every other modal (Compare, bring-your-own-data) already uses, so Escape
-// and Tab-trapping come for free.
+// and Tab-trapping come for free. Also wires "p" (pin the current parcel —
+// same addPin() the "📌 Pin to compare" button calls) and "c" (open Compare
+// — done by clicking #compareOpen rather than duplicating its
+// renderCompare()+openModal() handler) as the two most-repeated actions in a
+// comparison workflow. All three share one guard (shouldIgnoreGlobalShortcut,
+// web/logic.js): skip while a modal is open or focus is in a text field.
 function wireHelp(){
   const modal=document.getElementById('helpModal');
   document.getElementById('helpOpen').onclick=e=>{e.preventDefault();openModal(modal);};
   document.getElementById('helpCancel').onclick=()=>closeModal(modal);
   modal.onclick=e=>{if(e.target===modal)closeModal(modal);};
   document.addEventListener("keydown",e=>{
-    if(e.key!=="?"||e.ctrlKey||e.metaKey||e.altKey)return;
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
     if(document.querySelector(".modal.open"))return;
-    const tag=(e.target.tagName||"").toLowerCase();
-    if(tag==="input"||tag==="textarea"||tag==="select"||e.target.isContentEditable)return;
-    e.preventDefault();
-    openModal(modal);
+    if(shouldIgnoreGlobalShortcut(e.target))return;
+    if(e.key==="?"){
+      e.preventDefault();
+      openModal(modal);
+    }else if(e.key==="p"){
+      e.preventDefault();
+      const r=addPin();
+      const m=document.getElementById("pinMsg");
+      if(m){m.textContent=(r.ok?"✓ ":"⚠ ")+r.msg; setTimeout(()=>m.textContent="",2500);}
+    }else if(e.key==="c"){
+      e.preventDefault();
+      document.getElementById("compareOpen").click();
+    }
   });
 }
 

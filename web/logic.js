@@ -395,6 +395,20 @@ function debounce(fn,wait){
   return debounced;
 }
 
+/* ---- global keyboard-shortcut guard ----
+   Pure predicate for "should a document-level keydown listener ignore this
+   event because the user is typing somewhere?" — factored out of the inline
+   check wireHelp()'s `?` listener used to duplicate, now shared by every
+   global shortcut (help, pin, compare) so they all skip the same set of
+   focusable text targets rather than drifting out of sync. Takes the event
+   target directly (not the event) so a test can pass a plain {tagName}/
+   {isContentEditable} object without constructing a real KeyboardEvent. */
+function shouldIgnoreGlobalShortcut(target){
+  if(!target)return false;
+  const tag=String(target.tagName||"").toLowerCase();
+  return tag==="input"||tag==="textarea"||tag==="select"||!!target.isContentEditable;
+}
+
 /* ---- shareable permalink (URL hash) encode/decode ----
    Pure encode/decode so a "make the case" link can carry the clicked point
    (and, in Test-a-use mode, the selected use) in the URL hash: written on
@@ -1302,5 +1316,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
 }
