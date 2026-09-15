@@ -3790,6 +3790,91 @@ Ground rules for each run:
       (unchanged output), and `node --test tests/js/*.test.mjs` (363 passed,
       unaffected — this item touches only Python test code).
 
+## Now (high value) — newly added (19)
+- [ ] **24th land use: Dollar store (Dollar General/Family Dollar-type).**
+      A small-box discount retailer distinct from every existing use here —
+      `convenience_store` gates on fuel/AADT visibility, `warehouse_club`
+      needs a huge trade area, but a dollar store's whole model is a small
+      footprint chasing a modest, purely-local rooftop count that's too
+      thin to draw a grocery store or warehouse_club, which is exactly the
+      site case worth surfacing. Add a `dollar_store` entry to
+      `data_sources/layers.yaml`: `requires.demand.min_households_drive_time`
+      at a looser radius than `convenience_store`'s 3 km (dollar stores
+      chase rural/underserved trade areas, so try ~8 km drive-time, tuned
+      lower on the headcount threshold than `grocery_store`'s — it's built
+      to work where a grocery store can't), `requires.parcel.
+      min_buildable_acres` around 0.8–1.0 (small standalone box + surface
+      lot, in `convenience_store`/`car_wash`'s range), and the established
+      inverted `requires.competition.min_distance_km_from_nearest` gate
+      (~1.5 km — tighter competitor spacing than `grocery_store`'s, since
+      chains like Dollar General/Family Dollar/Dollar Tree deliberately
+      cluster closer together than full grocers do). No `transportation`
+      AADT gate needed — unlike `convenience_store`, visibility from a
+      passing arterial isn't the draw here, foot/short-drive convenience is.
+      OSM tags this as `shop=variety_store` primarily, with `shop=discount`
+      as a secondary/fallback tag to OR into the same live competitor/site
+      query — check both against Overpass before committing to one. Wire a
+      `maybeRenderDollarVerdict` in `web/explore.html` via the shared
+      `standardUseVerdict` helper (same demand+site-size+competitor-distance
+      shape most non-AADT-gated uses here already use). Verify to the
+      established bar: `simy validate`, `python -m pytest -q`, `node --test
+      tests/js/*.test.mjs`, headless-Chromium zero-console-errors load, and
+      driving the new verdict function directly through its PASS/SHORT/
+      missing-data states.
+
+- [ ] **25th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+      covers 24: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
+      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
+      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/Mecklenburg/
+      Bernalillo. Pick a populous metro not yet covered with a public
+      ArcGIS-hosted parcel MapServer — worth checking first: Multnomah
+      County OR (Portland — suggested alongside Bernalillo previously but
+      not yet built), Marion County IN (Indianapolis), Wayne County MI
+      (Detroit), or Jefferson County KY (Louisville). Needs a web search to
+      find the live public parcel REST endpoint and its real field names —
+      same research-then-graceful-partial-coverage approach every prior
+      county here used (not every county exposes acreage/owner/value on its
+      public layer, and that's fine; don't guess a field that isn't there,
+      and don't guess a per-APN deep-link URL shape that might 404). Check
+      the new entry's bbox for overlap with existing entries before
+      appending it to the array (`inBbox` resolves to the *first* match, so
+      a silent overlap would shadow an existing county). Verify: `simy
+      validate`, `python -m pytest -q`, `node --test tests/js/*.test.mjs`,
+      and a headless-Chromium load of `web/explore.html` with zero console
+      errors (the new array entry is static config, no live fetch possible
+      in-sandbox — note that in the write-up, same as every prior county
+      addition here).
+
+- [ ] **Real keyboard shortcuts for pin/compare, not just dialog nav.** The
+      existing `helpModal` (`web/explore.html`, `wireHelp()`) only documents
+      passive navigation (Tab/Enter/Space/Esc/`?`) — there's no shortcut for
+      the two most repeated actions in a comparison workflow: pinning the
+      currently-analyzed parcel and opening the Compare list. Add a global
+      `keydown` listener (same "skip when a modal is open or focus is in an
+      input/textarea/select/contenteditable" guard `wireHelp()`'s `?`
+      listener already establishes — reuse that guard rather than
+      duplicating it) for `p` (calls the same `addPin()` the existing "📌
+      Pin to compare" button calls, and shows the same inline `pinMsg`
+      feedback) and `c` (opens the Compare modal exactly like clicking
+      `#compareOpen` does — reuse its `onclick` handler rather than
+      duplicating `renderCompare()`+`openModal()` calls). Both are no-ops
+      with a clear message when there's nothing to pin (no `lastParcelSummary`
+      yet, mirroring `addPin()`'s own existing guard). Update the `kbdList`
+      in `helpModal` to document both new shortcuts. Add unit coverage in
+      `tests/js/` for the shared guard-condition helper if one gets
+      extracted (e.g. `shouldIgnoreGlobalShortcut(target)` in `web/logic.js`,
+      pure and testable, mirroring the inline check `wireHelp()` already
+      does) — that's the one piece of this item that's cleanly a pure
+      function; the two key bindings themselves are DOM wiring, same as the
+      rest of `wireHelp()`, and get covered by the headless-Chromium
+      zero-console-errors load plus a manual keydown-dispatch smoke check
+      (fire a synthetic `p` keydown after `analyze()` resolves, confirm
+      `pins.length` increments) rather than a Python/node unit test. Verify:
+      `python -m pytest -q`, `simy validate`, `node --test
+      tests/js/*.test.mjs`, and headless Chromium confirms both pages still
+      load with zero console/page errors and the synthetic keydown checks
+      above pass.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
