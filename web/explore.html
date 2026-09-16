@@ -1403,6 +1403,36 @@ const PARCEL_SOURCES=[
     county_state:"Bernalillo County, NM",
     zoning_note:"unlike TX, NM counties do zone unincorporated land — check Bernalillo County's zoning ordinance, or the City of Albuquerque's Integrated Development Ordinance if the parcel is inside city limits",
   },
+  {
+    name:"Multnomah County Assessment, Recording & Taxation (Multnomah County, OR)",
+    // The county's own public taxlot layer, served from its DART (Division of
+    // Assessment, Recording & Taxation) ArcGIS instance — confirmed live via
+    // multiple independent search-indexed sources (this sandbox blocks direct
+    // ArcGIS REST introspection like every prior county here, and also blocks
+    // www3.multco.us/oregonmetro.gov outright, so this couldn't be double
+    // -checked live this run).
+    urls:["https://www3.multco.us/arcgispublic/rest/services/DART/Taxlots_WebMerc/MapServer/0"],
+    // Covers Portland + the whole county east to the Bull Run/Larch Mountain
+    // area and north to Sauvie Island — padded rough rectangle, same "loose
+    // pre-filter before the real point query" approach every PARCEL_SOURCES
+    // bbox here takes. No overlap with any other entry's bbox (nearest is
+    // King County WA, a full state to the north).
+    bbox:[-122.87,45.32,-121.88,45.78],
+    // Confirmed fields on this layer (via multiple independent search-indexed
+    // sources): MAPTAXLOT (the county's taxlot id) and PROPID (the assessor's
+    // "R" account number, also what portlandmaps.com's per-property deep link
+    // takes). OWNERTYPE/ADDR1/ADDR2/CITY/STATE/NAME/NAME2 also exist on the
+    // layer but which of those is situs address vs. owner mailing address
+    // wasn't independently confirmed — same cautious call as
+    // Dallas/Fulton/Tarrant/Hennepin/Bernalillo here: left unmapped rather
+    // than guessed, so owner/address/acreage/value just render as absent
+    // instead of risking a wrong label.
+    record:(a)=>{const id=pick(a,["PROPID","MAPTAXLOT"]);
+      return id?`https://www.portlandmaps.com/detail/property/${encodeURIComponent(id)}_did/`:"https://www.portlandmaps.com/";},
+    source_label:"Multnomah County Assessment, Recording & Taxation",
+    county_state:"Multnomah County, OR",
+    zoning_note:"unlike TX, OR counties do zone unincorporated land — check Multnomah County's unincorporated-area zoning, or the City of Portland/Gresham/Troutdale zoning code if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3787,7 +3817,7 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC","PROPID","MAPTAXLOT"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);

@@ -3830,28 +3830,37 @@ Ground rules for each run:
       its PASS, SHORT, and missing-data (`acres:null`/`compErr:true`) states
       plus the no-rooftop-read hidden state — all four read back correctly.
 
-- [ ] **25th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 24: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/
-      Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/Franklin/
-      Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/Mecklenburg/
-      Bernalillo. Pick a populous metro not yet covered with a public
-      ArcGIS-hosted parcel MapServer — worth checking first: Multnomah
-      County OR (Portland — suggested alongside Bernalillo previously but
-      not yet built), Marion County IN (Indianapolis), Wayne County MI
-      (Detroit), or Jefferson County KY (Louisville). Needs a web search to
-      find the live public parcel REST endpoint and its real field names —
-      same research-then-graceful-partial-coverage approach every prior
-      county here used (not every county exposes acreage/owner/value on its
-      public layer, and that's fine; don't guess a field that isn't there,
-      and don't guess a per-APN deep-link URL shape that might 404). Check
-      the new entry's bbox for overlap with existing entries before
-      appending it to the array (`inBbox` resolves to the *first* match, so
-      a silent overlap would shadow an existing county). Verify: `simy
-      validate`, `python -m pytest -q`, `node --test tests/js/*.test.mjs`,
-      and a headless-Chromium load of `web/explore.html` with zero console
-      errors (the new array entry is static config, no live fetch possible
-      in-sandbox — note that in the write-up, same as every prior county
-      addition here).
+- [x] **25th parcel county: Multnomah County, OR (Portland).** Added a
+      `PARCEL_SOURCES` entry pointing at the county's own DART (Division of
+      Assessment, Recording & Taxation) public taxlot layer —
+      `https://www3.multco.us/arcgispublic/rest/services/DART/Taxlots_WebMerc/MapServer/0`
+      — confirmed live via multiple independent search-indexed sources (this
+      sandbox blocks direct ArcGIS REST introspection *and* outright blocks
+      `www3.multco.us`/`oregonmetro.gov`, so — same caveat as every prior
+      county added without live network access — this couldn't be
+      double-checked live this run). Confirmed fields: `MAPTAXLOT` (taxlot
+      id) and `PROPID` (the assessor's "R" account number), both added to
+      the shared parcel-id candidate list and used for the record deep link
+      (`portlandmaps.com/detail/property/<PROPID>_did/`, a real, confirmed
+      URL shape). `OWNERTYPE`/`ADDR1`/`ADDR2`/`CITY`/`STATE`/`NAME`/`NAME2`
+      also exist on the layer but which is situs address vs. owner mailing
+      address wasn't independently confirmed, so — same cautious call as
+      Dallas/Fulton/Tarrant/Hennepin/Bernalillo — left unmapped rather than
+      guessed; owner/address/acreage/value just render as absent instead of
+      risking a wrong label. bbox
+      `[-122.87,45.32,-121.88,45.78]` (Portland east through Bull
+      Run/Larch Mountain, north to Sauvie Island) checked for overlap
+      against all 24 existing entries — none (nearest is King County WA, a
+      full state north). Verified: `python tools/build_model_json.py` (still
+      24 land uses, 32 sources — this item touches no model data), `python
+      -m pytest -q` (39 passed), `simy validate` (OK), `node --test
+      tests/js/*.test.mjs` (367 passed, unaffected), a headless-Chromium
+      load of both `web/explore.html` and `web/index.html` with zero
+      console/page errors, and a synthetic in-page check confirming
+      `PARCEL_SOURCES.length` is 25, a downtown-Portland coordinate resolves
+      into the new entry's bbox (an Austin, TX coordinate correctly doesn't),
+      and `record()` builds the right portlandmaps.com URL from a `PROPID`
+      and falls back to the bare site when the id is missing.
 
 - [x] **Real keyboard shortcuts for pin/compare, not just dialog nav.** The
       existing `helpModal` (`web/explore.html`, `wireHelp()`) only documents
