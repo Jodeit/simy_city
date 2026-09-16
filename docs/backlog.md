@@ -3791,36 +3791,44 @@ Ground rules for each run:
       unaffected — this item touches only Python test code).
 
 ## Now (high value) — newly added (19)
-- [ ] **24th land use: Dollar store (Dollar General/Family Dollar-type).**
+- [x] **24th land use: Dollar store (Dollar General/Family Dollar-type).**
       A small-box discount retailer distinct from every existing use here —
       `convenience_store` gates on fuel/AADT visibility, `warehouse_club`
       needs a huge trade area, but a dollar store's whole model is a small
       footprint chasing a modest, purely-local rooftop count that's too
-      thin to draw a grocery store or warehouse_club, which is exactly the
-      site case worth surfacing. Add a `dollar_store` entry to
-      `data_sources/layers.yaml`: `requires.demand.min_households_drive_time`
-      at a looser radius than `convenience_store`'s 3 km (dollar stores
-      chase rural/underserved trade areas, so try ~8 km drive-time, tuned
-      lower on the headcount threshold than `grocery_store`'s — it's built
-      to work where a grocery store can't), `requires.parcel.
-      min_buildable_acres` around 0.8–1.0 (small standalone box + surface
-      lot, in `convenience_store`/`car_wash`'s range), and the established
-      inverted `requires.competition.min_distance_km_from_nearest` gate
-      (~1.5 km — tighter competitor spacing than `grocery_store`'s, since
-      chains like Dollar General/Family Dollar/Dollar Tree deliberately
-      cluster closer together than full grocers do). No `transportation`
-      AADT gate needed — unlike `convenience_store`, visibility from a
-      passing arterial isn't the draw here, foot/short-drive convenience is.
-      OSM tags this as `shop=variety_store` primarily, with `shop=discount`
-      as a secondary/fallback tag to OR into the same live competitor/site
-      query — check both against Overpass before committing to one. Wire a
-      `maybeRenderDollarVerdict` in `web/explore.html` via the shared
+      thin to draw a grocery store or warehouse_club. Added a `dollar_store`
+      entry to `data_sources/layers.yaml`: `requires.demand.
+      min_households_drive_time` (5000 rooftops within an 8 km drive-time
+      radius — looser and lower than `grocery_store`'s 12000/12 km, built to
+      work where a grocery store can't), `requires.parcel.
+      min_buildable_acres` (0.9, in `convenience_store`/`car_wash`'s range),
+      and the established inverted `requires.competition.
+      min_distance_km_from_nearest` gate (1.5 km — tighter than
+      `grocery_store`'s 2.0, since chains like Dollar General/Family
+      Dollar/Dollar Tree deliberately cluster closer together than full
+      grocers do). No `transportation` AADT gate — same reasoning
+      `grocery_store`/`vet_clinic`/`fitness_center` already established.
+      OSM tags this as `shop=variety_store` (primary) with `shop=discount`
+      as a secondary/fallback tag, OR'd into the same live competitor/site
+      query (no live Overpass reachable from this sandbox to double-check
+      real-world tag prevalence — documented as a caveat, same as every
+      prior land use added here without live network access). Wired
+      `maybeRenderDSVerdict` in `web/explore.html` via the shared
       `standardUseVerdict` helper (same demand+site-size+competitor-distance
-      shape most non-AADT-gated uses here already use). Verify to the
-      established bar: `simy validate`, `python -m pytest -q`, `node --test
-      tests/js/*.test.mjs`, headless-Chromium zero-console-errors load, and
-      driving the new verdict function directly through its PASS/SHORT/
-      missing-data states.
+      shape `grocery_store`/`vet_clinic` already use), plus the full
+      `dsState`/`DS_MIN_ACRES`/`DS_MIN_COMPETITOR_KM` wiring (state
+      reset on pin move, rooftop/competitor/acreage legs, `BEST_FIT_USES`,
+      `VERDICT_REFRESH`, the "Live area read" header/description text).
+      Verified: `python tools/build_model_json.py` (24 land uses, 32
+      sources), `python -m pytest -q` (39 passed), `simy validate` (OK),
+      `node --test tests/js/*.test.mjs` (367 passed, unaffected — this item
+      touches no shared `web/logic.js` code), a headless-Chromium load of
+      both `web/explore.html` and `web/index.html` with zero genuine
+      console/page errors (only the expected sandbox-network `net::ERR_*`
+      resource-load failures for real tile/API servers), and a synthetic
+      Playwright smoke test driving `maybeRenderDSVerdict` directly through
+      its PASS, SHORT, and missing-data (`acres:null`/`compErr:true`) states
+      plus the no-rooftop-read hidden state — all four read back correctly.
 
 - [ ] **25th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 24: Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/Cook/

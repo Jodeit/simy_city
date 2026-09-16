@@ -965,6 +965,46 @@ land_uses:
       commercial foot traffic, or a substation/school amenity, not
       rooftops).
 
+  dollar_store:           # small-box discount retailer (Dollar General/Family Dollar-type)
+    label: Dollar Store
+    requires:
+      # A dollar store chases a modest, purely-local rooftop count over a
+      # wider drive-time radius than convenience_store's 3 km — it's built
+      # to work in rural/underserved trade areas too thin to draw a grocery
+      # store or warehouse_club, not to out-draw them in a dense one.
+      demand:      { min_households_drive_time: 5000, drive_time_min: 8 }
+      # A small standalone box + surface lot, in convenience_store/
+      # car_wash's site-size range — far smaller than grocery_store's 5.0.
+      parcel:      { min_buildable_acres: 0.9 }
+      # Same inverted "farther is better" competition read every use since
+      # food_truck_court has established, but tighter than grocery_store's
+      # 2.0 km — chains like Dollar General/Family Dollar/Dollar Tree
+      # deliberately cluster closer together than full grocers do.
+      competition: { min_distance_km_from_nearest: 1.5 }
+    induces: {}
+    impacts:
+      habitat: low
+      land_cover: low         # a small standalone box + surface lot, well under a grocery-anchor footprint
+      carbon: low
+      traffic: low
+    notes: >
+      Same established `standardUseVerdict` shape as grocery_store/
+      vet_clinic — a rooftop-headcount demand read (5000 rooftops within an
+      8 km drive-time radius, looser and lower than grocery_store's 12000/
+      12 km — a dollar store's whole model is chasing a thinner, more
+      spread-out rooftop base than a full grocer needs), a site-size gate
+      (min_buildable_acres 0.9, in convenience_store's 0.75/car_wash's 1.0
+      range), and the same farther-is-better competition read (1.5 km,
+      tighter than grocery_store's 2.0 — dollar-store chains cluster closer
+      together than full grocers do). No AADT gate, unlike
+      convenience_store — a dollar store's draw is foot/short-drive
+      convenience, not visibility from a passing arterial, same reasoning
+      grocery_store/vet_clinic/fitness_center already established. OSM tags
+      this with two live tags — `shop=variety_store` (primary) and
+      `shop=discount` (secondary/fallback) — both queried with an
+      OR-fallback for the live competitor/site read, same messy-tagging
+      caveat convenience_store's fuel+shop pairing already documented.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

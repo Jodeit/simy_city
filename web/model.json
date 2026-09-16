@@ -1212,6 +1212,29 @@
         "traffic": "medium"
       },
       "notes": "Same established `standardUseVerdict` shape as vet_clinic/urgent_care \u2014 a rooftop-headcount demand read at a tighter attendance-zone radius (2.2 km / 1800 rooftops) than residential_subdivision's citywide pull, a site-size gate (min_buildable_acres 8 \u2014 a real campus + fields, smaller only than warehouse_club's 15), and the same farther-is-better competition read every use since food_truck_court has established, against existing OSM `amenity=school` points (1.5 km \u2014 this site should sit outside an existing school's own walk zone, not duplicate it). The 1800-rooftop need is the same ~0.5-students-per-home proxy documented on residential_subdivision's `induces.education` run backward: an 8-acre K-12 campus (roughly a single combined elementary+middle enrollment, ~900 students) needs about that many nearby households to fill it. Unlike every business use here, this is a *public-siting* question (\"does this parcel make sense as a new school\"), not \"is there paying demand\" \u2014 but the same rooftop-count proxy still answers it, just read as \"enough kids, not already served\" instead of \"enough customers.\" Reuses the exact same nearby-schools Overpass query residential_subdivision/multifamily already fetch for their own school-load reads (`compQ:'nwr[\"amenity\"=\"school\"]'`), so no new query shape. Both `preferNear` (rooftop demand) and `preferFar` (competition) resolve automatically via `reverseSearchSignals` (web/logic.js) once `requires.demand`/`requires.competition` are set \u2014 the first land use to combine both signals on a residential-rooftop demand read (every other `preferFar` use's `preferNear` leg reads commercial foot traffic, or a substation/school amenity, not rooftops).\n"
+    },
+    "dollar_store": {
+      "label": "Dollar Store",
+      "requires": {
+        "demand": {
+          "min_households_drive_time": 5000,
+          "drive_time_min": 8
+        },
+        "parcel": {
+          "min_buildable_acres": 0.9
+        },
+        "competition": {
+          "min_distance_km_from_nearest": 1.5
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "low",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "Same established `standardUseVerdict` shape as grocery_store/ vet_clinic \u2014 a rooftop-headcount demand read (5000 rooftops within an 8 km drive-time radius, looser and lower than grocery_store's 12000/ 12 km \u2014 a dollar store's whole model is chasing a thinner, more spread-out rooftop base than a full grocer needs), a site-size gate (min_buildable_acres 0.9, in convenience_store's 0.75/car_wash's 1.0 range), and the same farther-is-better competition read (1.5 km, tighter than grocery_store's 2.0 \u2014 dollar-store chains cluster closer together than full grocers do). No AADT gate, unlike convenience_store \u2014 a dollar store's draw is foot/short-drive convenience, not visibility from a passing arterial, same reasoning grocery_store/vet_clinic/fitness_center already established. OSM tags this with two live tags \u2014 `shop=variety_store` (primary) and `shop=discount` (secondary/fallback) \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat convenience_store's fuel+shop pairing already documented.\n"
     }
   },
   "actor_uses": {
