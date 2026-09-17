@@ -3892,6 +3892,92 @@ Ground rules for each run:
       load with zero console/page errors and the synthetic keydown checks
       above pass.
 
+## Now (high value) — newly added (20)
+- [ ] **25th land use: utility-scale solar farm.** Every land use here so far
+      is demand-driven — it wants to be *near* rooftops (retail/services) or
+      near a specific point amenity (a substation, a school). A solar farm
+      inverts that: it wants cheap, flat, mostly-vacant acreage (tens of
+      acres, well beyond `warehouse_club`'s 15) with a nearby grid
+      interconnection (reuse `data_center`'s substation-distance read —
+      `requires.power` / the existing live substation Overpass query — but
+      tighter, since unlike a data center a solar farm can't eat a long
+      interconnection cost) and *doesn't* care about nearby households at
+      all. Add `solar_farm` to `data_sources/layers.yaml`:
+      `requires.parcel.min_buildable_acres` in the 40–80 range,
+      `requires.power` reusing the substation-distance shape, no
+      `requires.demand` block (first land use with none), and
+      `impacts.land_cover`/`impacts.habitat` set deliberately higher than
+      any other use here — this is the one use in the model whose *build*
+      is the environmental question, not just its induced traffic, which
+      makes it a good stress-test of the `environmentalist` perspective
+      lens in `simy_city/perspectives.py`. Verdict logic
+      (`maybeRenderSolarVerdict` in `web/explore.html`) is two-gate, not the
+      usual three: acreage + substation distance, both PASS/SHORT, no
+      demand leg to wait on. `reverseSearchSignals` (`web/logic.js`) will
+      need a real look here — a rooftop-demand use always sets
+      `preferNear` today, but a solar farm arguably wants the opposite (stay
+      *away* from expensive/dense parcels); it's fine to ship it with
+      *no* ranking signal (search button disabled, same as
+      `data_center`/`residential_subdivision` today) rather than force a
+      wrong-shaped signal — call that out explicitly in the PR rather than
+      guessing. Verify: `python tools/build_model_json.py`, `simy
+      validate`, `python -m pytest -q`, `node --test tests/js/*.test.mjs`,
+      headless-Chromium zero-console-errors load of both pages, and driving
+      `maybeRenderSolarVerdict` directly through PASS/SHORT/missing-data
+      states.
+
+- [ ] **26th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+      covers 25 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
+      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
+      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
+      Mecklenburg/Bernalillo/Multnomah). Worth checking first for a public
+      ArcGIS-hosted parcel MapServer: Alameda County, CA (Oakland/Berkeley —
+      Bay Area counties tend to publish good open GIS), Fairfax County, VA
+      (DC metro, not yet covered), or Jefferson County, CO (Denver's western
+      suburbs — Denver itself is already in, this would be adjacent, so
+      double-check the bbox doesn't overlap). Same research-then-graceful-
+      partial-coverage approach every prior county here used: confirm the
+      live REST endpoint and real field names via web search (this sandbox
+      blocks ArcGIS REST introspection directly), map only the fields
+      independently confirmed rather than guessing a label, and check the
+      new bbox against all 25 existing entries before appending (`inBbox`
+      resolves to the *first* match, so a silent overlap would shadow an
+      existing county). Verify: `simy validate`, `python -m pytest -q`,
+      `node --test tests/js/*.test.mjs`, headless-Chromium load of
+      `web/explore.html` with zero console errors, and a synthetic check
+      that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
+      county's bbox resolves to it.
+
+- [ ] **CSV file upload for bulk address import, not just paste.** The
+      existing "📋 Import a list of addresses" panel (`#bulkImportPanel` in
+      `web/explore.html`, wired around line 4450, backed by
+      `parseBulkAddressList`/`bulkImportSummary` in `web/logic.js`) only
+      accepts pasted text in `#bulkImportText`. Add a `<input type="file"
+      accept=".csv,.txt">` next to it (same hidden-input-triggered-by-button
+      pattern `#dataImportFile` already uses for JSON app-state import) that
+      reads the selected file via `FileReader.readAsText`, and feeds its
+      contents through the *same* `parseBulkAddressList` pipeline the paste
+      box already uses — one line per address/`lat, lng` pair, same 25-line
+      cap, same truncation notice — so this is purely a second way to fill
+      the existing textarea/pipeline, not a new import path to test from
+      scratch. If a row looks like real CSV (multiple comma-separated
+      columns rather than a single "lat, lng" pair or a street address),
+      take the first column as the address/coordinate and ignore the rest
+      rather than failing the whole file — add a small pure
+      `extractAddressColumn(line)` to `web/logic.js` for that column-guess
+      logic so it's unit-testable (bare address passes through unchanged; a
+      multi-column CSV row with a quoted field containing a comma doesn't
+      get mis-split). Geocoding still goes through the existing
+      sequential, rate-limited Nominatim flow (`bulkImportGo`'s handler) —
+      this item only changes how the text gets into the box, not the import
+      itself. Verify: `python -m pytest -q`, `simy validate`, `node --test
+      tests/js/*.test.mjs` (new tests for `extractAddressColumn`: bare
+      address, bare `lat,lng`, multi-column CSV, a quoted field with an
+      embedded comma, blank lines), and headless Chromium confirms both
+      pages still load with zero console/page errors plus a synthetic
+      file-select (a mocked `File`/`FileReader`) correctly populates
+      `#bulkImportText`.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
