@@ -1237,6 +1237,30 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "Same established `standardUseVerdict` shape as grocery_store/ vet_clinic \u2014 a rooftop-headcount demand read (5000 rooftops within an 8 km drive-time radius, looser and lower than grocery_store's 12000/ 12 km \u2014 a dollar store's whole model is chasing a thinner, more spread-out rooftop base than a full grocer needs), a site-size gate (min_buildable_acres 0.9, in convenience_store's 0.75/car_wash's 1.0 range), and the same farther-is-better competition read (1.5 km, tighter than grocery_store's 2.0 \u2014 dollar-store chains cluster closer together than full grocers do). No AADT gate, unlike convenience_store \u2014 a dollar store's draw is foot/short-drive convenience, not visibility from a passing arterial, same reasoning grocery_store/vet_clinic/fitness_center already established. OSM tags this with two live tags \u2014 `shop=variety_store` (primary) and `shop=discount` (secondary/fallback) \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat convenience_store's fuel+shop pairing already documented.\n"
+    },
+    "solar_farm": {
+      "label": "Utility-Scale Solar Farm",
+      "requires": {
+        "parcel": {
+          "min_buildable_acres": 40,
+          "prefer_flood_zone": "none"
+        },
+        "power": {
+          "prefer_substation_within_km": 2
+        },
+        "environment": {
+          "prefer_low_slope": true
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "high",
+        "land_cover": "high",
+        "carbon": "low",
+        "water_stress": "low",
+        "traffic": "low"
+      },
+      "notes": "Inverts every demand-driven use above: no `requires.demand` block at all, since a solar farm's viability has nothing to do with nearby households \u2014 a rooftop count is fetched for on-screen context only (same \"roofNeed: 0\" display-only pattern data_center already established), never gated on. Verdict (`maybeRenderSFVerdict`, web/explore.html) is a two-gate PASS/SHORT, not the usual three: parcel acreage (`SF_MIN_ACRES`) and nearest-substation distance (`SF_SUB_KM`), reusing data_center's \"compQ *is* the power query\" trick (`USE_DEMAND.solar_farm.compQ` queries substations, not competitors, so the existing competitor-scan fetch doubles as the power leg \u2014 no separate `powerQ` needed) \u2014 no third water-district gate, unlike data_center. `reverseSearchSignals` (web/logic.js) needs no changes at all: `requires.power.prefer_substation_within_km` already gives it `preferNearComp` (seek nearby substations) and `preferFarDemand` (avoid rooftop density \u2014 a solar farm wants cheap edge land, not a residential encroachment fight, the same reasoning data_center's own entry already documents) automatically, via the exact same generalized read data_center's entry already exercises.\n"
     }
   },
   "actor_uses": {

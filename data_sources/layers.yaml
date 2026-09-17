@@ -1005,6 +1005,59 @@ land_uses:
       OR-fallback for the live competitor/site read, same messy-tagging
       caveat convenience_store's fuel+shop pairing already documented.
 
+  solar_farm:             # utility-scale solar photovoltaic farm — land-intensive generation, not a rooftop-demand use
+    label: Utility-Scale Solar Farm
+    requires:
+      # Unlike every other land use above, a solar farm doesn't chase nearby
+      # rooftops or a specific point amenity — it wants cheap, flat, mostly-
+      # vacant acreage with a nearby grid tie-in. Deliberately no `demand`
+      # block (the first land use here with none): a rooftop count is
+      # irrelevant to siting a solar farm.
+      parcel:      { min_buildable_acres: 40, prefer_flood_zone: none }
+      # Reuses data_center's substation-distance shape
+      # (`prefer_substation_within_km`), but tighter — a solar farm's thin
+      # economics can't absorb a long, expensive transmission interconnection
+      # the way a hyperscale data center's load can.
+      power:       { prefer_substation_within_km: 2 }
+      environment: { prefer_low_slope: true }
+    induces: {}
+    impacts:
+      # The one use in this model whose *build* is the environmental
+      # question, not just its induced traffic: tens of acres of continuous
+      # ground-mount panels clear more contiguous habitat/land cover than any
+      # other single use here — set to "high", the ceiling of this model's
+      # habitat/land_cover severity scale (simy_city/perspectives.py only
+      # defines low/medium/high; there's no tier above "high" to reach for
+      # "worse than every other high-severity use").
+      habitat: high
+      land_cover: high
+      # Unlike every other high-habitat/land_cover use here (data_center,
+      # residential_subdivision), solar generation itself is clean — no fuel
+      # combustion, no cooling-water draw, and negligible ongoing traffic (a
+      # handful of maintenance visits, not daily trip generation).
+      carbon: low
+      water_stress: low
+      traffic: low
+    notes: >
+      Inverts every demand-driven use above: no `requires.demand` block at
+      all, since a solar farm's viability has nothing to do with nearby
+      households — a rooftop count is fetched for on-screen context only
+      (same "roofNeed: 0" display-only pattern data_center already
+      established), never gated on. Verdict (`maybeRenderSFVerdict`,
+      web/explore.html) is a two-gate PASS/SHORT, not the usual three: parcel
+      acreage (`SF_MIN_ACRES`) and nearest-substation distance
+      (`SF_SUB_KM`), reusing data_center's "compQ *is* the power query" trick
+      (`USE_DEMAND.solar_farm.compQ` queries substations, not competitors, so
+      the existing competitor-scan fetch doubles as the power leg — no
+      separate `powerQ` needed) — no third water-district gate, unlike
+      data_center. `reverseSearchSignals` (web/logic.js) needs no changes at
+      all: `requires.power.prefer_substation_within_km` already gives it
+      `preferNearComp` (seek nearby substations) and `preferFarDemand` (avoid
+      rooftop density — a solar farm wants cheap edge land, not a residential
+      encroachment fight, the same reasoning data_center's own entry already
+      documents) automatically, via the exact same generalized read
+      data_center's entry already exercises.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

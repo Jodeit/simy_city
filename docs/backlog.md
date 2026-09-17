@@ -3893,7 +3893,7 @@ Ground rules for each run:
       above pass.
 
 ## Now (high value) — newly added (20)
-- [ ] **25th land use: utility-scale solar farm.** Every land use here so far
+- [x] **25th land use: utility-scale solar farm.** Every land use here so far
       is demand-driven — it wants to be *near* rooftops (retail/services) or
       near a specific point amenity (a substation, a school). A solar farm
       inverts that: it wants cheap, flat, mostly-vacant acreage (tens of
@@ -3925,6 +3925,41 @@ Ground rules for each run:
       headless-Chromium zero-console-errors load of both pages, and driving
       `maybeRenderSolarVerdict` directly through PASS/SHORT/missing-data
       states.
+
+      Shipped as planned, with two informed deviations from this item's
+      literal wording: (1) `impacts.habitat`/`impacts.land_cover` are set to
+      `high` — the *ceiling* of the model's severity scale
+      (`simy_city/perspectives.py`'s `_SEVERITY` only defines
+      low/medium/high/none; there's no tier above "high" to reach for
+      "worse than every other high-severity use," and inventing an unlisted
+      value would silently score as zero severity instead). (2)
+      `reverseSearchSignals` needed no changes and the search button is
+      **not** disabled: `requires.power.prefer_substation_within_km` (the
+      same field data_center already uses) already drives
+      `preferNearComp`/`preferFarDemand` generically — seek nearby
+      substations, avoid rooftop density — because a `!preferFar` +
+      substation-field code path for exactly this shape was added to
+      `web/logic.js` after this backlog item was originally written (see
+      `reverseSearchSignals`'s doc comment, which already names data_center
+      as the use it generalizes). solar_farm inherits that for free. Real
+      function name shipped is `maybeRenderSFVerdict` (matching this file's
+      per-use `maybeRender<XX>Verdict` naming convention, e.g.
+      `maybeRenderDCVerdict`/`maybeRenderDSVerdict`), not the
+      `maybeRenderSolarVerdict` name floated above. Verified: `python
+      tools/build_model_json.py` (25 land uses, 32 sources), `python -m
+      pytest -q` (39 passed), `simy validate` (OK), `node --test
+      tests/js/*.test.mjs` (367 passed), and headless Chromium confirmed
+      both `web/explore.html` and `web/index.html` load with zero
+      console/page errors, a simulated `solar_farm` map click renders the
+      full result panel without throwing, and driving
+      `maybeRenderSFVerdict` directly through PASS / SHORT-on-substation /
+      SHORT-on-acreage / substation-error / acreage-unlisted /
+      still-waiting-on-a-leg / wrong-use-selected states all produced
+      correct verdict text and left the DOM untouched where expected.
+      Outbound network to Overpass/ArcGIS is blocked from this sandbox, so a
+      live end-to-end substation/parcel fetch on the real site (and the
+      reverse-search "Find candidate sites" button now being enabled for
+      solar_farm) is a good human spot-check.
 
 - [ ] **26th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 25 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
