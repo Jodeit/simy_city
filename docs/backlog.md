@@ -3893,38 +3893,47 @@ Ground rules for each run:
       above pass.
 
 ## Now (high value) — newly added (20)
-- [ ] **25th land use: utility-scale solar farm.** Every land use here so far
-      is demand-driven — it wants to be *near* rooftops (retail/services) or
-      near a specific point amenity (a substation, a school). A solar farm
-      inverts that: it wants cheap, flat, mostly-vacant acreage (tens of
-      acres, well beyond `warehouse_club`'s 15) with a nearby grid
-      interconnection (reuse `data_center`'s substation-distance read —
-      `requires.power` / the existing live substation Overpass query — but
-      tighter, since unlike a data center a solar farm can't eat a long
-      interconnection cost) and *doesn't* care about nearby households at
-      all. Add `solar_farm` to `data_sources/layers.yaml`:
-      `requires.parcel.min_buildable_acres` in the 40–80 range,
-      `requires.power` reusing the substation-distance shape, no
-      `requires.demand` block (first land use with none), and
-      `impacts.land_cover`/`impacts.habitat` set deliberately higher than
-      any other use here — this is the one use in the model whose *build*
-      is the environmental question, not just its induced traffic, which
-      makes it a good stress-test of the `environmentalist` perspective
-      lens in `simy_city/perspectives.py`. Verdict logic
-      (`maybeRenderSolarVerdict` in `web/explore.html`) is two-gate, not the
-      usual three: acreage + substation distance, both PASS/SHORT, no
-      demand leg to wait on. `reverseSearchSignals` (`web/logic.js`) will
-      need a real look here — a rooftop-demand use always sets
-      `preferNear` today, but a solar farm arguably wants the opposite (stay
-      *away* from expensive/dense parcels); it's fine to ship it with
-      *no* ranking signal (search button disabled, same as
-      `data_center`/`residential_subdivision` today) rather than force a
-      wrong-shaped signal — call that out explicitly in the PR rather than
-      guessing. Verify: `python tools/build_model_json.py`, `simy
-      validate`, `python -m pytest -q`, `node --test tests/js/*.test.mjs`,
-      headless-Chromium zero-console-errors load of both pages, and driving
-      `maybeRenderSolarVerdict` directly through PASS/SHORT/missing-data
-      states.
+- [x] **25th land use: utility-scale solar farm.** Added `solar_farm` to
+      `data_sources/layers.yaml` — the first land use with no
+      `requires.demand` block at all (a PPA-funded array doesn't care how
+      many rooftops are nearby), `requires.power.prefer_substation_within_km: 3`
+      (data_center's own field shape, tighter than data_center's 5 km — a
+      solar array can't eat as long an interconnection cost as a
+      hyperscaler's power bill can), and `requires.parcel.min_buildable_acres: 50`
+      (40-80 acre range for a real utility-scale array). `impacts.habitat`/
+      `impacts.land_cover` both set to `high` — tied with
+      residential_subdivision at the top of the severity scale this model
+      can express (there's no level above "high"), since a solar farm's own
+      *build* (tens of graded, fenced acres) is the environmental question,
+      not its induced traffic. Verdict (`maybeRenderSolarVerdict`,
+      `web/explore.html`) is two-gate, not the usual three — substation
+      distance + parcel acreage, no demand leg to wait on — via the shared
+      `standardUseVerdict` with the same always-true `demandKind:"trivial"`
+      shape data_center's `BEST_FIT_USES` entry already established, and the
+      same compQ-doubles-as-power-query trick (no separate `powerQ` fetch).
+      This item was drafted expecting to ship with reverse search disabled
+      ("no ranking signal, same as data_center/residential_subdivision
+      today") — that assumption was stale: `reverseSearchSignals`
+      (`web/logic.js`) already gained `preferNearComp`/`preferFarDemand`
+      in an earlier run, and neither data_center nor residential_subdivision
+      is actually a holdout anymore (confirmed live: both resolve a real
+      signal today). `requires.power.prefer_substation_within_km` alone
+      gives solar_farm a correct `preferNearComp` signal with no
+      wrong-shaped-signal risk, so its search button ships enabled, not
+      disabled. Verified: `python tools/build_model_json.py` (25 land
+      uses), `simy validate` (OK), `python -m pytest -q` (39 passed),
+      `node --test tests/js/*.test.mjs` (367 passed, all pre-existing —
+      `standardUseVerdict`'s generic threshold tests already cover this
+      shape), and headless Chromium: both pages load with zero console/page
+      errors; selecting solar_farm and driving `maybeRenderSolarVerdict`
+      directly through PASS / SHORT-on-site-size / SHORT-on-substation /
+      no-substation-in-range / substation-lookup-error /
+      acreage-unavailable / still-waiting-on-a-leg / wrong-use-selected all
+      produced correct verdict text and CSS classes with zero throws; a
+      real simulated map click with solar_farm selected rendered the full
+      result panel end-to-end; the "Best fit here" ranking (which now scores
+      all 25 uses, solar_farm included) ran without throwing; and the
+      reverse-search toggle confirmed enabled (not disabled) for solar_farm.
 
 - [ ] **26th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 25 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/

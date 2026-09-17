@@ -1235,6 +1235,25 @@
         "traffic": "low"
       },
       "notes": "Same established `standardUseVerdict` shape as grocery_store/ vet_clinic \u2014 a rooftop-headcount demand read (5000 rooftops within an 8 km drive-time radius, looser and lower than grocery_store's 12000/ 12 km \u2014 a dollar store's whole model is chasing a thinner, more spread-out rooftop base than a full grocer needs), a site-size gate (min_buildable_acres 0.9, in convenience_store's 0.75/car_wash's 1.0 range), and the same farther-is-better competition read (1.5 km, tighter than grocery_store's 2.0 \u2014 dollar-store chains cluster closer together than full grocers do). No AADT gate, unlike convenience_store \u2014 a dollar store's draw is foot/short-drive convenience, not visibility from a passing arterial, same reasoning grocery_store/vet_clinic/fitness_center already established. OSM tags this with two live tags \u2014 `shop=variety_store` (primary) and `shop=discount` (secondary/fallback) \u2014 both queried with an OR-fallback for the live competitor/site read, same messy-tagging caveat convenience_store's fuel+shop pairing already documented.\n"
+    },
+    "solar_farm": {
+      "label": "Utility-Scale Solar Farm",
+      "requires": {
+        "power": {
+          "prefer_substation_within_km": 3
+        },
+        "parcel": {
+          "min_buildable_acres": 50
+        }
+      },
+      "induces": {},
+      "impacts": {
+        "habitat": "high",
+        "land_cover": "high",
+        "carbon": "low",
+        "traffic": "low"
+      },
+      "notes": "Inverts every demand-driven use above: a solar farm wants cheap, flat, mostly-vacant acreage with a nearby grid interconnection, and doesn't care how many rooftops are nearby at all. Verdict (`maybeRenderSolarVerdict`, web/explore.html) is two-gate, not the usual three \u2014 acreage + substation distance, no demand leg to wait on \u2014 the same `demandKind:\"trivial\"` shape data_center's `BEST_FIT_USES` entry already established, reusing data_center's own compQ-as-power- query trick (no separate `powerQ` fetch needed). This item was drafted expecting to ship with reverse search disabled (\"no ranking signal, same as data_center/residential_subdivision today\") \u2014 that assumption was already stale: `reverseSearchSignals` (web/logic.js) gained `preferNearComp`/`preferFarDemand` since then, and both existing holdouts already resolve a real signal from it. Solar farm is no exception \u2014 `requires.power.prefer_substation_within_km` alone gives it a correct `preferNearComp` signal (closer to a substation is genuinely better) with no wrong-shaped-signal risk, so the search button ships enabled here too.\n"
     }
   },
   "actor_uses": {
