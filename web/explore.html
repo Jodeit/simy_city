@@ -459,7 +459,7 @@ const LAYER_COLOR={power:"#e8843c",water:"#3a8fb7",broadband:"#2f9e44",transport
 // Canonical registered-land-use order, shared by the use-selector chips
 // (initUses) and "Best fit here" (BEST_FIT_USES/runBestFit below) so the two
 // can't silently drift apart on which uses actually exist.
-const ALL_USE_KEYS=["data_center","warehouse_club","fast_casual","residential_subdivision","multifamily","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store","car_wash","pharmacy","convenience_store","home_improvement_store","distribution_center","fitness_center","drive_thru_coffee","bank_branch","vet_clinic","school_site","dollar_store"];
+const ALL_USE_KEYS=["data_center","warehouse_club","fast_casual","residential_subdivision","multifamily","food_truck_court","ev_charging_hub","senior_living","urgent_care","self_storage","child_care_center","hotel","grocery_store","car_wash","pharmacy","convenience_store","home_improvement_store","distribution_center","fitness_center","drive_thru_coffee","bank_branch","vet_clinic","school_site","dollar_store","solar_farm"];
 // Per-use LIVE demand read from OpenStreetMap: a trade-area radius, the real
 // number a use needs (rooftops as a household proxy), and what to count as
 // competition/context. This is what turns "needs ~100k households" into a real,
@@ -565,6 +565,12 @@ const USE_DEMAND={
     // OR-fallback, same messy-tagging caveat convenience_store's fuel+shop
     // pairing already documented.
     compQ:'nwr["shop"="variety_store"];nwr["shop"="discount"]', compLabel:"dollar stores" },
+  // solar_farm: like data_center, no rooftop demand at all (roofNeed:0) —
+  // compQ *is* the power-substation query (same compQ-doubles-as-power-query
+  // trick data_center uses), tighter radius since a solar array's whole
+  // siting case rests on a nearby interconnection, not a citywide trade area.
+  solar_farm:{ radius:6000, roofNeed:0, needLabel:"",
+    compQ:'nwr["power"="substation"]', compLabel:"power substations" },
 };
 // data_center gets a real PASS/SHORT (not a rooftop demand read — nobody
 // lives near a data center by design): nearest substation + parcel size +
@@ -783,6 +789,13 @@ let schState=null;
 // arterial.
 const DS_MIN_ACRES=0.9, DS_MIN_COMPETITOR_KM=1.5;
 let dsState=null;
+// solar_farm's real verdict: unlike every other use, no demand leg at all —
+// just the two site-selection gates that actually decide whether a solar
+// array can build here (substation distance + parcel acreage), same
+// compQ-doubles-as-power-query trick and demandKind:"trivial" shape
+// data_center's own verdict/BEST_FIT_USES entry already established.
+const SOLAR_SUB_KM=3, SOLAR_MIN_ACRES=50;
+let solarState=null;
 // "Best fit here" step 2 (+ step 3): the land uses whose maybeRender*Verdict
 // already reduces to exactly the shared standardUseVerdict shape — a demand
 // leg, an optional site-size leg, an optional *farther-is-better*
@@ -843,6 +856,7 @@ const BEST_FIT_USES=[
   {key:"vet_clinic", minAcres:VC_MIN_ACRES, minCompetitorKm:VC_MIN_COMPETITOR_KM},
   {key:"school_site", minAcres:SCH_MIN_ACRES, minCompetitorKm:SCH_MIN_COMPETITOR_KM},
   {key:"dollar_store", minAcres:DS_MIN_ACRES, minCompetitorKm:DS_MIN_COMPETITOR_KM},
+  {key:"solar_farm", minAcres:SOLAR_MIN_ACRES, maxSubstationKm:SOLAR_SUB_KM, demandKind:"trivial"},
 ];
 
 // Parcel sources, county-by-county (there is no single free national parcel API
@@ -1746,6 +1760,7 @@ function analyze(latlng){
     vcState = current==="vet_clinic" ? {seq} : null;
     schState = current==="school_site" ? {seq} : null;
     dsState = current==="dollar_store" ? {seq} : null;
+    solarState = current==="solar_farm" ? {seq} : null;
     runParcel(latlng,seq);
     runDemand(latlng,seq);
   }else{
@@ -1772,6 +1787,7 @@ function analyze(latlng){
     vcState=null;
     schState=null;
     dsState=null;
+    solarState=null;
     res.innerHTML=renderExplore(latlng);
     fillTools(latlng);
     runParcel(latlng,seq);   // showParcel also fills the "what could go here" fit list
@@ -1945,8 +1961,8 @@ function renderBuild(use,latlng){
   h+=`</div>`;
 
   // LIVE demand read (real counts from OpenStreetMap)
-  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isMF=current==="multifamily", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care", isSS=current==="self_storage", isCC=current==="child_care_center", isHL=current==="hotel", isGS=current==="grocery_store", isCW=current==="car_wash", isPH=current==="pharmacy", isCS=current==="convenience_store", isHI=current==="home_improvement_store", isDW=current==="distribution_center", isFN=current==="fitness_center", isDTC=current==="drive_thru_coffee", isBB=current==="bank_branch", isVC=current==="vet_clinic", isSCH=current==="school_site", isDS=current==="dollar_store";
-  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isMF?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":isSS?"demand + site-size + distance-from-competitors check":isCC?"demand + site-size + distance-from-competitors check":isHL?"demand generators + traffic + site-size + distance-from-competitors check":isGS?"demand + site-size + distance-from-competitors check":isCW?"demand + traffic + site-size + distance-from-competitors check":isPH?"demand + traffic + site-size + distance-from-competitors check":isCS?"demand + traffic + site-size + distance-from-competitors check":isHI?"demand + site-size + distance-from-competitors check":isDW?"demand + traffic + site-size check":isFN?"demand + site-size + distance-from-competitors check":isDTC?"demand + traffic + site-size + distance-from-competitors check":isBB?"demand + traffic + site-size + distance-from-competitors check":isVC?"demand + site-size + distance-from-competitors check":isSCH?"demand + site-size + distance-from-competitors check":isDS?"demand + site-size + distance-from-competitors check":"real demand"}</h3>
+  const isDC=current==="data_center", isFC=current==="fast_casual", isRes=current==="residential_subdivision", isMF=current==="multifamily", isWC=current==="warehouse_club", isFTC=current==="food_truck_court", isEV=current==="ev_charging_hub", isSL=current==="senior_living", isUC=current==="urgent_care", isSS=current==="self_storage", isCC=current==="child_care_center", isHL=current==="hotel", isGS=current==="grocery_store", isCW=current==="car_wash", isPH=current==="pharmacy", isCS=current==="convenience_store", isHI=current==="home_improvement_store", isDW=current==="distribution_center", isFN=current==="fitness_center", isDTC=current==="drive_thru_coffee", isBB=current==="bank_branch", isVC=current==="vet_clinic", isSCH=current==="school_site", isDS=current==="dollar_store", isSolar=current==="solar_farm";
+  h+=`<div class="block"><h3>Live area read — ${isDC?"siting check":isRes?"induced school load":isMF?"induced school load":isWC?"demand + site-size check":isFTC?"demand + distance-from-competitors check":isEV?"demand + grid + distance-from-competitors check":isSL?"age-skewed demand + distance-from-competitors check":isUC?"demand + site-size + distance-from-competitors check":isSS?"demand + site-size + distance-from-competitors check":isCC?"demand + site-size + distance-from-competitors check":isHL?"demand generators + traffic + site-size + distance-from-competitors check":isGS?"demand + site-size + distance-from-competitors check":isCW?"demand + traffic + site-size + distance-from-competitors check":isPH?"demand + traffic + site-size + distance-from-competitors check":isCS?"demand + traffic + site-size + distance-from-competitors check":isHI?"demand + site-size + distance-from-competitors check":isDW?"demand + traffic + site-size check":isFN?"demand + site-size + distance-from-competitors check":isDTC?"demand + traffic + site-size + distance-from-competitors check":isBB?"demand + traffic + site-size + distance-from-competitors check":isVC?"demand + site-size + distance-from-competitors check":isSCH?"demand + site-size + distance-from-competitors check":isDS?"demand + site-size + distance-from-competitors check":isSolar?"grid-interconnection + site-size check":"real demand"}</h3>
       <div class="verdict" id="demandVerdict" style="display:none" role="status" aria-live="polite"></div>
       <div class="live loading" id="roofVal" role="status" aria-live="polite">counting rooftops in the trade area…</div>
       <div class="live loading" id="compVal" role="status" aria-live="polite">scanning for ${esc(USE_DEMAND[current].compLabel)}…</div>
@@ -1975,6 +1991,7 @@ function renderBuild(use,latlng){
               :isVC?"nearby rooftops + parcel size + distance from the nearest existing vet clinic (farther is better) decide the verdict"
               :isSCH?"nearby school-age households + parcel size + distance from the nearest existing school (farther is better) decide the verdict"
               :isDS?"nearby rooftops + parcel size + distance from the nearest existing dollar store (farther is better) decide the verdict"
+              :isSolar?"nearest substation distance + parcel acreage decide the verdict, not rooftops — nobody needs to live near a solar array by design"
               :"rooftops proxy household demand"}</div></div>`;
 
   // INDUCES
@@ -2302,6 +2319,12 @@ function runDemand(latlng,seq){
       // against existing dollar stores.
       dsState.nearestComp = els.length ? {name:els[0].name, km:els[0].km} : null;
       maybeRenderDSVerdict(seq);
+    } else if(current==="solar_farm"&&solarState&&solarState.seq===seq){
+      // Same reuse-compQ-as-power-query trick as data_center — this compQ is
+      // a substation scan, not a competitor scan, so nearer is better here,
+      // the opposite direction of every farther-is-better branch above.
+      solarState.subKm = els.length ? els[0].km : null;
+      maybeRenderSolarVerdict(seq);
     }
   }, ()=>{
     setHTML("compVal",errHTML("competitor scan unavailable"));
@@ -2326,6 +2349,7 @@ function runDemand(latlng,seq){
     else if(current==="vet_clinic"&&vcState&&vcState.seq===seq){ vcState.compErr=true; maybeRenderVCVerdict(seq); }
     else if(current==="school_site"&&schState&&schState.seq===seq){ schState.compErr=true; maybeRenderSCHVerdict(seq); }
     else if(current==="dollar_store"&&dsState&&dsState.seq===seq){ dsState.compErr=true; maybeRenderDSVerdict(seq); }
+    else if(current==="solar_farm"&&solarState&&solarState.seq===seq){ solarState.subErr=true; maybeRenderSolarVerdict(seq); }
   });
 }
 function renderDemandVerdict(c,cfg){
@@ -2396,6 +2420,35 @@ function maybeRenderDCVerdict(seq){
   el.style.display="block";
   el.className="verdict "+(pass?"aligned":"contested");
   el.innerHTML=(pass?"✓ PASS — clears the power, land &amp; water gates for a data center"
+    :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
+}
+// solar_farm's real verdict — the simplest of every use here, just two gates
+// (substation distance + parcel acreage), no demand leg to wait on at all.
+// Reuses the shared `standardUseVerdict` with `demand:{ratio:1,pass:true}`,
+// the same always-true `demandKind:"trivial"` shape data_center's
+// BEST_FIT_USES entry already established, so the AND of the two real gates
+// is the whole verdict.
+function maybeRenderSolarVerdict(seq){
+  if(current!=="solar_farm"||mode!=="build"||!solarState||solarState.seq!==seq)return;
+  const s=solarState;
+  const haveSub = s.subKm!==undefined || s.subErr;
+  if(!(haveSub && s.acres!==undefined))return; // still waiting on a leg
+  const el=document.getElementById("demandVerdict"); if(!el)return;
+  const v=standardUseVerdict(
+    {demand:{ratio:1,pass:true}, acres:s.acres, subKm:s.subKm, subErr:s.subErr},
+    {minAcres:SOLAR_MIN_ACRES, maxSubstationKm:SOLAR_SUB_KM});
+  const legs=[
+    v.subOk?`✓ substation ${s.subKm.toFixed(1)} km away (≤${SOLAR_SUB_KM} km)`
+      : s.subErr?`? substation distance unavailable`
+      : s.subKm==null?`✗ no substation within ${(USE_DEMAND.solar_farm.radius/1000)} km`
+      : `✗ nearest substation ${s.subKm.toFixed(1)} km away (need ≤${SOLAR_SUB_KM} km)`,
+    v.siteOk?`✓ parcel ${fmtAc(s.acres)} (≥${fmtAc(SOLAR_MIN_ACRES)})`
+      : s.acres==null?`? parcel acreage unlisted`
+      : `✗ parcel only ${fmtAc(s.acres)} (need ≥${fmtAc(SOLAR_MIN_ACRES)})`,
+  ];
+  el.style.display="block";
+  el.className="verdict "+(v.pass?"aligned":"contested");
+  el.innerHTML=(v.pass?"✓ PASS — clears the grid-interconnection &amp; site-size gates for a solar array"
     :"✗ SHORT — a real siting gap")+`<br><span style="font-weight:400;font-size:.85em">${legs.join(" · ")}</span>`;
 }
 // residential_subdivision's induced-school-load verdict — waits for the acreage
@@ -3249,13 +3302,15 @@ function bestFitLeg(u,lat,lng,acres){
       u.key==="multifamily"?MF_UNITS_PER_ACRE:RES_UNITS_PER_ACRE,
       u.key==="multifamily"?MF_STUDENTS_PER_HOME:RES_STUDENTS_PER_HOME,
       RES_SEATS_PER_SCHOOL);
-    // data_center's substation distance reuses the same compQ fetch above —
-    // its USE_DEMAND entry's "competition" query *is* power substations, so
-    // there's no separate powerQ leg for it (cfg.powerQ is undefined),
-    // mirroring how maybeRenderDCVerdict derives dcState.subKm from the same
-    // compQ leg runDemand issues for the currently-selected use.
-    const subKm = u.key==="data_center" ? (comp.nearestComp?comp.nearestComp.km:null) : sub.subKm;
-    const subErr = u.key==="data_center" ? comp.compErr : sub.subErr;
+    // data_center's (and solar_farm's) substation distance reuses the same
+    // compQ fetch above — both uses' USE_DEMAND entry's "competition" query
+    // *is* power substations, so there's no separate powerQ leg for either
+    // (cfg.powerQ is undefined), mirroring how maybeRenderDCVerdict/
+    // maybeRenderSolarVerdict derive their own subKm from the same compQ leg
+    // runDemand issues for the currently-selected use.
+    const reusesCompAsSub = u.key==="data_center"||u.key==="solar_farm";
+    const subKm = reusesCompAsSub ? (comp.nearestComp?comp.nearestComp.km:null) : sub.subKm;
+    const subErr = reusesCompAsSub ? comp.compErr : sub.subErr;
     return {roofs,demand,nearestComp:comp.nearestComp,compErr:comp.compErr,aadtHit:aadt.aadtHit,aadtErr:aadt.aadtErr,
       subKm,subErr,mud};
   });
@@ -3891,6 +3946,7 @@ function showParcel(geo,src,seq){
   if(current==="vet_clinic"&&vcState&&vcState.seq===seq){ vcState.acres=acN; maybeRenderVCVerdict(seq); }
   if(current==="school_site"&&schState&&schState.seq===seq){ schState.acres=acN; maybeRenderSCHVerdict(seq); }
   if(current==="dollar_store"&&dsState&&dsState.seq===seq){ dsState.acres=acN; maybeRenderDSVerdict(seq); }
+  if(current==="solar_farm"&&solarState&&solarState.seq===seq){ solarState.acres=acN; maybeRenderSolarVerdict(seq); }
   setLastParcelSummary({seq, lat:lastLatLng.lat, lng:lastLatLng.lng,
     label: situs || (id?`Parcel ${id}`:null),
     id, owner, situs, land, acres:acN,
@@ -4698,6 +4754,7 @@ const VERDICT_REFRESH={
   vet_clinic:()=>vcState&&maybeRenderVCVerdict(vcState.seq),
   school_site:()=>schState&&maybeRenderSCHVerdict(schState.seq),
   dollar_store:()=>dsState&&maybeRenderDSVerdict(dsState.seq),
+  solar_farm:()=>solarState&&maybeRenderSolarVerdict(solarState.seq),
 };
 function refreshAreaDisplays(){
   if(mode==="build"&&VERDICT_REFRESH[current])VERDICT_REFRESH[current]();

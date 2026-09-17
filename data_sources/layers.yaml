@@ -1005,6 +1005,49 @@ land_uses:
       OR-fallback for the live competitor/site read, same messy-tagging
       caveat convenience_store's fuel+shop pairing already documented.
 
+  solar_farm:             # utility-scale solar farm — cheap flat acreage + grid interconnection, no rooftop demand at all
+    label: Utility-Scale Solar Farm
+    requires:
+      # The first land use with no `requires.demand` block at all — a solar
+      # farm's revenue is a power-purchase agreement, not foot traffic or
+      # nearby households, so there is no rooftop/daytime-population gate to
+      # check. Reuses data_center's `prefer_substation_within_km` field
+      # shape, but tighter (3 km vs data_center's 5) — a solar array can't
+      # eat as long an interconnection cost as a hyperscaler's power bill can.
+      power:  { prefer_substation_within_km: 3 }
+      # A real utility-scale array (a few MW) — well beyond warehouse_club's
+      # 15-acre pad, in the 40-80 acre range a small array actually needs.
+      parcel: { min_buildable_acres: 50 }
+    induces: {}
+    impacts:
+      # The one use in this model whose *build* is the environmental
+      # question, not its induced traffic — tens of acres of graded, fenced
+      # panel arrays is as big a single-site land-cover/habitat hit as any
+      # use here, tied with residential_subdivision at the top of the scale
+      # this model can express (SEVERITY has no level above "high").
+      habitat: high
+      land_cover: high
+      carbon: low            # displaces fossil generation once operating; only the build itself has a footprint
+      traffic: low            # a handful of maintenance visits a month, not daily customer/employee trips
+    notes: >
+      Inverts every demand-driven use above: a solar farm wants cheap, flat,
+      mostly-vacant acreage with a nearby grid interconnection, and doesn't
+      care how many rooftops are nearby at all. Verdict
+      (`maybeRenderSolarVerdict`, web/explore.html) is two-gate, not the
+      usual three — acreage + substation distance, no demand leg to wait on
+      — the same `demandKind:"trivial"` shape data_center's `BEST_FIT_USES`
+      entry already established, reusing data_center's own compQ-as-power-
+      query trick (no separate `powerQ` fetch needed). This item was drafted
+      expecting to ship with reverse search disabled ("no ranking signal,
+      same as data_center/residential_subdivision today") — that assumption
+      was already stale: `reverseSearchSignals` (web/logic.js) gained
+      `preferNearComp`/`preferFarDemand` since then, and both existing
+      holdouts already resolve a real signal from it. Solar farm is no
+      exception — `requires.power.prefer_substation_within_km` alone gives
+      it a correct `preferNearComp` signal (closer to a substation is
+      genuinely better) with no wrong-shaped-signal risk, so the search
+      button ships enabled here too.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*
