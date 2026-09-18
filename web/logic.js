@@ -648,6 +648,50 @@ function bulkImportSummary(results){
   return {okCount:list.length-failed.length, failCount:failed.length, failed};
 }
 
+/* Quote-aware comma split for one CSV row (RFC-4180-lite: a field wrapped in
+   double quotes may contain commas/newlines, and "" inside a quoted field is
+   a literal quote). Used only by extractAddressColumn below — not a general
+   CSV parser, just enough to find field boundaries without mis-splitting a
+   quoted address. */
+function splitCsvFields(line){
+  const s=String(line), fields=[];
+  let cur="", i=0, inQuotes=false;
+  while(i<s.length){
+    const c=s[i];
+    if(inQuotes){
+      if(c==='"'){
+        if(s[i+1]==='"'){cur+='"';i+=2;continue;}
+        inQuotes=false;i++;continue;
+      }
+      cur+=c;i++;continue;
+    }
+    if(c==='"' && cur===""){inQuotes=true;i++;continue;}
+    if(c===","){fields.push(cur);cur="";i++;continue;}
+    cur+=c;i++;
+  }
+  fields.push(cur);
+  return fields;
+}
+/* Bulk-import CSV file upload (see wireBulkImport in explore.html) feeds a
+   whole uploaded file through this before handing it to the existing
+   parseBulkAddressList/geocode pipeline, one call per line. A bare address
+   ("123 Main St, Austin, TX") or a bare "lat, lng" pair both pass straight
+   through unchanged — those are exactly what the pipeline already expects,
+   and their commas are part of the address/pair, not column separators. A
+   real spreadsheet export (more columns than a plain address has, and/or a
+   quoted field, since a typed address never contains literal quotes) is
+   reduced to its first column, on the assumption that's the address/
+   coordinate and the rest (city/state/zip as separate columns, an owner
+   name, notes...) isn't needed — better than feeding the whole row,
+   quote-mangled, into the geocoder and failing the line outright. */
+function extractAddressColumn(line){
+  const trimmed=String(line||"").trim();
+  if(!trimmed)return "";
+  const fields=splitCsvFields(trimmed);
+  const looksLikeCsv=fields.length>3 || trimmed.indexOf('"')!==-1;
+  return looksLikeCsv ? fields[0].trim() : trimmed;
+}
+
 /* ---- CSV export for the Compare list ----
    `toCsvRow` quotes a single field per RFC 4180: wrapped in double quotes
    whenever it contains a comma, a double quote (itself doubled), or a
@@ -1316,5 +1360,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,extractAddressColumn,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
 }
