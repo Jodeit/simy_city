@@ -373,6 +373,8 @@
 456 Oak Ave, Phoenix, AZ"></textarea>
       <div class="actions">
         <button class="toolbtn" id="bulkImportGo" type="button">Import</button>
+        <label class="btng" for="bulkImportFile" style="cursor:pointer">⬆️ Upload CSV/TXT</label>
+        <input type="file" id="bulkImportFile" accept=".csv,.txt,text/csv,text/plain" style="display:none"/>
       </div>
       <div class="live" id="bulkImportStatus" style="display:none"></div>
     </div>
@@ -4511,6 +4513,7 @@ function wireBulkImport(){
   const btn=document.getElementById("bulkImportToggle"); if(!btn)return;
   const panel=document.getElementById("bulkImportPanel");
   const go=document.getElementById("bulkImportGo"), ta=document.getElementById("bulkImportText");
+  const fileInput=document.getElementById("bulkImportFile"), status=document.getElementById("bulkImportStatus");
   btn.onclick=()=>{
     const opening=panel.style.display==="none";
     panel.style.display=opening?"block":"none";
@@ -4521,6 +4524,23 @@ function wireBulkImport(){
     go.disabled=true;
     runBulkImport(ta.value).then(()=>{go.disabled=false;});
   };
+  if(fileInput){
+    fileInput.onchange=()=>{
+      const f=fileInput.files&&fileInput.files[0];
+      fileInput.value="";
+      if(!f)return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const lines=String(reader.result||"").split(/\r?\n/).map(extractAddressColumn);
+        ta.value=lines.filter(Boolean).join("\n");
+      };
+      reader.onerror=()=>{
+        status.style.display="block"; status.className="live";
+        status.innerHTML=errHTML("couldn't read that file — nothing changed.");
+      };
+      reader.readAsText(f);
+    };
+  }
 }
 function wireCompare(){
   const modal=document.getElementById("compareModal");

@@ -3983,35 +3983,55 @@ Ground rules for each run:
       that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
       county's bbox resolves to it.
 
-- [ ] **CSV file upload for bulk address import, not just paste.** The
-      existing "📋 Import a list of addresses" panel (`#bulkImportPanel` in
-      `web/explore.html`, wired around line 4450, backed by
-      `parseBulkAddressList`/`bulkImportSummary` in `web/logic.js`) only
-      accepts pasted text in `#bulkImportText`. Add a `<input type="file"
-      accept=".csv,.txt">` next to it (same hidden-input-triggered-by-button
-      pattern `#dataImportFile` already uses for JSON app-state import) that
-      reads the selected file via `FileReader.readAsText`, and feeds its
-      contents through the *same* `parseBulkAddressList` pipeline the paste
-      box already uses — one line per address/`lat, lng` pair, same 25-line
-      cap, same truncation notice — so this is purely a second way to fill
-      the existing textarea/pipeline, not a new import path to test from
-      scratch. If a row looks like real CSV (multiple comma-separated
-      columns rather than a single "lat, lng" pair or a street address),
-      take the first column as the address/coordinate and ignore the rest
-      rather than failing the whole file — add a small pure
-      `extractAddressColumn(line)` to `web/logic.js` for that column-guess
-      logic so it's unit-testable (bare address passes through unchanged; a
-      multi-column CSV row with a quoted field containing a comma doesn't
-      get mis-split). Geocoding still goes through the existing
-      sequential, rate-limited Nominatim flow (`bulkImportGo`'s handler) —
-      this item only changes how the text gets into the box, not the import
-      itself. Verify: `python -m pytest -q`, `simy validate`, `node --test
-      tests/js/*.test.mjs` (new tests for `extractAddressColumn`: bare
-      address, bare `lat,lng`, multi-column CSV, a quoted field with an
-      embedded comma, blank lines), and headless Chromium confirms both
-      pages still load with zero console/page errors plus a synthetic
-      file-select (a mocked `File`/`FileReader`) correctly populates
-      `#bulkImportText`.
+- [x] **CSV file upload for bulk address import, not just paste.** Added a
+      `#bulkImportFile` `<input type="file" accept=".csv,.txt,...">` next to
+      the existing `#bulkImportGo` button in `#bulkImportPanel`
+      (`web/explore.html`), using the same hidden-input-behind-a-`<label>`
+      pattern `#dataImportFile` already uses for JSON app-state import.
+      `wireBulkImport`'s new `fileInput.onchange` reads the picked file via
+      `FileReader.readAsText`, maps `extractAddressColumn` (new, in
+      `web/logic.js`) over each line, and fills `#bulkImportText` with the
+      result — the user still clicks the existing Import button, so this is
+      purely a second way to fill the box, not a new import path
+      (`parseBulkAddressList`/`bulkGeocodeLine`/sequential rate-limited
+      Nominatim flow are all untouched).
+
+      `extractAddressColumn(line)`: a `lat, lng` pair (`parseCoordPair`) is
+      recognized first and returned whole. Otherwise the line is split
+      RFC-4180-style (`splitCsvFields`, a private helper — a doubled `""`
+      inside a quoted field is a literal quote, not a field break, so
+      `"123 Main St, Austin, TX",78701` keeps its first field intact rather
+      than splitting on the address's own commas). A quoted field anywhere
+      on the line is treated as a deliberate CSV export and only the first
+      column survives; without quoting, up to 3 comma-separated segments is
+      treated as a plain "street, city, state" address and kept whole (real
+      spreadsheet exports tend to run 4+ columns — only at that width, or
+      when quoting signals real CSV, does the line get split and the rest
+      of the row dropped). This is a heuristic, not a real address/CSV
+      classifier, and is documented as such in `web/logic.js`: an unquoted
+      3-segment CSV row that happens to look like an address is kept whole
+      (usually still geocodes fine as one string); a genuinely 4+-column
+      row that happens to be one long unquoted address loses its tail.
+      Pasting directly into the textarea is completely unaffected — this
+      function only ever runs on file-derived lines.
+
+      Verified: `python tools/build_model_json.py` (25 land uses, 32
+      sources, no change — this item touches no model data), `python -m
+      pytest -q` (39 passed), `simy validate` (OK), `node --test
+      tests/js/*.mjs` (376 passed — 9 new `extractAddressColumn` tests: bare
+      address with no commas, a 3-segment street/city/state address kept
+      whole, a `lat,lng` pair kept whole, a real 5-column CSV row reduced to
+      its first column, a quoted field with an embedded comma not
+      mis-split, a value wholly wrapped in quotes unquoted, a doubled `""`
+      decoded to a literal quote, blank/whitespace/null/undefined lines
+      returning `""`, and surrounding whitespace trimmed), headless
+      Chromium confirms both `web/explore.html` and `web/index.html` still
+      load with zero console/page errors, and a synthetic file-select
+      against the *real* page (a real `File`/`DataTransfer` dispatched
+      through the actual `#bulkImportFile` `change` handler, not a mocked
+      function call) fed a 5-line CSV mixing all four shapes above and
+      confirmed `#bulkImportText` came back with exactly the expected
+      4 lines (the blank line dropped, each shape handled correctly).
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

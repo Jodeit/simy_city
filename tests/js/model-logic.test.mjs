@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, directionsUrl, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
-  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, extractAddressColumn, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
@@ -1270,6 +1270,47 @@ test("bulkImportSummary: empty or missing results list summarizes to all zeros",
   assert.deepEqual(bulkImportSummary([]), { okCount: 0, failCount: 0, failed: [] });
   assert.deepEqual(bulkImportSummary(null), { okCount: 0, failCount: 0, failed: [] });
   assert.deepEqual(bulkImportSummary(undefined), { okCount: 0, failCount: 0, failed: [] });
+});
+
+// ---- extractAddressColumn (CSV-file bulk import column guess) ----
+
+test("extractAddressColumn: a bare address with no commas passes through unchanged", () => {
+  assert.equal(extractAddressColumn("123MainSt"), "123MainSt");
+});
+
+test("extractAddressColumn: a plain street/city/state address (<=3 unquoted segments) is kept whole", () => {
+  assert.equal(extractAddressColumn("123 Main St, Austin, TX"), "123 Main St, Austin, TX");
+});
+
+test("extractAddressColumn: a lat,lng pair is recognized and kept whole, not split as CSV", () => {
+  assert.equal(extractAddressColumn("30.3072, -97.9203"), "30.3072, -97.9203");
+});
+
+test("extractAddressColumn: a real multi-column CSV row (4+ segments) keeps only the first column", () => {
+  assert.equal(extractAddressColumn("123 Main St,Austin,TX,78701,Travis County"), "123 Main St");
+});
+
+test("extractAddressColumn: a quoted field with an embedded comma is not mis-split", () => {
+  assert.equal(extractAddressColumn('"123 Main St, Austin, TX",78701'), "123 Main St, Austin, TX");
+});
+
+test("extractAddressColumn: a single field wrapped entirely in quotes is unquoted", () => {
+  assert.equal(extractAddressColumn('"123 Main St, Austin, TX"'), "123 Main St, Austin, TX");
+});
+
+test("extractAddressColumn: a doubled quote inside a quoted field is a literal quote", () => {
+  assert.equal(extractAddressColumn('"Bob""s Diner, Austin, TX",78701'), 'Bob"s Diner, Austin, TX');
+});
+
+test("extractAddressColumn: blank/whitespace-only lines yield an empty string", () => {
+  assert.equal(extractAddressColumn(""), "");
+  assert.equal(extractAddressColumn("   "), "");
+  assert.equal(extractAddressColumn(null), "");
+  assert.equal(extractAddressColumn(undefined), "");
+});
+
+test("extractAddressColumn: leading/trailing whitespace around a bare value is trimmed", () => {
+  assert.equal(extractAddressColumn("  123 Main St  "), "123 Main St");
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----
