@@ -373,6 +373,8 @@
 456 Oak Ave, Phoenix, AZ"></textarea>
       <div class="actions">
         <button class="toolbtn" id="bulkImportGo" type="button">Import</button>
+        <label class="btng" for="bulkImportFile" style="cursor:pointer">⬆️ Upload CSV/TXT</label>
+        <input type="file" id="bulkImportFile" accept=".csv,.txt" style="display:none"/>
       </div>
       <div class="live" id="bulkImportStatus" style="display:none"></div>
     </div>
@@ -4520,6 +4522,18 @@ function wireBulkImport(){
     if(go.disabled)return;
     go.disabled=true;
     runBulkImport(ta.value).then(()=>{go.disabled=false;});
+  };
+  const fileInput=document.getElementById("bulkImportFile");
+  if(fileInput)fileInput.onchange=()=>{
+    const f=fileInput.files&&fileInput.files[0];
+    fileInput.value="";
+    if(!f)return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const lines=String(reader.result||"").split(/\r?\n/).map(extractAddressColumn).filter(Boolean);
+      ta.value=lines.join("\n");
+    };
+    reader.readAsText(f);
   };
 }
 function wireCompare(){

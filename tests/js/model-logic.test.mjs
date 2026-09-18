@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, directionsUrl, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
-  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, extractAddressColumn, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
@@ -1270,6 +1270,42 @@ test("bulkImportSummary: empty or missing results list summarizes to all zeros",
   assert.deepEqual(bulkImportSummary([]), { okCount: 0, failCount: 0, failed: [] });
   assert.deepEqual(bulkImportSummary(null), { okCount: 0, failCount: 0, failed: [] });
   assert.deepEqual(bulkImportSummary(undefined), { okCount: 0, failCount: 0, failed: [] });
+});
+
+// ---- extractAddressColumn (CSV-file bulk import: column-guess per line) ----
+
+test("extractAddressColumn: a bare street address passes through unchanged", () => {
+  assert.equal(extractAddressColumn("123 Main St, Austin, TX"), "123 Main St, Austin, TX");
+});
+
+test("extractAddressColumn: a bare lat,lng pair passes through unchanged", () => {
+  assert.equal(extractAddressColumn("30.3072, -97.9203"), "30.3072, -97.9203");
+});
+
+test("extractAddressColumn: a multi-column CSV row keeps only the first column", () => {
+  assert.equal(extractAddressColumn("123 Main St,Austin,TX,78701"), "123 Main St");
+});
+
+test("extractAddressColumn: a quoted field with an embedded comma isn't mis-split", () => {
+  assert.equal(
+    extractAddressColumn('"123 Main St, Apt 4",Austin,TX,78701'),
+    "123 Main St, Apt 4"
+  );
+});
+
+test("extractAddressColumn: a short quoted row (still real CSV) also extracts", () => {
+  assert.equal(extractAddressColumn('"456 Oak Ave, Suite 2",Phoenix'), "456 Oak Ave, Suite 2");
+});
+
+test("extractAddressColumn: blank/whitespace-only lines become empty strings", () => {
+  assert.equal(extractAddressColumn(""), "");
+  assert.equal(extractAddressColumn("   "), "");
+  assert.equal(extractAddressColumn(null), "");
+  assert.equal(extractAddressColumn(undefined), "");
+});
+
+test("extractAddressColumn: trims surrounding whitespace on pass-through lines", () => {
+  assert.equal(extractAddressColumn("  123 Main St, Austin, TX  "), "123 Main St, Austin, TX");
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----

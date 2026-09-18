@@ -3983,7 +3983,7 @@ Ground rules for each run:
       that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
       county's bbox resolves to it.
 
-- [ ] **CSV file upload for bulk address import, not just paste.** The
+- [x] **CSV file upload for bulk address import, not just paste.** The
       existing "📋 Import a list of addresses" panel (`#bulkImportPanel` in
       `web/explore.html`, wired around line 4450, backed by
       `parseBulkAddressList`/`bulkImportSummary` in `web/logic.js`) only
@@ -4012,6 +4012,41 @@ Ground rules for each run:
       pages still load with zero console/page errors plus a synthetic
       file-select (a mocked `File`/`FileReader`) correctly populates
       `#bulkImportText`.
+
+      Shipped as planned. `extractAddressColumn(line)` (`web/logic.js`) uses
+      a small RFC-4180-lite quote-aware `splitCsvFields` helper (handles a
+      quoted field with an embedded comma and doubled-`""` escaping) and
+      treats a line as "real CSV" — extracting only its first column — when
+      it splits into more than 3 fields, *or* the raw line contains a
+      literal `"` at all (so a short 2-column quoted row, e.g. from a
+      spreadsheet with only address+city, still gets column-extracted even
+      though field count alone wouldn't trigger it). A plain address or a
+      bare `lat, lng` pair (both ≤3 comma-separated fields, no quotes) pass
+      through unchanged, since those are exactly what the existing
+      `parseBulkAddressList`/Nominatim pipeline already expects. The new
+      `#bulkImportFile` input sits next to the existing `#bulkImportGo`
+      button (same hidden-input-behind-a-`<label class="btng">` pattern as
+      `#dataImportFile`), wired in `wireBulkImport()`: on file-select it
+      reads the file via `FileReader.readAsText`, maps every line through
+      `extractAddressColumn`, drops now-empty (originally-blank) lines, and
+      writes the joined result straight into `#bulkImportText` — the
+      existing `bulkImportGo` button and `runBulkImport`/
+      `parseBulkAddressList` pipeline are untouched, so the 25-line cap and
+      truncation notice still apply exactly as before, at Import time, not
+      at file-read time. Verified: `python tools/build_model_json.py` (25
+      land uses, 32 sources), `python -m pytest -q` (39 passed), `simy
+      validate` (OK), `node --test tests/js/*.test.mjs` (374 passed,
+      including 7 new `extractAddressColumn` tests: bare address, bare
+      `lat,lng`, multi-column CSV, a quoted field with an embedded comma, a
+      short quoted 2-column row, blank/whitespace/null/undefined input, and
+      whitespace-trimming on pass-through), and a headless-Chromium run
+      confirmed both `web/explore.html` and `web/index.html` load with zero
+      genuine console/page errors (ignoring the expected failed network
+      calls to blocked external tile/Overpass/ArcGIS/Nominatim hosts in this
+      sandbox) plus a simulated file-select — a mocked `File` fed through a
+      real `DataTransfer`/`change` event, no `FileReader` mocking needed —
+      correctly populated `#bulkImportText` with the expected per-line
+      output from a 5-line CSV mixing all four shapes above.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
