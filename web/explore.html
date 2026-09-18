@@ -373,6 +373,8 @@
 456 Oak Ave, Phoenix, AZ"></textarea>
       <div class="actions">
         <button class="toolbtn" id="bulkImportGo" type="button">Import</button>
+        <label class="btng" for="bulkImportFile" style="cursor:pointer">⬆️ Upload CSV/TXT</label>
+        <input type="file" id="bulkImportFile" accept=".csv,.txt" style="display:none"/>
       </div>
       <div class="live" id="bulkImportStatus" style="display:none"></div>
     </div>
@@ -4459,7 +4461,14 @@ function downloadCompareGeoJson(){
 // on-keystroke), per the same Nominatim usage-policy constraint the address
 // box already respects. A line that fails to geocode is skipped, not
 // aborting the whole batch, and listed back via bulkImportSummary
-// (web/logic.js). A resolved point only carries {lat,lng,label} — no
+// (web/logic.js). The "⬆️ Upload CSV/TXT" file input (wireBulkImport) is a
+// second way to fill the same #bulkImportText textarea, not a separate
+// import path: each line of the picked file goes through
+// extractAddressColumn (web/logic.js) — which only touches a genuine
+// multi-column CSV row, leaving a bare "lat, lng" pair or a plain
+// comma-containing address untouched — then the result is loaded into the
+// textarea for the same Import button/pipeline below to geocode. A
+// resolved point only carries {lat,lng,label} — no
 // owner/acreage/verdict, since that would mean a full per-point parcel
 // fan-out for every line — and merges into the existing pins via the same
 // mergeComparePins a shared #cmp= link already uses (dedupe + 6-pin cap).
@@ -4511,6 +4520,7 @@ function wireBulkImport(){
   const btn=document.getElementById("bulkImportToggle"); if(!btn)return;
   const panel=document.getElementById("bulkImportPanel");
   const go=document.getElementById("bulkImportGo"), ta=document.getElementById("bulkImportText");
+  const status=document.getElementById("bulkImportStatus"), fileInput=document.getElementById("bulkImportFile");
   btn.onclick=()=>{
     const opening=panel.style.display==="none";
     panel.style.display=opening?"block":"none";
@@ -4521,6 +4531,27 @@ function wireBulkImport(){
     go.disabled=true;
     runBulkImport(ta.value).then(()=>{go.disabled=false;});
   };
+  if(fileInput){
+    fileInput.onchange=()=>{
+      const f=fileInput.files&&fileInput.files[0];
+      fileInput.value="";
+      if(!f)return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const lines=String(reader.result||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(extractAddressColumn);
+        ta.value=lines.join("\n");
+        status.style.display="block"; status.className="live";
+        status.textContent=lines.length
+          ? `Loaded ${lines.length} line${lines.length===1?"":"s"} from ${esc(f.name)} — click Import to geocode.`
+          : `${esc(f.name)} didn't contain any address lines.`;
+      };
+      reader.onerror=()=>{
+        status.style.display="block"; status.className="live";
+        status.innerHTML=errHTML(`couldn't read ${esc(f.name)}.`);
+      };
+      reader.readAsText(f);
+    };
+  }
 }
 function wireCompare(){
   const modal=document.getElementById("compareModal");

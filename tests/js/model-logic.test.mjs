@@ -17,7 +17,7 @@ const {
   encodeHash, decodeHash, directionsUrl, hasWebShare, sharePayloadForLink, sharePayloadForCase,
   encodeComparePins, decodeComparePins, mergeComparePins,
   encodeSearchHash, decodeSearchHash,
-  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, toCsvField, toCsvRow, toCsv, addRecentSite,
+  nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, splitCsvFields, extractAddressColumn, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
   parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
@@ -1270,6 +1270,50 @@ test("bulkImportSummary: empty or missing results list summarizes to all zeros",
   assert.deepEqual(bulkImportSummary([]), { okCount: 0, failCount: 0, failed: [] });
   assert.deepEqual(bulkImportSummary(null), { okCount: 0, failCount: 0, failed: [] });
   assert.deepEqual(bulkImportSummary(undefined), { okCount: 0, failCount: 0, failed: [] });
+});
+
+// ---- splitCsvFields / extractAddressColumn (CSV file upload for bulk import) ----
+test("extractAddressColumn: a bare address with no commas passes through unchanged", () => {
+  assert.equal(extractAddressColumn("1600 Pennsylvania Ave NW"), "1600 Pennsylvania Ave NW");
+});
+
+test("extractAddressColumn: a bare 'lat, lng' pair passes through unchanged", () => {
+  assert.equal(extractAddressColumn("30.3072, -97.9203"), "30.3072, -97.9203");
+});
+
+test("extractAddressColumn: a plain street/city/state address (3 or fewer fields) is left alone", () => {
+  assert.equal(extractAddressColumn("123 Main St, Austin, TX"), "123 Main St, Austin, TX");
+});
+
+test("extractAddressColumn: a real multi-column CSV row (4+ fields) takes just the first column", () => {
+  assert.equal(extractAddressColumn("123 Main St,Austin,TX,78701"), "123 Main St");
+  assert.equal(extractAddressColumn("456 Oak Ave,Phoenix,AZ,85001,extra notes"), "456 Oak Ave");
+});
+
+test("extractAddressColumn: a quoted field with an embedded comma isn't mis-split", () => {
+  assert.equal(
+    extractAddressColumn('"123 Main St, Austin, TX",sold Q1,comp,notes'),
+    "123 Main St, Austin, TX"
+  );
+});
+
+test("extractAddressColumn: blank lines and non-string input yield an empty string", () => {
+  assert.equal(extractAddressColumn(""), "");
+  assert.equal(extractAddressColumn("   "), "");
+  assert.equal(extractAddressColumn(null), "");
+  assert.equal(extractAddressColumn(undefined), "");
+});
+
+test("splitCsvFields: splits unquoted fields on commas", () => {
+  assert.deepEqual(splitCsvFields("a,b,c"), ["a", "b", "c"]);
+});
+
+test("splitCsvFields: a quoted field keeps its embedded comma as one field", () => {
+  assert.deepEqual(splitCsvFields('"a, b",c'), ["a, b", "c"]);
+});
+
+test("splitCsvFields: a doubled quote inside a quoted field becomes one literal quote", () => {
+  assert.deepEqual(splitCsvFields('"say ""hi""",c'), ['say "hi"', "c"]);
 });
 
 // ---- toCsvField / toCsvRow / toCsv (Compare list CSV export) ----
