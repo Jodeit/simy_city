@@ -3983,7 +3983,7 @@ Ground rules for each run:
       that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
       county's bbox resolves to it.
 
-- [ ] **CSV file upload for bulk address import, not just paste.** The
+- [x] **CSV file upload for bulk address import, not just paste.** The
       existing "📋 Import a list of addresses" panel (`#bulkImportPanel` in
       `web/explore.html`, wired around line 4450, backed by
       `parseBulkAddressList`/`bulkImportSummary` in `web/logic.js`) only
@@ -4012,6 +4012,44 @@ Ground rules for each run:
       pages still load with zero console/page errors plus a synthetic
       file-select (a mocked `File`/`FileReader`) correctly populates
       `#bulkImportText`.
+
+      Shipped as planned. Added a `⬆️ Upload CSV/TXT` file input
+      (`#bulkImportFile`, `accept=".csv,.txt"`) next to the existing Import
+      button in `#bulkImportPanel`, wired in `wireBulkImport()`
+      (`web/explore.html`): on `change`, `FileReader.readAsText` reads the
+      picked file, each non-blank line is run through the new
+      `extractAddressColumn` (`web/logic.js`), and the joined result
+      replaces `#bulkImportText`'s value — the user still clicks the
+      existing Import button to run the real (unchanged) geocoding
+      pipeline. `extractAddressColumn` distinguishes a genuine multi-column
+      CSV row from a hand-typed street address the same way a person would:
+      a plain address tops out at 3 comma-separated parts ("123 Main St,
+      Austin, TX"), so only 4-or-more-field rows are treated as CSV and
+      trimmed to their first column; a bare `lat, lng` pair is recognized
+      via the existing `parseCoordPair` and left untouched either way. Field
+      splitting is RFC-4180-quote-aware (new pure `splitCsvFields` helper)
+      so a quoted field with an embedded comma — e.g.
+      `"456 Oak Ave, Phoenix, AZ",comp,sold Q1,notes` — counts as one field
+      and isn't mis-split. Also exported `splitCsvFields`/
+      `extractAddressColumn` from `web/logic.js`. Added 12 new unit tests
+      (bare address, bare `lat,lng`, plain 3-field address left alone,
+      real 4+-field CSV rows, a quoted field with an embedded comma, blank/
+      non-string input, plus direct `splitCsvFields` coverage including a
+      doubled-quote escape). Verified: `python tools/build_model_json.py`
+      (25 land uses, 32 sources unchanged), `python -m pytest -q` (39
+      passed), `simy validate` (OK), `node --test tests/js/*.test.mjs` (376
+      passed, 12 new), and a headless-Chromium script confirmed both
+      `web/explore.html` and `web/index.html` load with zero genuine
+      console/page errors, then drove a real synthetic file-select (a
+      mocked `File` + `DataTransfer`, since jsdom-style direct
+      `input.files` assignment needs a real `DataTransfer` in Chromium)
+      through the actual `wireBulkImport` handler end-to-end: a 4-line CSV
+      mix (a 4-column row, a bare coordinate pair, a quoted 4-column row,
+      and a blank line) populated the textarea with exactly the 3 expected
+      address lines and the correct "Loaded 3 lines… click Import" status
+      text, with zero console errors during the interaction; a
+      no-address-lines file produced the distinct "didn't contain any
+      address lines" status instead of silently doing nothing.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
