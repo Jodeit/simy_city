@@ -1455,6 +1455,46 @@ const PARCEL_SOURCES=[
     county_state:"Multnomah County, OR",
     zoning_note:"unlike TX, OR counties do zone unincorporated land — check Multnomah County's unincorporated-area zoning, or the City of Portland/Gresham/Troutdale zoning code if incorporated",
   },
+  {
+    name:"Alameda County Assessor (Alameda County, CA)",
+    // The county's own public "Parcel Boundaries" layer — confirmed live via
+    // multiple independent search-indexed sources, including a search engine's
+    // own index of the live ArcGIS REST layer page itself (title "Layer:
+    // Parcel Boundaries (ID:0)") — the strongest confirmation any
+    // PARCEL_SOURCES entry here has had, though this sandbox still can't
+    // fetch it directly (same ArcGIS-REST-introspection block every prior
+    // county hit) to double-check live this run.
+    urls:["https://services5.arcgis.com/ROBnTHSNjoZ2Wm1P/arcgis/rest/services/Parcels/FeatureServer/0"],
+    // Oakland/Berkeley/Fremont/Hayward/Livermore — bbox is the county's own
+    // Open Data Hub's published search extent (data.acgov.org), not a rough
+    // guess. No overlap with any other entry (nearest CA counties here — LA/
+    // Orange/San Diego — all sit south of 34.8°N; this is 37.45–37.91°N).
+    bbox:[-122.3436,37.4542,-121.4693,37.9067],
+    // Confirmed fields (via multiple independent search-indexed sources —
+    // same sandbox caveat as above): APN (already in the shared id candidate
+    // list), SitusAddress (added to the shared address list), UseCode (added
+    // to the shared land-use list), and TotalNetValue — unlike most thin-
+    // schema counties here, this layer's Land/Imps split *does* also publish
+    // a combined net total (after HOEX/OTEX exemptions), so — unlike San
+    // Diego's ASR_LAND/ASR_IMPR or Miami-Dade's sqft-only LND_SQFOOT — value
+    // isn't left unmapped (added to the shared value list). No owner-name
+    // field is confirmed on this layer (MailingAddress is a mailing address,
+    // not a name — same "don't guess which field is a name" caution as
+    // Dallas/Fulton/Tarrant/Hennepin/Bernalillo/Multnomah), and no acreage
+    // field is confirmed either, so both render as absent rather than risking
+    // a wrong label.
+    // propinfo.acgov.org's Property Search *does* have a documented per-APN
+    // deep link — unlike most counties here, this was confirmed by a search
+    // engine indexing multiple live result pages for distinct real APNs
+    // (e.g. `?PRINT_PARCEL=60-2535-1-2`, `?PRINT_PARCEL=2-89-1`), strong
+    // enough to build a real record URL instead of the usual bare-search-page
+    // fallback.
+    record:(a)=>{const id=pick(a,["APN"]);
+      return id?`https://propinfo.acgov.org/?PRINT_PARCEL=${encodeURIComponent(id)}`:"https://propinfo.acgov.org/";},
+    source_label:"Alameda County Assessor",
+    county_state:"Alameda County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3881,10 +3921,10 @@ function showParcel(geo,src,seq){
   }
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC","PROPID","MAPTAXLOT"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD","SitusAddress"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION","UseCode"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot","TotalNetValue"]);
   let rows="";
   const row=(k,v,id)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b${id?` id="${id}"`:""}>${esc(v)}</b></div>`;};
   row("Parcel ID",id);

@@ -3961,27 +3961,45 @@ Ground rules for each run:
       reverse-search "Find candidate sites" button now being enabled for
       solar_farm) is a good human spot-check.
 
-- [ ] **26th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 25 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
-      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
-      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
-      Mecklenburg/Bernalillo/Multnomah). Worth checking first for a public
-      ArcGIS-hosted parcel MapServer: Alameda County, CA (Oakland/Berkeley —
-      Bay Area counties tend to publish good open GIS), Fairfax County, VA
-      (DC metro, not yet covered), or Jefferson County, CO (Denver's western
-      suburbs — Denver itself is already in, this would be adjacent, so
-      double-check the bbox doesn't overlap). Same research-then-graceful-
-      partial-coverage approach every prior county here used: confirm the
-      live REST endpoint and real field names via web search (this sandbox
-      blocks ArcGIS REST introspection directly), map only the fields
-      independently confirmed rather than guessing a label, and check the
-      new bbox against all 25 existing entries before appending (`inBbox`
-      resolves to the *first* match, so a silent overlap would shadow an
-      existing county). Verify: `simy validate`, `python -m pytest -q`,
-      `node --test tests/js/*.test.mjs`, headless-Chromium load of
-      `web/explore.html` with zero console errors, and a synthetic check
-      that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
-      county's bbox resolves to it.
+- [x] **26th parcel county: Alameda County, CA (Oakland/Berkeley/Fremont).**
+      Added a `PARCEL_SOURCES` entry pointing at the county's public "Parcel
+      Boundaries" ArcGIS layer —
+      `https://services5.arcgis.com/ROBnTHSNjoZ2Wm1P/arcgis/rest/services/Parcels/FeatureServer/0`
+      — confirmed live via multiple independent search-indexed sources,
+      including a search engine's own index of the live layer's REST page
+      itself (title "Layer: Parcel Boundaries (ID:0)"), the strongest
+      confirmation any entry here has had (same sandbox caveat as every
+      prior county: direct ArcGIS REST introspection is blocked, so this
+      couldn't be double-checked live this run). Confirmed fields: `APN`
+      (already in the shared id candidate list), `SitusAddress` (added to
+      the shared address list), `UseCode` (added to the shared land-use
+      list), and `TotalNetValue` — unlike most thin-schema counties here,
+      this layer's `Land`/`Imps` split also publishes a combined post-
+      exemption total, so value isn't left unmapped (added to the shared
+      value list). No owner-name field is confirmed (`MailingAddress` is an
+      address, not a name — same caution as Dallas/Fulton/Tarrant/Hennepin/
+      Bernalillo/Multnomah) and no acreage field is confirmed either, so
+      both render as absent rather than risking a wrong label. Also unlike
+      most counties here, `propinfo.acgov.org`'s Property Search *does* have
+      a confirmed per-APN deep link — a search engine had indexed live
+      result pages for multiple distinct real APNs
+      (`?PRINT_PARCEL=60-2535-1-2`, `?PRINT_PARCEL=2-89-1`), strong enough to
+      build a real record URL instead of the usual bare-search-page
+      fallback. bbox `[-122.3436,37.4542,-121.4693,37.9067]` is the county's
+      own Open Data Hub's published search extent (not a guess), checked for
+      overlap against all 25 existing entries — none (the nearest CA
+      counties here, LA/Orange/San Diego, all sit south of 34.8°N).
+      Verified: `python tools/build_model_json.py` (still 25 land uses, 32
+      sources — this item touches no model data), `python -m pytest -q` (39
+      passed), `simy validate` (OK), `node --test tests/js/*.test.mjs` (376
+      passed, unaffected), a headless-Chromium load of both
+      `web/explore.html` and `web/index.html` with zero genuine console/page
+      errors (only the expected blocked-network noise for map tiles/ArcGIS/
+      etc. in this sandbox), and a synthetic in-page check confirming
+      `PARCEL_SOURCES.length` is 26, a downtown-Oakland coordinate resolves
+      into the new entry's bbox (an Austin, TX coordinate correctly doesn't),
+      and `record()` builds the right `propinfo.acgov.org` URL from an `APN`
+      and falls back to the bare site when the id is missing.
 
 - [x] **CSV file upload for bulk address import, not just paste.** Added a
       `#bulkImportFile` `<input type="file" accept=".csv,.txt,...">` next to
