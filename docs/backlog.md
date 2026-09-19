@@ -3961,27 +3961,40 @@ Ground rules for each run:
       reverse-search "Find candidate sites" button now being enabled for
       solar_farm) is a good human spot-check.
 
-- [ ] **26th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 25 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
-      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
-      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
-      Mecklenburg/Bernalillo/Multnomah). Worth checking first for a public
-      ArcGIS-hosted parcel MapServer: Alameda County, CA (Oakland/Berkeley —
-      Bay Area counties tend to publish good open GIS), Fairfax County, VA
-      (DC metro, not yet covered), or Jefferson County, CO (Denver's western
-      suburbs — Denver itself is already in, this would be adjacent, so
-      double-check the bbox doesn't overlap). Same research-then-graceful-
-      partial-coverage approach every prior county here used: confirm the
-      live REST endpoint and real field names via web search (this sandbox
-      blocks ArcGIS REST introspection directly), map only the fields
-      independently confirmed rather than guessing a label, and check the
-      new bbox against all 25 existing entries before appending (`inBbox`
-      resolves to the *first* match, so a silent overlap would shadow an
-      existing county). Verify: `simy validate`, `python -m pytest -q`,
-      `node --test tests/js/*.test.mjs`, headless-Chromium load of
-      `web/explore.html` with zero console errors, and a synthetic check
-      that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
-      county's bbox resolves to it.
+- [x] **26th parcel county.** Added Alameda County, CA (Oakland/Berkeley/
+      Fremont/Hayward/Livermore) to `PARCEL_SOURCES` in `web/explore.html`,
+      pointing at the county's public "Parcel Boundaries" (ID:0) ArcGIS
+      Online FeatureServer layer — confirmed live via multiple independent
+      search-indexed sources (this sandbox blocks direct ArcGIS REST
+      introspection, same as every prior county here). The county also runs
+      its own gis.acgov.org ArcGIS Server, but that's only confirmed
+      reachable over plain http — mixed content from this https page — so it
+      was left out rather than added as a fallback that would just get
+      blocked by the browser anyway. bbox covers the whole county (San
+      Leandro Bay/Alameda island west to the Livermore Valley/San Joaquin
+      county line east, Fremont south to Berkeley/Albany/Emeryville north)
+      with no overlap against any of the other 25 entries — the nearest
+      other California counties here (LA, Orange, San Diego) are all
+      Southern California. Confirmed fields on the layer: `APN` (already in
+      the shared id candidate list from Maricopa), `SitusAddress` (combined
+      situs address) and `UseCode`/`TotalNetValue`, both newly added to the
+      shared `land`/`value` pick() candidate lists that every county's
+      parcel-panel render shares. Owner name isn't exposed on this public
+      boundary layer (`MailingAddress` is a mailing address, not an owner
+      name) and `Shape__Area` is a raw area attribute, not confirmed to be
+      in acres — same unit-mismatch call LA County's `Shape.STArea()` hit —
+      so both are left unmapped rather than guessed, same graceful
+      partial-field-coverage as every other county here. No documented
+      per-APN deep-link URL scheme on the county's propinfo.acgov.org search
+      portal either, so — same call as Harris/Bexar/LA/King/Miami-Dade —
+      it links to the search page instead of guessing a link shape that
+      might 404. Verified: `simy validate` (OK, 32 sources), `python -m
+      pytest -q` (39 passed), `node --test tests/js/*.test.mjs` (376
+      passed), and headless Chromium confirms `web/explore.html` and
+      `web/index.html` both load with zero genuine console/page errors, plus
+      a synthetic in-page check that `PARCEL_SOURCES.length` is now 26 and
+      that an Oakland coordinate (37.8044, -122.2712) correctly resolves to
+      `"Alameda County, CA"` via `inBbox`.
 
 - [x] **CSV file upload for bulk address import, not just paste.** Added a
       `#bulkImportFile` `<input type="file" accept=".csv,.txt,...">` next to
