@@ -1455,6 +1455,38 @@ const PARCEL_SOURCES=[
     county_state:"Multnomah County, OR",
     zoning_note:"unlike TX, OR counties do zone unincorporated land — check Multnomah County's unincorporated-area zoning, or the City of Portland/Gresham/Troutdale zoning code if incorporated",
   },
+  {
+    name:"Alameda County Assessor Parcel Boundaries (Alameda County, CA)",
+    // Public ArcGIS Online-hosted "Parcel Boundaries" (ID:0) layer, confirmed
+    // live via multiple independent search-indexed sources (this sandbox
+    // blocks direct ArcGIS REST introspection, same as every prior county
+    // here). The county also runs its own gis.acgov.org ArcGIS Server, but
+    // that's only confirmed reachable over plain http — mixed content from
+    // this https page — so it's left out rather than added as a fallback
+    // that would just get blocked by the browser anyway.
+    urls:["https://services5.arcgis.com/ROBnTHSNjoZ2Wm1P/arcgis/rest/services/Parcels/FeatureServer/0"],
+    // Covers the whole county: San Leandro Bay/Alameda island in the west to
+    // the Livermore Valley/Alameda-San Joaquin county line in the east,
+    // Fremont in the south to Berkeley/Albany/Emeryville in the north.
+    // No overlap with any other entry's bbox (nearest CA entries — LA,
+    // Orange, San Diego — are all Southern California).
+    bbox:[-122.35,37.45,-121.46,37.91],
+    // Confirmed fields on this layer (via multiple independent search-indexed
+    // sources): APN (already in the shared id list from Maricopa), SitusAddress
+    // (combined situs address), UseCode, and TotalNetValue. Owner name isn't
+    // exposed on this public boundary layer (MailingAddress is a mailing
+    // address, not a name) and Shape__Area is likely square feet/meters, not
+    // acres — same unit-mismatch call LA County's Shape.STArea() hit — so
+    // both are left unmapped rather than guessed, same graceful
+    // partial-field-coverage as every other county here. No documented
+    // per-APN deep-link URL scheme on the county's propinfo.acgov.org search
+    // portal either, so — same call as Harris/Bexar/LA/King/Miami-Dade —
+    // send people to the search page instead of guessing a link shape.
+    record:()=>"https://propinfo.acgov.org/",
+    source_label:"Alameda County Assessor",
+    county_state:"Alameda County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check Alameda County's unincorporated-area zoning, or the city's if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3881,10 +3913,10 @@ function showParcel(geo,src,seq){
   }
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC","PROPID","MAPTAXLOT"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD","SitusAddress"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION","UseCode"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot","TotalNetValue"]);
   let rows="";
   const row=(k,v,id)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b${id?` id="${id}"`:""}>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
