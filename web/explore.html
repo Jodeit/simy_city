@@ -1455,6 +1455,38 @@ const PARCEL_SOURCES=[
     county_state:"Multnomah County, OR",
     zoning_note:"unlike TX, OR counties do zone unincorporated land — check Multnomah County's unincorporated-area zoning, or the City of Portland/Gresham/Troutdale zoning code if incorporated",
   },
+  {
+    name:"Alameda County Assessor (Alameda County, CA)",
+    // Alameda's own hosted FeatureServer on ArcGIS Online — confirmed live via
+    // multiple independent search-indexed sources (this sandbox blocks direct
+    // ArcGIS REST introspection like every prior county here).
+    urls:["https://services5.arcgis.com/ROBnTHSNjoZ2Wm1P/arcgis/rest/services/Parcels/FeatureServer/0"],
+    // Covers Oakland/Berkeley/Fremont/Hayward/Livermore west to the Bay,
+    // east to the Altamont Pass — padded rough rectangle, same "loose
+    // pre-filter before the real point query" approach every PARCEL_SOURCES
+    // bbox here takes. No overlap with any other entry's bbox (nearest CA
+    // entries — Orange/LA/San Diego — sit a full degree of latitude south).
+    bbox:[-122.35,37.44,-121.45,37.92],
+    // Confirmed fields (via multiple independent search-indexed sources):
+    // APN (dash-hyphenated, e.g. "15-1338-24" — already in the shared id
+    // candidate list above) and a combined SitusAddress field (added to the
+    // shared address candidate list above), built from
+    // SitusStreetNumber/SitusStreetName/SitusUnit/SitusCity components.
+    // Owner *name* isn't exposed on this public layer (MailingAddress/
+    // MailingAddressStreet cover the owner's mailing address, not a name),
+    // and acreage/land-use field names weren't independently confirmed on
+    // this specific layer — so, same cautious call as
+    // Dallas/Fulton/Tarrant/Hennepin/Bernalillo/Multnomah here, left
+    // unmapped rather than guessed.
+    // Unlike Harris/Bexar/LA/King, propinfo.acgov.org does publish a stable
+    // per-APN deep link (`?PRINT_PARCEL=<APN>`), so build a real record URL
+    // instead of falling back to a search page.
+    record:(a)=>{const id=pick(a,["APN"]);
+      return id?`https://propinfo.acgov.org/?PRINT_PARCEL=${encodeURIComponent(id)}`:"https://propinfo.acgov.org/";},
+    source_label:"Alameda County Assessor",
+    county_state:"Alameda County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -3881,7 +3913,7 @@ function showParcel(geo,src,seq){
   }
   const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC","PROPID","MAPTAXLOT"]);
   const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
-  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
+  const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","SitusAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
   const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
   const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
   const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);

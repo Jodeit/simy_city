@@ -3961,27 +3961,47 @@ Ground rules for each run:
       reverse-search "Find candidate sites" button now being enabled for
       solar_farm) is a good human spot-check.
 
-- [ ] **26th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 25 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
-      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
-      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
-      Mecklenburg/Bernalillo/Multnomah). Worth checking first for a public
-      ArcGIS-hosted parcel MapServer: Alameda County, CA (Oakland/Berkeley —
-      Bay Area counties tend to publish good open GIS), Fairfax County, VA
-      (DC metro, not yet covered), or Jefferson County, CO (Denver's western
-      suburbs — Denver itself is already in, this would be adjacent, so
-      double-check the bbox doesn't overlap). Same research-then-graceful-
-      partial-coverage approach every prior county here used: confirm the
-      live REST endpoint and real field names via web search (this sandbox
-      blocks ArcGIS REST introspection directly), map only the fields
-      independently confirmed rather than guessing a label, and check the
-      new bbox against all 25 existing entries before appending (`inBbox`
-      resolves to the *first* match, so a silent overlap would shadow an
-      existing county). Verify: `simy validate`, `python -m pytest -q`,
-      `node --test tests/js/*.test.mjs`, headless-Chromium load of
-      `web/explore.html` with zero console errors, and a synthetic check
-      that `PARCEL_SOURCES.length` is 26 and a coordinate inside the new
-      county's bbox resolves to it.
+- [x] **26th parcel county.** Added Alameda County, CA (Oakland/Berkeley/
+      Fremont/Hayward/Livermore) to `PARCEL_SOURCES` in `web/explore.html`,
+      using the county's own hosted ArcGIS Online FeatureServer
+      (`services5.arcgis.com/ROBnTHSNjoZ2Wm1P/.../Parcels/FeatureServer/0`,
+      confirmed live via multiple independent search-indexed sources — this
+      sandbox blocks direct ArcGIS REST introspection like every prior
+      county here). Confirmed fields: `APN` (dash-hyphenated, e.g.
+      "15-1338-24" — already in the shared id candidate list) and a
+      combined `SitusAddress` field (newly added to the shared address
+      candidate list in `showParcel`, built from
+      SitusStreetNumber/SitusStreetName/SitusUnit/SitusCity components on
+      the live layer). Owner *name* isn't exposed on this public layer
+      (only `MailingAddress`/`MailingAddressStreet`, the mailing address —
+      not a name), and acreage/land-use field names weren't independently
+      confirmed, so — same cautious call as
+      Dallas/Fulton/Tarrant/Hennepin/Bernalillo/Multnomah here — left
+      unmapped rather than guessed. Unlike Harris/Bexar/LA/King,
+      `propinfo.acgov.org` does publish a stable per-APN deep link
+      (`?PRINT_PARCEL=<APN>`), so `record()` builds a real record URL
+      instead of falling back to a search page. bbox
+      `[-122.35,37.44,-121.45,37.92]` checked against all 25 existing
+      entries before appending — no overlap (nearest CA entries, Orange/LA/
+      San Diego, sit a full degree of latitude south).
+
+      Verified: `python tools/build_model_json.py` (25 land uses, 32
+      sources, no change — this item touches no model data), `python -m
+      pytest -q` (39 passed), `simy validate` (OK), `node --test
+      tests/js/*.test.mjs` (376 passed, unchanged — this item adds no new
+      testable pure function), headless Chromium confirmed both
+      `web/explore.html` and `web/index.html` load with zero genuine
+      `pageerror` events (console-level `net::ERR_TUNNEL_CONNECTION_FAILED`
+      entries for satellite tiles/county ArcGIS endpoints are the sandbox's
+      expected outbound-network block, not real JS errors — same caveat
+      every prior county here noted), and a synthetic in-page check
+      confirmed `PARCEL_SOURCES.length` is 26, an Oakland, CA coordinate
+      (37.8044, -122.2712) resolves via `inBbox` to the new Alameda County
+      entry, and `record({APN:"15-1338-24"})` /
+      `record({})` produce the expected populated and fallback
+      `propinfo.acgov.org` URLs. A live end-to-end parcel-boundary fetch
+      against the real FeatureServer is a good human spot-check (outbound
+      to ArcGIS Online is blocked from this sandbox).
 
 - [x] **CSV file upload for bulk address import, not just paste.** Added a
       `#bulkImportFile` `<input type="file" accept=".csv,.txt,...">` next to
