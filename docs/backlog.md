@@ -4053,6 +4053,91 @@ Ground rules for each run:
       confirmed `#bulkImportText` came back with exactly the expected
       4 lines (the blank line dropped, each shape handled correctly).
 
+## Now (high value) — newly added (21)
+- [ ] **26th land use: truck stop / travel plaza (interstate-interchange
+      siting).** Every land use so far that cares about roads uses the
+      *arterial* traffic-count leg added for warehouse_club/fast_casual
+      (`trafficLeg`, `maxAadtWithinRadius`, the NHS AADT FeatureServer). A
+      truck stop / travel plaza is the first use whose core siting question
+      is specifically "how close is the nearest *interstate* interchange,"
+      not "is there decent arterial traffic" — reuse the exact same
+      `arcgisNearQuery`/NHS-AADT infrastructure but at a much higher AADT
+      floor (interstates run 50k–150k+ vs. fast_casual's 20k arterial gate)
+      and a *tight* distance radius (trucks need direct ramp access, not
+      "somewhere in the same zip code"). Add `truck_stop` to
+      `data_sources/layers.yaml`: `requires.transportation` with a high
+      `near_highway_aadt` floor plus a short radius (the existing
+      `trafficLeg` helper takes a radius already, just needs a smaller one
+      passed for this use than warehouse_club's), `requires.parcel.
+      min_buildable_acres` in the 5–10 range (fuel islands + truck parking,
+      well under warehouse_club's 15 but well over a kiosk use), and no
+      `requires.demand` (a truck stop's customers are passing through, not
+      local rooftops — the second land use after solar_farm with no demand
+      leg). Verdict (`maybeRenderTruckStopVerdict`) is two-gate: acreage +
+      highway-proximity, same shape as solar_farm's two-gate pattern.
+      `reverseSearchSignals` should get a real look here too: this is a
+      `preferNear`-shaped use (near a highway), but the "near" target is
+      a road network, not point competitors/demand — decide whether that
+      fits the existing `rankCandidates` demand-radius signal as-is or
+      needs its own; if it doesn't cleanly fit, ship with no ranking signal
+      (search button disabled) rather than bolting on a wrong-shaped one,
+      and say so explicitly. Verify: `python tools/build_model_json.py`,
+      `simy validate`, `python -m pytest -q`, `node --test
+      tests/js/*.test.mjs`, headless-Chromium zero-console-errors load of
+      both pages, and driving `maybeRenderTruckStopVerdict` directly
+      through PASS/SHORT-on-acreage/SHORT-on-highway-distance/
+      no-highway-in-range/missing-data states.
+- [ ] **27th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+      covers 26 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
+      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
+      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
+      Mecklenburg/Bernalillo/Multnomah/Alameda). Worth checking first for a
+      public ArcGIS-hosted parcel MapServer/FeatureServer: Santa Clara
+      County, CA (San Jose/Silicon Valley — another Bay Area county with
+      historically good open GIS, adjacent to but not overlapping Alameda's
+      bbox), Broward County, FL (Fort Lauderdale — South Florida isn't
+      covered outside Miami-Dade), or Marion County, IN (Indianapolis —
+      Midwest coverage is thin outside Cook/Hennepin/Franklin). Same
+      research-then-graceful-partial-coverage approach every prior county
+      here used: confirm the live REST endpoint and real field names via
+      web search (this sandbox blocks ArcGIS REST introspection directly,
+      same constraint every prior PARCEL_SOURCES entry had), map only the
+      fields independently confirmed rather than guessing a label, and
+      check the new bbox against all 26 existing entries before appending
+      (`inBbox` resolves to the *first* match, so a silent overlap would
+      shadow an existing county). Verify: `simy validate`, `python -m
+      pytest -q`, `node --test tests/js/*.test.mjs`, headless-Chromium load
+      of `web/explore.html` with zero console errors, and a synthetic check
+      that `PARCEL_SOURCES.length` is 27 and a coordinate inside the new
+      county's bbox resolves to it (and one inside every existing county
+      still resolves to its own entry, not the new one).
+- [ ] **Transit-proximity checklist row (nearest bus/rail stop).** The
+      developer checklist has topography, MUD/water district, FEMA flood,
+      Census ACS, and (for two uses) highway-AADT reads, but nothing about
+      transit access — relevant context for multifamily and senior_living
+      in particular (both `layers.yaml` uses that plausibly serve
+      transit-dependent residents), and generally useful background for
+      every use. Add a live, keyless Overpass query (reusing the existing
+      `overpassRaw`/session-cache pattern, not a new fetch mechanism) for
+      the nearest `highway=bus_stop`, `railway=station`/`halt`, or
+      `public_transport=stop_position|platform` node within a short radius
+      (~1 km) of the clicked point, surfaced as a new checklist row ("🚌
+      Nearest transit stop: ~400m — CapMetro bus route" or "no transit stop
+      within 1 km") — informational only, not a new PASS/SHORT verdict gate
+      on any existing land use (that's a separate, larger follow-up once
+      there's a real per-use case for it, e.g. multifamily preferring
+      transit access). Add a pure `nearestTransitStop(points, center)`
+      helper to `web/logic.js` (parse Overpass elements via the existing
+      `parseOverpassPoints`, find closest via `haversine`) with unit tests
+      for: a mix of bus/rail/platform tags, an empty result set, a result
+      exactly at the query center, and malformed/missing-coordinate
+      elements. Verify: `python -m pytest -q`, `simy validate`, `node
+      --test tests/js/*.test.mjs`, and headless Chromium confirming the new
+      checklist row renders correctly (with mocked Overpass responses, both
+      a hit and a no-stops-in-range case) with zero console errors.
+      Outbound network to Overpass is blocked from this sandbox, so a live
+      end-to-end fetch on the real site is a good human spot-check.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
