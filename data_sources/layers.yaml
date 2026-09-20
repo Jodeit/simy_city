@@ -1058,6 +1058,56 @@ land_uses:
       documents) automatically, via the exact same generalized read
       data_center's entry already exercises.
 
+  truck_stop:              # interstate-interchange truck stop / travel plaza (Pilot/Love's/TA-type)
+    label: Truck Stop / Travel Plaza
+    requires:
+      # Every prior road-facing use (warehouse_club/fast_casual/car_wash/
+      # pharmacy/convenience_store/distribution_center/drive_thru_coffee/
+      # bank_branch) gates on `near_highway_aadt`/`near_arterial_aadt`
+      # somewhere between 15000 and 40000 — decent arterial traffic. A truck
+      # stop's siting question is narrower and stricter: is there a real
+      # *interstate* interchange right here, not just a busy road. Set above
+      # every existing floor (distribution_center's 35000, warehouse_club's
+      # 40000) to reflect actual interstate volumes (50k-150k+ AADT) rather
+      # than arterial ones.
+      transportation: { near_highway_aadt: 55000 }
+      # Fuel islands (car + truck sides) + truck parking + a small convenience
+      # building, well under warehouse_club's 15-acre big-box pad but well
+      # over a kiosk-scale use (drive_thru_coffee's 0.4).
+      parcel:      { min_buildable_acres: 8 }
+      # Deliberately no `demand` block, same inversion solar_farm's entry
+      # established: a truck stop's customers are passing through on the
+      # interstate, not driving from nearby rooftops — a household count is
+      # irrelevant to siting one. The second land use here with no demand
+      # leg at all.
+    induces:
+      transportation:
+        note: high daily truck-trip generation at the interchange ramp; may require a dedicated deceleration/acceleration lane
+    impacts:
+      habitat: low             # typically an already-disturbed interchange pad, not raw land
+      land_cover: medium        # fuel islands + truck parking + a small building, less paving than a full warehouse
+      carbon: medium            # idling trucks/refrigeration units are a real if secondary emissions source
+      water_stress: low
+      traffic: high             # heavy daily truck volume, by definition
+    notes: >
+      The second no-`requires.demand` land use (after solar_farm): a truck
+      stop's viability has nothing to do with nearby households, only
+      interstate-interchange access, so `USE_DEMAND.truck_stop.roofNeed` is 0
+      (display-only rooftop count, never gated) same as solar_farm/
+      data_center. Verdict (`maybeRenderTSVerdict`, web/explore.html) is a
+      two-gate PASS/SHORT mirroring solar_farm's shape exactly, just swapping
+      substation-distance for the highway-AADT leg every warehouse_club-style
+      use already fetches (`arcgisNearQuery(AADT_SOURCE,...)`, reused here at
+      a tight 1.5 km radius rather than warehouse_club's wide trade-area one
+      — trucks need a ramp right there, not "somewhere in the same zip
+      code"). `reverseSearchSignals` (web/logic.js) needs no changes: with no
+      `competition`/`power.prefer_substation_within_km`/`demand_signals`
+      block, none of its four signals turn on, so `updateSearchAvailability`
+      already disables the reverse-search toggle for this use automatically
+      — the right outcome (a road-network-proximity read doesn't fit
+      `rankCandidates`' point-competitor/demand-radius shapes) without
+      bolting on a wrong-shaped ranking signal.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

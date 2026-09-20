@@ -4054,7 +4054,7 @@ Ground rules for each run:
       4 lines (the blank line dropped, each shape handled correctly).
 
 ## Now (high value) — newly added (21)
-- [ ] **26th land use: truck stop / travel plaza (interstate-interchange
+- [x] **26th land use: truck stop / travel plaza (interstate-interchange
       siting).** Every land use so far that cares about roads uses the
       *arterial* traffic-count leg added for warehouse_club/fast_casual
       (`trafficLeg`, `maxAadtWithinRadius`, the NHS AADT FeatureServer). A
