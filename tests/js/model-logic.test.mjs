@@ -19,7 +19,7 @@ const {
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, extractAddressColumn, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
-  parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
+  parseOverpassPoints, nearestTransitStop, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
   bestFitReasonText, bestFitToCsvRows, buildBestFitReportText,
@@ -1960,6 +1960,50 @@ test("parseOverpassPoints: handles a missing/malformed response gracefully", () 
   assert.deepEqual(parseOverpassPoints(null), []);
   assert.deepEqual(parseOverpassPoints({}), []);
   assert.deepEqual(parseOverpassPoints({ elements: null }), []);
+});
+
+// ---- developer checklist: nearestTransitStop ----
+
+test("nearestTransitStop: picks the closest of a mix of bus/rail/platform tags", () => {
+  const center = { lat: 30.0, lng: -97.0 };
+  const json = {
+    elements: [
+      { type: "node", tags: { railway: "station" }, lat: 30.05, lon: -97.0 }, // ~5.6 km
+      { type: "node", tags: { highway: "bus_stop" }, lat: 30.004, lon: -97.0 }, // ~0.44 km
+      { type: "way", tags: { public_transport: "platform" }, center: { lat: 30.02, lon: -97.0 } }, // ~2.2 km
+    ],
+  };
+  const nearest = nearestTransitStop(json, center);
+  assert.ok(nearest);
+  assert.equal(nearest.lat, 30.004);
+  assert.equal(nearest.lng, -97.0);
+  assert.ok(nearest.km < 0.5);
+});
+
+test("nearestTransitStop: an empty result set returns null", () => {
+  assert.equal(nearestTransitStop({ elements: [] }, { lat: 30, lng: -97 }), null);
+  assert.equal(nearestTransitStop(null, { lat: 30, lng: -97 }), null);
+});
+
+test("nearestTransitStop: a stop exactly at the query center resolves to km 0", () => {
+  const center = { lat: 30.0, lng: -97.0 };
+  const json = { elements: [{ type: "node", lat: 30.0, lon: -97.0 }] };
+  const nearest = nearestTransitStop(json, center);
+  assert.equal(nearest.km, 0);
+});
+
+test("nearestTransitStop: malformed/missing-coordinate elements are skipped, not crashed on", () => {
+  const center = { lat: 30.0, lng: -97.0 };
+  const json = {
+    elements: [
+      { type: "node" }, // no lat/lon
+      { type: "way", center: null },
+      { type: "node", lat: 30.01, lon: -97.0 },
+    ],
+  };
+  const nearest = nearestTransitStop(json, center);
+  assert.ok(nearest);
+  assert.equal(nearest.lat, 30.01);
 });
 
 test("reverseSearchSignals: a min_distance_km_from_nearest competition read turns preferFar on", () => {
