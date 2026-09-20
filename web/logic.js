@@ -974,6 +974,23 @@ function parseOverpassPoints(json){
     return (lat!=null&&lng!=null)?{lat,lng}:null;
   }).filter(Boolean);
 }
+// Developer-checklist transit-proximity row: closest bus/rail stop to
+// `center` out of an Overpass response's elements, reusing parseOverpassPoints
+// for the same node/way-center element handling every other Overpass reader
+// here uses (a stop query is node-only today, but a stray way/relation with a
+// `center` still resolves rather than getting silently dropped). Returns
+// {lat,lng,km} for the nearest element, or null when the response has no
+// usable elements at all (empty result set, or every element missing
+// coordinates) — km is exactly 0 when a stop sits at the query center itself.
+function nearestTransitStop(json,center){
+  const pts=parseOverpassPoints(json);
+  let best=null;
+  pts.forEach(p=>{
+    const km=haversine(center.lat,center.lng,p.lat,p.lng);
+    if(!best||km<best.km)best={lat:p.lat,lng:p.lng,km};
+  });
+  return best;
+}
 // Decides which of rankCandidates' four scoring signals apply to a given land
 // use, from its model.json `requires`/`demand_signals` blocks plus the use's
 // own rooftop-need threshold (USE_DEMAND[id].roofNeed in explore.html —
@@ -1369,5 +1386,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,extractAddressColumn,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,extractAddressColumn,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,nearestTransitStop,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
 }

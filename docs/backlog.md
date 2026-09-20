@@ -4111,7 +4111,7 @@ Ground rules for each run:
       that `PARCEL_SOURCES.length` is 27 and a coordinate inside the new
       county's bbox resolves to it (and one inside every existing county
       still resolves to its own entry, not the new one).
-- [ ] **Transit-proximity checklist row (nearest bus/rail stop).** The
+- [x] **Transit-proximity checklist row (nearest bus/rail stop).** The
       developer checklist has topography, MUD/water district, FEMA flood,
       Census ACS, and (for two uses) highway-AADT reads, but nothing about
       transit access — relevant context for multifamily and senior_living
