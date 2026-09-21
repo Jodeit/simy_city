@@ -1514,6 +1514,39 @@ const PARCEL_SOURCES=[
     county_state:"Alameda County, CA",
     zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
   },
+  {
+    name:"Broward County Property Appraiser (Broward County, FL)",
+    // BCPA's public parcel layer, confirmed live via multiple independent
+    // search-indexed sources (this sandbox blocks direct ArcGIS REST
+    // introspection like every prior county here) — including a Broward
+    // County government agenda-packet PDF (cragenda.broward.org) that cites
+    // the same bcpa.net record-page URL scheme used below, independent of
+    // the GIS-endpoint sources. gis.bcpa.net's DNS was retired; the public
+    // service now lives at gisweb-adapters.bcpa.net under a dated service
+    // name (BCPA_EXTERNAL_JAN26) that may itself rotate again later.
+    urls:["https://gisweb-adapters.bcpa.net/arcgis/rest/services/BCPA_EXTERNAL_JAN26/MapServer/16"],
+    // Broward sits directly north of Miami-Dade (already covered, bbox maxLat
+    // 25.98) sharing the same Everglades western edge (~-80.87); padded
+    // rough rectangle north to the Palm Beach County line, same "loose
+    // pre-filter before the real point query" every PARCEL_SOURCES bbox here
+    // takes — listed after Miami-Dade so any thin overlap right at the
+    // shared county line still resolves to whichever county's real geometry
+    // the point query actually finds.
+    bbox:[-80.88,25.95,-80.05,26.35],
+    // A 2026-06-06 migration to this new public layer stripped owner,
+    // site-address, mailing, valuation, and sale fields from the public REST
+    // service, leaving only FOLIO (12-digit parcel id, already in the shared
+    // id candidate list above from Miami-Dade's FOLIO field) + geometry —
+    // same graceful partial-field-coverage as every other thin-schema county
+    // here. Unlike Harris/Bexar/LA/King, bcpa.net does publish a stable
+    // per-folio record page (RecInfo.asp?URL_Folio=<folio>), so build a real
+    // record URL instead of falling back to a search page.
+    record:(a)=>{const id=pick(a,["FOLIO"]);
+      return id?`https://bcpa.net/RecInfo.asp?URL_Folio=${encodeURIComponent(id)}`:"https://bcpa.net/recmenu.asp";},
+    source_label:"Broward County Property Appraiser",
+    county_state:"Broward County, FL",
+    zoning_note:"unlike TX, FL counties do zone unincorporated land — check Broward's unincorporated-area zoning, or the city's if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
