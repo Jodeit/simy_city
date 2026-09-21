@@ -4103,30 +4103,44 @@ Ground rules for each run:
       SHORT-on-highway, no-highway-in-range, an AADT-lookup error, and
       missing/unlisted acreage) confirming the exact PASS/SHORT text and
       CSS class each time.
-- [ ] **27th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 26 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
-      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
-      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
-      Mecklenburg/Bernalillo/Multnomah/Alameda). Worth checking first for a
-      public ArcGIS-hosted parcel MapServer/FeatureServer: Santa Clara
-      County, CA (San Jose/Silicon Valley — another Bay Area county with
-      historically good open GIS, adjacent to but not overlapping Alameda's
-      bbox), Broward County, FL (Fort Lauderdale — South Florida isn't
-      covered outside Miami-Dade), or Marion County, IN (Indianapolis —
-      Midwest coverage is thin outside Cook/Hennepin/Franklin). Same
-      research-then-graceful-partial-coverage approach every prior county
-      here used: confirm the live REST endpoint and real field names via
-      web search (this sandbox blocks ArcGIS REST introspection directly,
-      same constraint every prior PARCEL_SOURCES entry had), map only the
-      fields independently confirmed rather than guessing a label, and
-      check the new bbox against all 26 existing entries before appending
-      (`inBbox` resolves to the *first* match, so a silent overlap would
-      shadow an existing county). Verify: `simy validate`, `python -m
-      pytest -q`, `node --test tests/js/*.test.mjs`, headless-Chromium load
-      of `web/explore.html` with zero console errors, and a synthetic check
-      that `PARCEL_SOURCES.length` is 27 and a coordinate inside the new
-      county's bbox resolves to it (and one inside every existing county
-      still resolves to its own entry, not the new one).
+- [x] **27th parcel county: Broward County, FL (Fort Lauderdale).** Added to
+      `PARCEL_SOURCES` in `web/explore.html`, closing South Florida coverage
+      outside Miami-Dade. Endpoint: `gisweb-adapters.bcpa.net/arcgis/rest/
+      services/BCPA_EXTERNAL_JAN26/MapServer/16` — confirmed live via
+      multiple independent search-indexed sources (this sandbox blocks
+      direct ArcGIS REST introspection like every prior county here),
+      including a Broward County government agenda-packet PDF
+      (cragenda.broward.org) that independently cites the same bcpa.net
+      record-page URL scheme used below. Noted in a code comment: gis.bcpa.net's
+      DNS was retired and the public service moved here under a dated
+      service name (`BCPA_EXTERNAL_JAN26`) that may itself rotate again —
+      same "graceful fallback, don't over-trust a hostname" spirit as every
+      other `urls` list here. A June 2026 migration stripped owner,
+      site-address, mailing, valuation, and sale fields from the public
+      layer, leaving only `FOLIO` (already in the shared id candidate list,
+      reused from Miami-Dade) + geometry — same graceful
+      partial-field-coverage as every other thin-schema county here. Unlike
+      Harris/Bexar/LA/King, bcpa.net publishes a stable per-folio record
+      page (`RecInfo.asp?URL_Folio=<folio>`, cross-confirmed via multiple
+      real folio examples across independent sources), so `record()` builds
+      a real deep link instead of falling back to a search page. `bbox`
+      sits directly north of Miami-Dade sharing its Everglades western edge
+      (~-80.87), listed after Miami-Dade in the array so any thin overlap
+      right at the shared county line still resolves by whichever county's
+      real geometry the point query actually finds. Verified: `python
+      tools/build_model_json.py`, `simy validate` (OK: 32 sources, 16
+      layers, 26 land uses), `python -m pytest -q` (39 passed), `node --test
+      tests/js/*.test.mjs` (383 passed), headless Chromium zero-console-error
+      loads of both pages, a synthetic check confirming `PARCEL_SOURCES.length
+      === 27` and that a coordinate inside Broward's bbox resolves to it
+      while a representative point in every other existing county still
+      resolves to its own entry (no shadowing introduced), and a second
+      headless pass mocking the Broward ArcGIS endpoint and driving
+      `runParcel`/`showParcel` directly end-to-end — confirming the parcel
+      panel renders the FOLIO and the record link builds to
+      `https://bcpa.net/RecInfo.asp?URL_Folio=514128060970` with zero JS
+      errors. A live end-to-end fetch against the real BCPA endpoint
+      (blocked from this sandbox) is a good human spot-check.
 - [x] **Transit-proximity checklist row (nearest bus/rail stop).** Added a
       live, keyless Overpass query (`runTransit` in `web/explore.html`,
       reusing the existing `overpass()`/`overpassRaw` session-cache
