@@ -19,7 +19,7 @@ const {
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, extractAddressColumn, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
-  parseOverpassPoints, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
+  parseOverpassPoints, nearestTransitStop, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
   bestFitReasonText, bestFitToCsvRows, buildBestFitReportText,
@@ -1960,6 +1960,49 @@ test("parseOverpassPoints: handles a missing/malformed response gracefully", () 
   assert.deepEqual(parseOverpassPoints(null), []);
   assert.deepEqual(parseOverpassPoints({}), []);
   assert.deepEqual(parseOverpassPoints({ elements: null }), []);
+});
+
+test("nearestTransitStop: picks the closer of a mix of bus/rail/platform-tagged elements", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [
+    { type: "node", lat: 30.101, lon: -97.1, tags: { railway: "station", name: "Downtown Station" } },
+    { type: "node", lat: 30.1005, lon: -97.1, tags: { highway: "bus_stop", operator: "CapMetro" } },
+    { type: "way", center: { lat: 30.11, lon: -97.1 }, tags: { public_transport: "platform" } },
+  ] };
+  const stop = nearestTransitStop(json, center);
+  assert.equal(stop.label, "CapMetro (bus stop)");
+  assert.ok(stop.km > 0 && stop.km < 0.1);
+});
+
+test("nearestTransitStop: returns null for an empty result set", () => {
+  assert.equal(nearestTransitStop({ elements: [] }, { lat: 30.1, lng: -97.1 }), null);
+  assert.equal(nearestTransitStop(null, { lat: 30.1, lng: -97.1 }), null);
+});
+
+test("nearestTransitStop: a stop exactly at the query center resolves to zero distance", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [{ type: "node", lat: 30.1, lon: -97.1, tags: { railway: "halt" } }] };
+  const stop = nearestTransitStop(json, center);
+  assert.equal(stop.km, 0);
+  assert.equal(stop.label, "rail halt");
+});
+
+test("nearestTransitStop: drops malformed/missing-coordinate elements", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [
+    { type: "node", tags: { highway: "bus_stop" } },
+    { type: "way", center: null, tags: { railway: "station" } },
+    null,
+    { type: "node", lat: 30.1001, lon: -97.1, tags: { public_transport: "stop_position" } },
+  ] };
+  const stop = nearestTransitStop(json, center);
+  assert.equal(stop.label, "transit stop");
+});
+
+test("nearestTransitStop: labels an unnamed, unoperated stop by its OSM kind alone", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [{ type: "node", lat: 30.1001, lon: -97.1, tags: {} }] };
+  assert.equal(nearestTransitStop(json, center).label, "transit stop");
 });
 
 test("reverseSearchSignals: a min_distance_km_from_nearest competition read turns preferFar on", () => {

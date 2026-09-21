@@ -4111,32 +4111,34 @@ Ground rules for each run:
       that `PARCEL_SOURCES.length` is 27 and a coordinate inside the new
       county's bbox resolves to it (and one inside every existing county
       still resolves to its own entry, not the new one).
-- [ ] **Transit-proximity checklist row (nearest bus/rail stop).** The
-      developer checklist has topography, MUD/water district, FEMA flood,
-      Census ACS, and (for two uses) highway-AADT reads, but nothing about
-      transit access — relevant context for multifamily and senior_living
-      in particular (both `layers.yaml` uses that plausibly serve
-      transit-dependent residents), and generally useful background for
-      every use. Add a live, keyless Overpass query (reusing the existing
-      `overpassRaw`/session-cache pattern, not a new fetch mechanism) for
-      the nearest `highway=bus_stop`, `railway=station`/`halt`, or
-      `public_transport=stop_position|platform` node within a short radius
-      (~1 km) of the clicked point, surfaced as a new checklist row ("🚌
-      Nearest transit stop: ~400m — CapMetro bus route" or "no transit stop
-      within 1 km") — informational only, not a new PASS/SHORT verdict gate
-      on any existing land use (that's a separate, larger follow-up once
-      there's a real per-use case for it, e.g. multifamily preferring
-      transit access). Add a pure `nearestTransitStop(points, center)`
-      helper to `web/logic.js` (parse Overpass elements via the existing
-      `parseOverpassPoints`, find closest via `haversine`) with unit tests
-      for: a mix of bus/rail/platform tags, an empty result set, a result
-      exactly at the query center, and malformed/missing-coordinate
-      elements. Verify: `python -m pytest -q`, `simy validate`, `node
-      --test tests/js/*.test.mjs`, and headless Chromium confirming the new
-      checklist row renders correctly (with mocked Overpass responses, both
-      a hit and a no-stops-in-range case) with zero console errors.
-      Outbound network to Overpass is blocked from this sandbox, so a live
-      end-to-end fetch on the real site is a good human spot-check.
+- [x] **Transit-proximity checklist row (nearest bus/rail stop).** Added a
+      live, keyless Overpass query (`runTransit` in `web/explore.html`,
+      reusing the existing `overpass()`/`overpassRaw` session-cache
+      wrapper — no new fetch mechanism) for the nearest `highway=bus_stop`,
+      `railway=station`/`halt`, or `public_transport=stop_position|platform`
+      node/way within 1 km of the clicked point, surfaced as a new "🚌
+      Transit" developer-checklist row (e.g. "~120 m — CapMetro (bus stop)"
+      or "no transit stop within 1 km") — informational only, not a new
+      PASS/SHORT verdict gate on any land use. Added a pure
+      `nearestTransitStop(json, center)` helper to `web/logic.js`: walks a
+      raw Overpass response using the same node-lat/lon-or-way/relation-
+      center element shape `parseOverpassPoints` handles, but (unlike that
+      function) keeps each element's tags long enough to label the nearest
+      stop by name, else operator/network, else its OSM kind. 5 new unit
+      tests cover a mix of bus/rail/platform tags (nearest wins), an empty
+      result set, a stop exactly at the query center (zero distance), and
+      malformed/missing-coordinate elements (dropped, not crashed).
+      Verified: `python -m pytest -q` (39 passed), `simy validate` (OK: 32
+      sources, 16 layers, 25 land uses), `node --test tests/js/*.test.mjs`
+      (381 passed), and headless Chromium two ways — a plain load of both
+      pages with zero `pageerror`/genuine-console-error events (the only
+      console errors on `explore.html` are the expected blocked-tile/
+      ArcGIS/Overpass network failures in this sandbox), and a second pass
+      that mocks the Overpass fetch and drives `runTransit` directly,
+      confirming the checklist row renders "~56 m — CapMetro (bus stop)"
+      on a hit and "no transit stop within 1 km" on an empty result, both
+      with zero JS errors. A live end-to-end fetch against the real
+      Overpass API (blocked from this sandbox) is a good human spot-check.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

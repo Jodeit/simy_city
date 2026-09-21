@@ -3948,6 +3948,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>🌊 Flood zone (FEMA)</span><b id="devFlood" class="loading">checking…</b></div>
     <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
     ${(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"||current==="grocery_store"))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
+    <div class="drow"><span>🚌 Transit</span><b id="devTransit" class="loading">checking…</b></div>
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -3959,6 +3960,7 @@ function showParcel(geo,src,seq){
 
   if(lastLatLng){
     runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);
+    runTransit(lastLatLng,seq);
     if(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"||current==="grocery_store"))runCensusTradeArea(lastLatLng,seq);
   }
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
@@ -4131,6 +4133,32 @@ function tryAcsYear(years,fips,seq){
       setHTML("devCensus",parts.join(" · ")+` <span class="src">(ACS ${y} 5-yr, this tract only)</span>`);
     })
     .catch(()=>tryAcsYear(years.slice(1),fips,seq));
+}
+
+/* Nearest transit stop (bus/rail) within ~1 km — informational developer-
+   checklist context for every use (relevant to transit-dependent residents
+   for multifamily/senior_living in particular), not a PASS/SHORT verdict
+   gate on anything. Reuses the same keyless Overpass fetch (`overpass()`,
+   which already gates on reqSeq via web/explore.html's overpassRaw session
+   cache) every other live checklist row uses — just a different tag set on
+   the query. */
+const TRANSIT_RADIUS_M=1000;
+function runTransit(latlng,seq){
+  if(!document.getElementById("devTransit"))return;
+  const q=`[out:json][timeout:25];(`+
+    `node["highway"="bus_stop"](around:${TRANSIT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `node["railway"="station"](around:${TRANSIT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `node["railway"="halt"](around:${TRANSIT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `node["public_transport"~"^(stop_position|platform)$"](around:${TRANSIT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `way["public_transport"="platform"](around:${TRANSIT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `);out center 50;`;
+  overpass(q,seq,d=>{
+    if(!document.getElementById("devTransit"))return;
+    const stop=nearestTransitStop(d,latlng);
+    setHTML("devTransit", stop
+      ? `~${Math.round(stop.km*1000)} m — ${esc(stop.label)}`
+      : `no transit stop within ${(TRANSIT_RADIUS_M/1000).toFixed(0)} km`);
+  },()=>{if(document.getElementById("devTransit"))setHTML("devTransit",errHTML("couldn’t reach OpenStreetMap for transit"));});
 }
 
 /* Multi-tract Census ACS trade area (fast_casual/warehouse_club only): point-
