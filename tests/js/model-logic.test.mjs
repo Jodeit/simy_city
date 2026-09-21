@@ -322,6 +322,32 @@ test("standardUseVerdict: the AADT gate participates in pass same as the other g
   assert.equal(standardUseVerdict({ ...base, aadtHit: { aadt: 100 } }, thresholds).pass, false);
 });
 
+test("standardUseVerdict: truck_stop's BEST_FIT_USES shape (trivial demand + minAcres + minAadt, no competitor/substation/district gates) — PASS only when both real gates clear", () => {
+  // Mirrors BEST_FIT_USES' truck_stop entry exactly: demandKind:"trivial" (no
+  // rooftop count matters), minAcres:7, minAadt:60000, nothing else.
+  const thresholds = { demand: undefined, minAcres: 7, minAadt: 60000 };
+  const trivialDemand = { ratio: 1, pass: true };
+  const pass = standardUseVerdict({ demand: trivialDemand, acres: 7, aadtHit: { aadt: 60000 } }, thresholds);
+  assert.equal(pass.pass, true);
+  assert.equal(pass.demandOk, true); // trivial demand always reads as satisfied
+
+  const shortOnAcreage = standardUseVerdict({ demand: trivialDemand, acres: 6.9, aadtHit: { aadt: 60000 } }, thresholds);
+  assert.equal(shortOnAcreage.siteOk, false);
+  assert.equal(shortOnAcreage.pass, false);
+
+  const shortOnHighway = standardUseVerdict({ demand: trivialDemand, acres: 7, aadtHit: { aadt: 59999 } }, thresholds);
+  assert.equal(shortOnHighway.aadtOk, false);
+  assert.equal(shortOnHighway.pass, false);
+
+  const noHighwayInRange = standardUseVerdict({ demand: trivialDemand, acres: 7, aadtHit: null }, thresholds);
+  assert.equal(noHighwayInRange.aadtOk, false);
+  assert.equal(noHighwayInRange.pass, false);
+
+  const missingAcreage = standardUseVerdict({ demand: trivialDemand, acres: null, aadtHit: { aadt: 60000 } }, thresholds);
+  assert.equal(missingAcreage.siteOk, false);
+  assert.equal(missingAcreage.pass, false);
+});
+
 test("standardUseVerdict: omitting maxSubstationKm skips the substation gate entirely", () => {
   const v = standardUseVerdict({ roofs: 100, subKm: null }, { roofNeed: 100 });
   assert.equal(v.subOk, true);
@@ -2029,6 +2055,15 @@ test("reverseSearchSignals: a use with none of the requires/demand_signals hooks
   assert.equal(sig.preferNear, false);
   assert.equal(sig.preferNearComp, false);
   assert.equal(sig.preferFarDemand, false);
+});
+
+test("reverseSearchSignals: truck_stop's real requires shape (transportation + parcel, no competition/power/demand_signals) gets everything off, same as the no-hooks case", () => {
+  // The actual layers.yaml truck_stop `requires` block — a near_highway_aadt
+  // gate and a min_buildable_acres gate, neither of which reverseSearchSignals
+  // reads at all — should read identically to an empty requires object, not
+  // accidentally trip a signal meant for a different field shape.
+  const sig = reverseSearchSignals({ transportation: { near_highway_aadt: 60000 }, parcel: { min_buildable_acres: 7 } }, 0);
+  assert.deepEqual(sig, { preferFar: false, preferNear: false, preferNearComp: false, preferFarDemand: false });
 });
 
 test("reverseSearchSignals: a max_same_brand_in_trade_area competition read also turns preferFar on (warehouse_club's shape)", () => {

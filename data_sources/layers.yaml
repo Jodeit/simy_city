@@ -1058,6 +1058,63 @@ land_uses:
       documents) automatically, via the exact same generalized read
       data_center's entry already exercises.
 
+  truck_stop:             # interstate-interchange truck stop / travel plaza (fuel + parking, not a rooftop-demand use)
+    label: Truck Stop / Travel Plaza
+    requires:
+      # Every prior traffic-gated use (warehouse_club's 40000, distribution_
+      # center's 35000, fast_casual's 20000 arterial floor) reads "is there
+      # decent nearby traffic" off the National Highway System AADT feed via
+      # `arcgisNearQuery`/`maxAadtWithinRadius` (web/explore.html) — this is
+      # the first use whose gate is specifically an *interstate* interchange,
+      # not just a busy arterial, so the floor jumps well past every prior
+      # one (interstates commonly run 50k-150k+ AADT) and the search radius
+      # (`USE_DEMAND.truck_stop.radius`, the same field `trafficLeg`'s
+      # `arcgisNearQuery` call already takes for every AADT-gated use) drops
+      # to the tightest of any of them — a truck stop needs a ramp it can
+      # actually reach, not just "somewhere near a highway".
+      transportation: { near_highway_aadt: 60000 }
+      # Fuel islands (car + separate diesel/HGV lanes) and truck parking need
+      # real acreage — smaller than distribution_center's 20-acre cross-dock
+      # site, well over a small commercial pad site.
+      parcel:        { min_buildable_acres: 7 }
+      # Deliberately no `requires.demand` block — the second land use after
+      # solar_farm with none. A truck stop's customers are passing through on
+      # the interstate, not driving from nearby rooftops, so a household
+      # count within some radius is meaningless here the way it is for solar
+      # generation (nobody "lives near" either use by design).
+    induces:
+      transportation: { note: "heavy HGV turning movements at the interchange ramp; may need a dedicated deceleration/turn lane" }
+    impacts:
+      habitat: low            # interchange-adjacent land is usually already disturbed/cleared
+      land_cover: medium       # fuel canopy + truck court + parking, smaller footprint than a full warehouse
+      carbon: medium           # idling diesel trucks and fuel throughput
+      traffic: high            # every visit is a heavy-vehicle trip on/off the interstate ramp
+    notes: >
+      Verdict (`maybeRenderTruckStopVerdict`, web/explore.html) is a two-gate
+      PASS/SHORT, the same shape solar_farm's own entry established: parcel
+      acreage (`TS_MIN_ACRES`) and the real AADT traffic-count leg
+      (`TS_AADT_MIN`, reusing the exact same `trafficLeg`/`AADT_SOURCE`
+      machinery warehouse_club/fast_casual/hotel/car_wash/pharmacy/
+      convenience_store/distribution_center/drive_thru_coffee/bank_branch
+      already share) — no rooftop-demand leg at all, same "trivial demand"
+      `demandKind` data_center/solar_farm already use so `standardUseVerdict`
+      reduces to exactly these two real site-selection gates. `USE_DEMAND.
+      truck_stop.compQ` fetches nearby existing truck stops/travel plazas for
+      on-screen context only (same "fetched but not gated" pattern
+      distribution_center's own warehouse count already established) — this
+      use has no `requires.competition` block, so there's no farther-is-
+      better distance leg to wire up. `reverseSearchSignals` (web/logic.js)
+      needs no changes and gets no ranking signal at all: it's a real
+      preferNear-shaped siting question (near a highway interchange), but the
+      "near" target is a road network, not a point layer of competitors or
+      demand the existing preferNear/preferFar/preferNearComp/preferFarDemand
+      reads can express — `roofNeed:0` and no `competition`/`power.
+      prefer_substation_within_km`/`demand_signals.amenities.
+      prefer_school_within_km` block means every one of those four signals
+      reads false, so `updateSearchAvailability`'s existing `supported`
+      check already disables the reverse-search toggle for this use exactly
+      like the ground rule asks, with no per-use special-casing needed.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

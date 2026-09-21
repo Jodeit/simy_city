@@ -1261,6 +1261,29 @@ window.SIMY_MODEL = {
         "traffic": "low"
       },
       "notes": "Inverts every demand-driven use above: no `requires.demand` block at all, since a solar farm's viability has nothing to do with nearby households \u2014 a rooftop count is fetched for on-screen context only (same \"roofNeed: 0\" display-only pattern data_center already established), never gated on. Verdict (`maybeRenderSFVerdict`, web/explore.html) is a two-gate PASS/SHORT, not the usual three: parcel acreage (`SF_MIN_ACRES`) and nearest-substation distance (`SF_SUB_KM`), reusing data_center's \"compQ *is* the power query\" trick (`USE_DEMAND.solar_farm.compQ` queries substations, not competitors, so the existing competitor-scan fetch doubles as the power leg \u2014 no separate `powerQ` needed) \u2014 no third water-district gate, unlike data_center. `reverseSearchSignals` (web/logic.js) needs no changes at all: `requires.power.prefer_substation_within_km` already gives it `preferNearComp` (seek nearby substations) and `preferFarDemand` (avoid rooftop density \u2014 a solar farm wants cheap edge land, not a residential encroachment fight, the same reasoning data_center's own entry already documents) automatically, via the exact same generalized read data_center's entry already exercises.\n"
+    },
+    "truck_stop": {
+      "label": "Truck Stop / Travel Plaza",
+      "requires": {
+        "transportation": {
+          "near_highway_aadt": 60000
+        },
+        "parcel": {
+          "min_buildable_acres": 7
+        }
+      },
+      "induces": {
+        "transportation": {
+          "note": "heavy HGV turning movements at the interchange ramp; may need a dedicated deceleration/turn lane"
+        }
+      },
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "medium",
+        "carbon": "medium",
+        "traffic": "high"
+      },
+      "notes": "Verdict (`maybeRenderTruckStopVerdict`, web/explore.html) is a two-gate PASS/SHORT, the same shape solar_farm's own entry established: parcel acreage (`TS_MIN_ACRES`) and the real AADT traffic-count leg (`TS_AADT_MIN`, reusing the exact same `trafficLeg`/`AADT_SOURCE` machinery warehouse_club/fast_casual/hotel/car_wash/pharmacy/ convenience_store/distribution_center/drive_thru_coffee/bank_branch already share) \u2014 no rooftop-demand leg at all, same \"trivial demand\" `demandKind` data_center/solar_farm already use so `standardUseVerdict` reduces to exactly these two real site-selection gates. `USE_DEMAND. truck_stop.compQ` fetches nearby existing truck stops/travel plazas for on-screen context only (same \"fetched but not gated\" pattern distribution_center's own warehouse count already established) \u2014 this use has no `requires.competition` block, so there's no farther-is- better distance leg to wire up. `reverseSearchSignals` (web/logic.js) needs no changes and gets no ranking signal at all: it's a real preferNear-shaped siting question (near a highway interchange), but the \"near\" target is a road network, not a point layer of competitors or demand the existing preferNear/preferFar/preferNearComp/preferFarDemand reads can express \u2014 `roofNeed:0` and no `competition`/`power. prefer_substation_within_km`/`demand_signals.amenities. prefer_school_within_km` block means every one of those four signals reads false, so `updateSearchAvailability`'s existing `supported` check already disables the reverse-search toggle for this use exactly like the ground rule asks, with no per-use special-casing needed.\n"
     }
   },
   "actor_uses": {

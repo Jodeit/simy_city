@@ -4054,39 +4054,55 @@ Ground rules for each run:
       4 lines (the blank line dropped, each shape handled correctly).
 
 ## Now (high value) — newly added (21)
-- [ ] **26th land use: truck stop / travel plaza (interstate-interchange
-      siting).** Every land use so far that cares about roads uses the
-      *arterial* traffic-count leg added for warehouse_club/fast_casual
-      (`trafficLeg`, `maxAadtWithinRadius`, the NHS AADT FeatureServer). A
-      truck stop / travel plaza is the first use whose core siting question
-      is specifically "how close is the nearest *interstate* interchange,"
-      not "is there decent arterial traffic" — reuse the exact same
-      `arcgisNearQuery`/NHS-AADT infrastructure but at a much higher AADT
-      floor (interstates run 50k–150k+ vs. fast_casual's 20k arterial gate)
-      and a *tight* distance radius (trucks need direct ramp access, not
-      "somewhere in the same zip code"). Add `truck_stop` to
-      `data_sources/layers.yaml`: `requires.transportation` with a high
-      `near_highway_aadt` floor plus a short radius (the existing
-      `trafficLeg` helper takes a radius already, just needs a smaller one
-      passed for this use than warehouse_club's), `requires.parcel.
-      min_buildable_acres` in the 5–10 range (fuel islands + truck parking,
-      well under warehouse_club's 15 but well over a kiosk use), and no
-      `requires.demand` (a truck stop's customers are passing through, not
-      local rooftops — the second land use after solar_farm with no demand
-      leg). Verdict (`maybeRenderTruckStopVerdict`) is two-gate: acreage +
-      highway-proximity, same shape as solar_farm's two-gate pattern.
-      `reverseSearchSignals` should get a real look here too: this is a
-      `preferNear`-shaped use (near a highway), but the "near" target is
-      a road network, not point competitors/demand — decide whether that
-      fits the existing `rankCandidates` demand-radius signal as-is or
-      needs its own; if it doesn't cleanly fit, ship with no ranking signal
-      (search button disabled) rather than bolting on a wrong-shaped one,
-      and say so explicitly. Verify: `python tools/build_model_json.py`,
-      `simy validate`, `python -m pytest -q`, `node --test
-      tests/js/*.test.mjs`, headless-Chromium zero-console-errors load of
-      both pages, and driving `maybeRenderTruckStopVerdict` directly
-      through PASS/SHORT-on-acreage/SHORT-on-highway-distance/
-      no-highway-in-range/missing-data states.
+- [x] **26th land use: truck stop / travel plaza (interstate-interchange
+      siting).** Added `truck_stop` to `data_sources/layers.yaml`:
+      `requires.transportation.near_highway_aadt: 60000` (well past
+      warehouse_club's 40000/distribution_center's 35000 — a real interstate
+      floor) at a 1.5 km radius (`USE_DEMAND.truck_stop.radius`, the
+      tightest of any AADT-gated use), `requires.parcel.
+      min_buildable_acres: 7`, and deliberately no `requires.demand` (the
+      second land use after solar_farm with none). Verdict
+      (`maybeRenderTruckStopVerdict`, web/explore.html) is a two-gate
+      PASS/SHORT — parcel acreage (`TS_MIN_ACRES`) + the real AADT leg
+      (`TS_AADT_MIN`, reusing the exact `trafficLeg`/`AADT_SOURCE` machinery
+      warehouse_club/fast_casual/hotel/car_wash/pharmacy/convenience_store/
+      distribution_center/drive_thru_coffee/bank_branch already share) — the
+      same shape solar_farm's own two-gate verdict established, just
+      swapping its substation-distance leg for a highway-proximity one. Also
+      wired into `ALL_USE_KEYS`, `USE_DEMAND` (compQ fetches nearby existing
+      truck stops/travel plazas for on-screen context only, same
+      fetched-but-not-gated pattern distribution_center's warehouse count
+      already established), `BEST_FIT_USES` (`demandKind:"trivial"`, same
+      as data_center/solar_farm — needed no changes to the generic
+      `bestFitLeg`/`bestFitReasonText` engine at all, both already read
+      `minAcres`/`minAadt`/`demandKind` off the entry generically), and
+      `VERDICT_REFRESH`. Gave `reverseSearchSignals` (web/logic.js) the real
+      look it needed: this is a `preferNear`-shaped siting question (near a
+      highway interchange), but the "near" target is a road network, not a
+      point layer of competitors/demand the existing preferNear/preferFar/
+      preferNearComp/preferFarDemand reads can express — confirmed (via a
+      new unit test using truck_stop's actual `requires` shape) that
+      `roofNeed:0` and no `competition`/`power.
+      prefer_substation_within_km`/`demand_signals.amenities.
+      prefer_school_within_km` block already makes every one of those four
+      signals read false, so `updateSearchAvailability`'s existing
+      `supported` check disables the reverse-search toggle for this use
+      automatically — no per-use special-casing needed, confirmed live via
+      headless Chromium (`btn.disabled === true`, with the expected
+      "isn't tuned for this use yet" title). Added a `standardUseVerdict`
+      unit test exercising truck_stop's exact `BEST_FIT_USES` shape
+      (trivial demand + minAcres + minAadt, no competitor/substation/
+      district gates) through PASS/SHORT-on-acreage/SHORT-on-highway/
+      no-highway-in-range/missing-acreage. Verified: `python
+      tools/build_model_json.py` (26 land uses), `simy validate` (OK: 32
+      sources, 16 layers, 26 land uses), `python -m pytest -q` (39 passed),
+      `node --test tests/js/*.test.mjs` (383 passed), headless Chromium
+      zero-console-error loads of both pages, and a second headless pass
+      driving `maybeRenderTruckStopVerdict` directly (no live network)
+      through all 6 documented states (PASS, SHORT-on-acreage,
+      SHORT-on-highway, no-highway-in-range, an AADT-lookup error, and
+      missing/unlisted acreage) confirming the exact PASS/SHORT text and
+      CSS class each time.
 - [ ] **27th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 26 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
       Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
