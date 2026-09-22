@@ -1483,6 +1483,40 @@ const PARCEL_SOURCES=[
     zoning_note:"unlike TX, OR counties do zone unincorporated land — check Multnomah County's unincorporated-area zoning, or the City of Portland/Gresham/Troutdale zoning code if incorporated",
   },
   {
+    name:"Santa Clara County Assessor (Santa Clara County, CA)",
+    // Santa Clara's own hosted FeatureServer on ArcGIS Online — confirmed live
+    // via multiple independent search-indexed sources (this sandbox blocks
+    // direct ArcGIS REST introspection like every prior county here).
+    urls:["https://services8.arcgis.com/fpjs8A5Vtkshblnd/arcgis/rest/services/Santa_Clara_County_Parcels/FeatureServer/0"],
+    // Covers San Jose/Sunnyvale/Santa Clara/Palo Alto/Mountain View/Milpitas
+    // north to Gilroy/Morgan Hill south — padded rough rectangle, same "loose
+    // pre-filter before the real point query" approach every PARCEL_SOURCES
+    // bbox here takes. Listed *ahead of* Alameda County below on purpose:
+    // `inBbox`/`.find()` picks the *first* bbox match, and the two counties'
+    // padded rectangles overlap slightly across the Bay (Alameda's southern
+    // edge and Santa Clara's northern edge both sit near 37.44–37.47°N);
+    // checking Santa Clara's tighter bbox first is what correctly routes
+    // Palo Alto/Mountain View/Milpitas here instead of silently
+    // mis-resolving them to Alameda's parcel service.
+    bbox:[-122.20,36.79,-121.20,37.47],
+    // Confirmed field (via multiple independent search-indexed sources): APN
+    // — plain numeric string, no dashes, already in the shared id candidate
+    // list above. Owner name is legally redacted from this public layer
+    // (California Gov. Code §7928.205), and situs address/acreage/land-use
+    // field names weren't independently confirmed on this specific layer —
+    // same cautious call as Dallas/Fulton/Tarrant/Hennepin/Bernalillo/
+    // Multnomah/Alameda here: left unmapped rather than guessed.
+    // sccassessor.org's property search is a form (address, APN, or map
+    // click) with no documented per-APN query-string deep link, so — same
+    // cautious call as Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/
+    // Allegheny/Fulton/Salt Lake/Franklin/Clark/Suffolk — send people to the
+    // search page instead of guessing a link shape that might 404.
+    record:()=>"https://www.sccassessor.org/index.php/online-services/property-search/search-by-map",
+    source_label:"Santa Clara County Assessor",
+    county_state:"Santa Clara County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
+  {
     name:"Alameda County Assessor (Alameda County, CA)",
     // Alameda's own hosted FeatureServer on ArcGIS Online — confirmed live via
     // multiple independent search-indexed sources (this sandbox blocks direct

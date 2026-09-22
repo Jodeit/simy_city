@@ -4103,30 +4103,41 @@ Ground rules for each run:
       SHORT-on-highway, no-highway-in-range, an AADT-lookup error, and
       missing/unlisted acreage) confirming the exact PASS/SHORT text and
       CSS class each time.
-- [ ] **27th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 26 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
-      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
-      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
-      Mecklenburg/Bernalillo/Multnomah/Alameda). Worth checking first for a
-      public ArcGIS-hosted parcel MapServer/FeatureServer: Santa Clara
-      County, CA (San Jose/Silicon Valley — another Bay Area county with
-      historically good open GIS, adjacent to but not overlapping Alameda's
-      bbox), Broward County, FL (Fort Lauderdale — South Florida isn't
-      covered outside Miami-Dade), or Marion County, IN (Indianapolis —
-      Midwest coverage is thin outside Cook/Hennepin/Franklin). Same
-      research-then-graceful-partial-coverage approach every prior county
-      here used: confirm the live REST endpoint and real field names via
-      web search (this sandbox blocks ArcGIS REST introspection directly,
-      same constraint every prior PARCEL_SOURCES entry had), map only the
-      fields independently confirmed rather than guessing a label, and
-      check the new bbox against all 26 existing entries before appending
-      (`inBbox` resolves to the *first* match, so a silent overlap would
-      shadow an existing county). Verify: `simy validate`, `python -m
-      pytest -q`, `node --test tests/js/*.test.mjs`, headless-Chromium load
-      of `web/explore.html` with zero console errors, and a synthetic check
-      that `PARCEL_SOURCES.length` is 27 and a coordinate inside the new
-      county's bbox resolves to it (and one inside every existing county
-      still resolves to its own entry, not the new one).
+- [x] **27th parcel county.** Added Santa Clara County, CA (San Jose/
+      Sunnyvale/Palo Alto/Mountain View/Milpitas/Gilroy) as a 27th
+      `PARCEL_SOURCES` entry — its own hosted FeatureServer on ArcGIS
+      Online, confirmed live via multiple independent search-indexed
+      sources (this sandbox blocks direct ArcGIS REST introspection, same
+      constraint every prior county here had). Confirmed field: `APN`
+      (plain numeric string, no dashes — already in the shared id candidate
+      list). Owner name is legally redacted from this public layer (CA Gov.
+      Code §7928.205), and situs address/acreage/land-use field names
+      weren't independently confirmed, so — same cautious call as Dallas/
+      Fulton/Tarrant/Hennepin/Bernalillo/Multnomah/Alameda — left unmapped
+      rather than guessed; `sccassessor.org` has no documented per-APN deep
+      link either, so `record()` sends people to its search-by-map page.
+      Santa Clara's padded bbox overlaps Alameda's slightly across the Bay
+      (both counties' rectangles span ~37.44–37.47°N), so the new entry is
+      listed *ahead of* Alameda in the array — same "more specific entry
+      wins the overlap" ordering Orange County uses ahead of LA/San Diego —
+      confirmed via headless Chromium that a Palo Alto point (37.4419,
+      -122.1430, inside both counties' padded rectangles) resolves to Santa
+      Clara while a Fremont point (37.5483, -121.9886, outside Santa
+      Clara's bbox) still resolves to Alameda. Verified: `python
+      tools/build_model_json.py` (registry unchanged — this item doesn't
+      touch `data_sources/*.yaml`), `python -m pytest -q` (39 passed),
+      `python -m simy_city.cli validate` (OK: 32 sources, 16 layers, 26
+      land uses), `node --test tests/js/*.test.mjs` (383 passed, unchanged —
+      `inBbox`/`pick` are already generically tested), headless-Chromium
+      zero-console-error loads of both `web/explore.html` and
+      `web/index.html`, and a second headless pass evaluating
+      `PARCEL_SOURCES`/`inBbox` directly in-page: `PARCEL_SOURCES.length`
+      is 27, San Jose and the Palo Alto overlap point both resolve to
+      "Santa Clara County Assessor", Austin/Fremont regression points still
+      resolve to their own counties, and an uncovered point (Bozeman, MT)
+      resolves to no source. A live end-to-end fetch against the real
+      ArcGIS endpoint (blocked from this sandbox) is a good human
+      spot-check.
 - [x] **Transit-proximity checklist row (nearest bus/rail stop).** Added a
       live, keyless Overpass query (`runTransit` in `web/explore.html`,
       reusing the existing `overpass()`/`overpassRaw` session-cache
