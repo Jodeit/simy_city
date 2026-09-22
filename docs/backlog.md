@@ -4167,6 +4167,100 @@ Ground rules for each run:
       with zero JS errors. A live end-to-end fetch against the real
       Overpass API (blocked from this sandbox) is a good human spot-check.
 
+## Now (high value) — newly added (22)
+- [ ] **27th land use: battery energy storage system (BESS / grid-scale
+      battery facility).** `layers.yaml` already models `solar_farm`'s two
+      gates — buildable acreage + distance to a substation
+      (`power.prefer_substation_within_km`, via the existing
+      `arcgisNearQuery`/substation-distance leg `maybeRenderSolarFarmVerdict`
+      already uses). A BESS site needs the exact same substation-proximity
+      leg (often *tighter* than solar, since batteries interconnect directly
+      and don't need solar's acreage-per-MW), but a much smaller minimum
+      parcel (a few acres of hardstand, not hundreds) — and it's also one of
+      the most topical real-world standoffs right now (fire-safety setbacks
+      from residences, county moratoria, community opposition), which fits
+      this app's "standoffs" framing well. Add `battery_storage` to
+      `data_sources/layers.yaml`: `requires.power.
+      prefer_substation_within_km` (reuse solar_farm's distance leg, likely
+      a smaller km value — batteries tolerate less headroom than a solar
+      array before curtailment), `requires.parcel.min_buildable_acres` in
+      the 2–5 range (well under solar_farm's, well over a kiosk use), and no
+      `requires.demand` (third land use after solar_farm/truck_stop with
+      none). Verdict: two-gate PASS/SHORT (acreage + substation distance),
+      same shape `maybeRenderSolarFarmVerdict`/`maybeRenderTruckStopVerdict`
+      already establish — this should be almost a copy of
+      `maybeRenderSolarFarmVerdict` with different thresholds, not new
+      machinery. Wire into `ALL_USE_KEYS`, `USE_DEMAND` (`demandKind:
+      "trivial"`), `BEST_FIT_USES`, `VERDICT_REFRESH`. Reverse-search: same
+      as solar_farm — confirm via a unit test on `battery_storage`'s actual
+      `requires` shape whether `reverseSearchSignals` already reads
+      `power.prefer_substation_within_km` as a `preferNear`-shaped signal
+      (it should, since solar_farm already exercises that exact field) and
+      enable ranking if so, rather than assuming. Add a `standardUseVerdict`
+      unit test through PASS/SHORT-on-acreage/SHORT-on-substation-distance/
+      no-substation-in-range/missing-acreage. Verify: `python
+      tools/build_model_json.py`, `simy validate` (expect 27 land uses),
+      `python -m pytest -q`, `node --test tests/js/*.test.mjs`, headless
+      Chromium zero-console-error loads of both pages, and a second headless
+      pass driving `maybeRenderBatteryStorageVerdict` directly (no live
+      network) through all documented states.
+- [ ] **28th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+      covers 27 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
+      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
+      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
+      Mecklenburg/Bernalillo/Multnomah/Santa Clara/Alameda). No DC-metro
+      county is covered yet — worth checking first for a public
+      ArcGIS-hosted parcel MapServer/FeatureServer: Fairfax County, VA
+      (the DC metro's largest county, ~1.1M people, historically strong
+      open-GIS program), or as fallbacks Broward County, FL (Fort
+      Lauderdale — South Florida coverage is thin outside Miami-Dade) or
+      Sacramento County, CA (Central Valley — no coverage there yet). Same
+      research-then-graceful-partial-coverage approach every prior county
+      here used: confirm the live REST endpoint and real field names via
+      web search (this sandbox blocks ArcGIS REST introspection directly,
+      same constraint every prior `PARCEL_SOURCES` entry had), map only the
+      fields independently confirmed rather than guessing a label, and
+      check the new bbox against all 27 existing entries before appending
+      (`inBbox` resolves to the *first* match, so a silent overlap would
+      shadow an existing county). Verify: `simy validate`, `python -m
+      pytest -q`, `node --test tests/js/*.test.mjs`, headless-Chromium load
+      of `web/explore.html` with zero console errors, and a synthetic check
+      that `PARCEL_SOURCES.length` is 28 and a coordinate inside the new
+      county's bbox resolves to it (and one inside every existing county
+      still resolves to its own entry, not the new one).
+- [ ] **Wetlands-proximity checklist row (USFWS National Wetlands
+      Inventory).** The developer checklist covers topography, MUD/water
+      district, FEMA flood, Census ACS, and transit, but nothing from the
+      `habitat`/`environment` layers already defined in `layers.yaml` —
+      wetlands proximity is real due-diligence context (Clean Water Act
+      §404 permitting, mitigation costs, a common source of project delay)
+      and, like FEMA flood, has a free, keyless, nationwide ArcGIS
+      REST/MapServer endpoint (USFWS National Wetlands Inventory —
+      `fwswetlandsservice.wim.usgs.gov` or the io.arcgis.com mirror already
+      used elsewhere in similar apps; endpoint reachability needs
+      confirming from a network-enabled check since this sandbox blocks
+      direct ArcGIS REST probing). Add `runWetlands(latlng,seq)` following
+      `runFlood`'s exact shape (same `arcgisPointQuery` helper, same
+      seq-guard/element-existence pattern), surfaced as a new "🌾 Wetlands"
+      developer-checklist row — informational only, not a new PASS/SHORT
+      verdict gate on any land use (that's a separate, larger follow-up if
+      a specific use ever needs a hard wetlands gate). Label by
+      `WETLAND_TYPE`/`ATTRIBUTE` field (e.g. "Freshwater Forested/Shrub
+      Wetland — within mapped NWI boundary") when a feature is present, and
+      a clear "no mapped wetland at this point (NWI does not certify
+      absence — a field delineation is the only authoritative check)"
+      when absent, since NWI is a coarse desktop screening layer, not a
+      jurisdictional determination. Add a pure helper (following
+      `pick`/`esc` conventions in `web/logic.js`) with unit tests for a
+      hit, a miss, and a malformed/missing-attribute feature. Verify:
+      `python -m pytest -q`, `simy validate`, `node --test
+      tests/js/*.test.mjs`, and headless Chromium confirming the new
+      checklist row renders correctly (with mocked fetch responses, both a
+      hit and a no-wetland case) with zero console errors. A live
+      end-to-end fetch against the real NWI service (blocked from this
+      sandbox) is a good human spot-check, including confirming the actual
+      endpoint URL and field names before wiring them in.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
