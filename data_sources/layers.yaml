@@ -1115,6 +1115,67 @@ land_uses:
       check already disables the reverse-search toggle for this use exactly
       like the ground rule asks, with no per-use special-casing needed.
 
+  cold_storage:           # refrigerated distribution / cold storage warehouse
+    label: Cold Storage / Refrigerated Distribution Facility
+    requires:
+      # The first land use with three real site-selection gates at once — every
+      # prior power-gated use (data_center) has no transportation gate, and
+      # every prior AADT-gated use (warehouse_club/fast_casual/.../
+      # distribution_center/truck_stop) has no power gate. Trucks still need
+      # real highway access, same `near_highway_aadt` gate distribution_center/
+      # truck_stop share (`standardUseVerdict`'s `minAadt` leg via
+      # `trafficLeg`/`arcgisNearQuery`, web/explore.html) — sit the floor
+      # between distribution_center's 35000 and a plain warehouse's lighter
+      # need, since reefer-trailer traffic is real but thinner than a
+      # last-mile fulfillment center's van fleet.
+      transportation: { near_highway_aadt: 30000 }
+      # Refrigeration compressor racks draw meaningfully more continuous power
+      # than a dry warehouse's dock doors and lighting — a real siting factor,
+      # not decoration — so this reuses data_center's exact
+      # prefer_substation_within_km field/machinery, just tighter (3 km vs.
+      # data_center's 5 km — cold storage can't eat as long an interconnection
+      # cost as a hyperscale data center's multi-hundred-MW load).
+      power: { prefer_substation_within_km: 3 }
+      # Cold storage boxes run denser per acre than a last-mile sortation
+      # facility, so this sits below distribution_center's 20-acre cross-dock
+      # pad but above warehouse_club's 15-acre big-box lot.
+      parcel: { min_buildable_acres: 15 }
+      # Deliberately no `requires.demand` leg — same "passes-through/regional,
+      # not local-rooftop-driven" shape distribution_center/truck_stop already
+      # established; nobody "lives near" a refrigerated distribution facility
+      # by design.
+    induces:
+      transportation: { note: "daily reefer-trailer truck trips; may need dedicated turn lanes/signal timing for freight access" }
+      power: { trigger: "refrigeration compressor load may require a dedicated feeder or substation upgrade" }
+    impacts:
+      habitat: low            # interchange/logistics-park-adjacent land is usually already disturbed
+      land_cover: high         # large building + refrigeration plant + truck court
+      carbon: medium           # continuous refrigeration draw, more than a dry warehouse but well under data_center's scale
+      traffic: medium          # real reefer-trailer trip generation, but a scheduled truck fleet, not distribution_center's van-routing volume
+    notes: >
+      The three-gate counterpart to distribution_center's two-gate shape:
+      highway access (`near_highway_aadt: 30000`, between distribution_
+      center's 35000 and a plain warehouse's lighter need), grid capacity
+      (`power.prefer_substation_within_km: 3`, reusing data_center's exact
+      field at a tighter radius — refrigeration compressors are a real
+      continuous load, just not at data_center's megawatt scale), and site
+      size (`parcel.min_buildable_acres: 15`, between warehouse_club's 15 and
+      distribution_center's 20). Verdict (`maybeRenderCSTVerdict`,
+      web/explore.html) is a real three-gate PASS/SHORT, all three ANDed —
+      `standardUseVerdict` (web/logic.js) already composes minAcres/minAadt/
+      maxSubstationKm side-by-side with no new plumbing, since each gate is
+      already an independent optional leg there. Same `demandKind:"trivial"`
+      shape data_center/solar_farm/truck_stop already use, so
+      `standardUseVerdict` reduces to exactly these three real site-selection
+      gates. Substation distance reuses the same Overpass fetch its own
+      `USE_DEMAND.compQ` (power substations) already makes — the "compQ IS
+      the power query" trick data_center/solar_farm established — so there's
+      no separate powerQ fetch needed. `reverseSearchSignals` (web/logic.js)
+      needs no changes and comes up *enabled* here (unlike truck_stop): this
+      is a `preferNearComp`-shaped use per the existing `power.
+      prefer_substation_within_km` rule, giving `rankCandidates` a real point
+      layer (substations) to score against.
+
 # -----------------------------------------------------------------------------
 # ENABLING EDGES — directed "X makes Y more viable" relationships between land
 # uses. These are what create chicken-and-egg standoffs: when a set of *absent*

@@ -4168,7 +4168,7 @@ Ground rules for each run:
       Overpass API (blocked from this sandbox) is a good human spot-check.
 
 ## Now (high value) — newly added (22)
-- [ ] **27th land use: cold storage / refrigerated distribution facility.**
+- [x] **27th land use: cold storage / refrigerated distribution facility.**
       Every land use gated on power so far (`data_center`) has no
       transportation gate, and every use gated on highway AADT
       (`warehouse_club`/`fast_casual`/`distribution_center`/`truck_stop`)

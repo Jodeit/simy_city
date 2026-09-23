@@ -383,6 +383,52 @@ test("standardUseVerdict: the substation gate ANDs with the other gates (ev_char
   assert.equal(standardUseVerdict({ ...base, roofs: 10 }, thresholds).pass, false);
 });
 
+test("standardUseVerdict: cold_storage's BEST_FIT_USES shape (trivial demand + minAcres + minAadt + maxSubstationKm all at once) — PASS only when all three real gates clear", () => {
+  // Mirrors BEST_FIT_USES' cold_storage entry exactly: demandKind:"trivial"
+  // (no rooftop count matters), minAcres:15, minAadt:30000,
+  // maxSubstationKm:3 — the first use to combine all three real
+  // site-selection gates at once, confirming standardUseVerdict composes
+  // them side-by-side with no new plumbing.
+  const thresholds = { demand: undefined, minAcres: 15, minAadt: 30000, maxSubstationKm: 3 };
+  const trivialDemand = { ratio: 1, pass: true };
+  const base = { demand: trivialDemand, acres: 15, aadtHit: { aadt: 30000 }, subKm: 3 };
+  const pass = standardUseVerdict(base, thresholds);
+  assert.equal(pass.pass, true);
+  assert.equal(pass.demandOk, true); // trivial demand always reads as satisfied
+
+  const shortOnAcreage = standardUseVerdict({ ...base, acres: 14.9 }, thresholds);
+  assert.equal(shortOnAcreage.siteOk, false);
+  assert.equal(shortOnAcreage.pass, false);
+
+  const shortOnHighway = standardUseVerdict({ ...base, aadtHit: { aadt: 29999 } }, thresholds);
+  assert.equal(shortOnHighway.aadtOk, false);
+  assert.equal(shortOnHighway.pass, false);
+
+  const noHighwayInRange = standardUseVerdict({ ...base, aadtHit: null }, thresholds);
+  assert.equal(noHighwayInRange.aadtOk, false);
+  assert.equal(noHighwayInRange.pass, false);
+
+  const aadtLookupError = standardUseVerdict({ ...base, aadtHit: null, aadtErr: true }, thresholds);
+  assert.equal(aadtLookupError.aadtOk, false);
+  assert.equal(aadtLookupError.pass, false);
+
+  const shortOnSubstation = standardUseVerdict({ ...base, subKm: 3.1 }, thresholds);
+  assert.equal(shortOnSubstation.subOk, false);
+  assert.equal(shortOnSubstation.pass, false);
+
+  const noSubstationInRange = standardUseVerdict({ ...base, subKm: null }, thresholds);
+  assert.equal(noSubstationInRange.subOk, false);
+  assert.equal(noSubstationInRange.pass, false);
+
+  const substationLookupError = standardUseVerdict({ ...base, subKm: null, subErr: true }, thresholds);
+  assert.equal(substationLookupError.subOk, false);
+  assert.equal(substationLookupError.pass, false);
+
+  const missingAcreage = standardUseVerdict({ ...base, acres: null }, thresholds);
+  assert.equal(missingAcreage.siteOk, false);
+  assert.equal(missingAcreage.pass, false);
+});
+
 // ---- standardUseVerdict's `requireDistrict`/`reads.mud` gate ("Best fit here" step 3, part 4) ----
 
 test("standardUseVerdict: omitting requireDistrict skips the water-district gate entirely", () => {
@@ -2112,6 +2158,21 @@ test("reverseSearchSignals: truck_stop's real requires shape (transportation + p
   // accidentally trip a signal meant for a different field shape.
   const sig = reverseSearchSignals({ transportation: { near_highway_aadt: 60000 }, parcel: { min_buildable_acres: 7 } }, 0);
   assert.deepEqual(sig, { preferFar: false, preferNear: false, preferNearComp: false, preferFarDemand: false });
+});
+
+test("reverseSearchSignals: cold_storage's real requires shape (transportation + power + parcel) turns preferNearComp/preferFarDemand on, unlike truck_stop", () => {
+  // The actual layers.yaml cold_storage `requires` block — near_highway_aadt
+  // and min_buildable_acres read the same as truck_stop's (neither trips a
+  // signal on their own), but power.prefer_substation_within_km is the field
+  // that does: the same nearSubstation read data_center's own requires shape
+  // already gets, confirming the reverse-search toggle comes up *enabled*
+  // for this use unlike truck_stop's all-off case just above.
+  const sig = reverseSearchSignals({
+    transportation: { near_highway_aadt: 30000 },
+    power: { prefer_substation_within_km: 3 },
+    parcel: { min_buildable_acres: 15 },
+  }, 0);
+  assert.deepEqual(sig, { preferFar: false, preferNear: false, preferNearComp: true, preferFarDemand: true });
 });
 
 test("reverseSearchSignals: a max_same_brand_in_trade_area competition read also turns preferFar on (warehouse_club's shape)", () => {

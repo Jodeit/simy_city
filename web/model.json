@@ -1282,6 +1282,35 @@
         "traffic": "high"
       },
       "notes": "Verdict (`maybeRenderTruckStopVerdict`, web/explore.html) is a two-gate PASS/SHORT, the same shape solar_farm's own entry established: parcel acreage (`TS_MIN_ACRES`) and the real AADT traffic-count leg (`TS_AADT_MIN`, reusing the exact same `trafficLeg`/`AADT_SOURCE` machinery warehouse_club/fast_casual/hotel/car_wash/pharmacy/ convenience_store/distribution_center/drive_thru_coffee/bank_branch already share) \u2014 no rooftop-demand leg at all, same \"trivial demand\" `demandKind` data_center/solar_farm already use so `standardUseVerdict` reduces to exactly these two real site-selection gates. `USE_DEMAND. truck_stop.compQ` fetches nearby existing truck stops/travel plazas for on-screen context only (same \"fetched but not gated\" pattern distribution_center's own warehouse count already established) \u2014 this use has no `requires.competition` block, so there's no farther-is- better distance leg to wire up. `reverseSearchSignals` (web/logic.js) needs no changes and gets no ranking signal at all: it's a real preferNear-shaped siting question (near a highway interchange), but the \"near\" target is a road network, not a point layer of competitors or demand the existing preferNear/preferFar/preferNearComp/preferFarDemand reads can express \u2014 `roofNeed:0` and no `competition`/`power. prefer_substation_within_km`/`demand_signals.amenities. prefer_school_within_km` block means every one of those four signals reads false, so `updateSearchAvailability`'s existing `supported` check already disables the reverse-search toggle for this use exactly like the ground rule asks, with no per-use special-casing needed.\n"
+    },
+    "cold_storage": {
+      "label": "Cold Storage / Refrigerated Distribution Facility",
+      "requires": {
+        "transportation": {
+          "near_highway_aadt": 30000
+        },
+        "power": {
+          "prefer_substation_within_km": 3
+        },
+        "parcel": {
+          "min_buildable_acres": 15
+        }
+      },
+      "induces": {
+        "transportation": {
+          "note": "daily reefer-trailer truck trips; may need dedicated turn lanes/signal timing for freight access"
+        },
+        "power": {
+          "trigger": "refrigeration compressor load may require a dedicated feeder or substation upgrade"
+        }
+      },
+      "impacts": {
+        "habitat": "low",
+        "land_cover": "high",
+        "carbon": "medium",
+        "traffic": "medium"
+      },
+      "notes": "The three-gate counterpart to distribution_center's two-gate shape: highway access (`near_highway_aadt: 30000`, between distribution_ center's 35000 and a plain warehouse's lighter need), grid capacity (`power.prefer_substation_within_km: 3`, reusing data_center's exact field at a tighter radius \u2014 refrigeration compressors are a real continuous load, just not at data_center's megawatt scale), and site size (`parcel.min_buildable_acres: 15`, between warehouse_club's 15 and distribution_center's 20). Verdict (`maybeRenderCSTVerdict`, web/explore.html) is a real three-gate PASS/SHORT, all three ANDed \u2014 `standardUseVerdict` (web/logic.js) already composes minAcres/minAadt/ maxSubstationKm side-by-side with no new plumbing, since each gate is already an independent optional leg there. Same `demandKind:\"trivial\"` shape data_center/solar_farm/truck_stop already use, so `standardUseVerdict` reduces to exactly these three real site-selection gates. Substation distance reuses the same Overpass fetch its own `USE_DEMAND.compQ` (power substations) already makes \u2014 the \"compQ IS the power query\" trick data_center/solar_farm established \u2014 so there's no separate powerQ fetch needed. `reverseSearchSignals` (web/logic.js) needs no changes and comes up *enabled* here (unlike truck_stop): this is a `preferNearComp`-shaped use per the existing `power. prefer_substation_within_km` rule, giving `rankCandidates` a real point layer (substations) to score against.\n"
     }
   },
   "actor_uses": {
