@@ -4167,6 +4167,106 @@ Ground rules for each run:
       with zero JS errors. A live end-to-end fetch against the real
       Overpass API (blocked from this sandbox) is a good human spot-check.
 
+## Now (high value) — newly added (22)
+- [ ] **27th land use: cold storage / refrigerated distribution facility.**
+      Every land use gated on power so far (`data_center`) has no
+      transportation gate, and every use gated on highway AADT
+      (`warehouse_club`/`fast_casual`/`distribution_center`/`truck_stop`)
+      has no power gate — this would be the first land use whose verdict
+      needs *three* real gates at once: `requires.transportation.
+      near_highway_aadt` (interstate/arterial truck access — sit it around
+      30000, between distribution_center's 35000 and a plain warehouse's
+      lighter need), `requires.power.prefer_substation_within_km` (reusing
+      data_center's exact field/machinery — refrigeration compressor racks
+      draw meaningfully more continuous power than a dry warehouse's dock
+      doors and lighting, so this is a real siting factor, not decoration;
+      pick something tighter than data_center's 5 km, e.g. 3 km), and
+      `requires.parcel.min_buildable_acres` (~15, between distribution_
+      center's 20 and warehouse_club's 15 — cold storage boxes run denser
+      per acre than a last-mile sortation facility). No `requires.demand`
+      leg (same "passes-through/regional, not local-rooftop-driven" shape
+      as distribution_center/truck_stop). Add `cold_storage` to
+      `data_sources/layers.yaml` following distribution_center's comment
+      style explaining each threshold's placement relative to its
+      neighbors. Verdict (`maybeRenderColdStorageVerdict`, web/explore.html)
+      needs a *three*-gate PASS/SHORT (acreage + highway AADT + substation
+      distance) — check whether the existing `trafficLeg`/AADT_SOURCE and
+      the data_center substation-distance leg can just be composed
+      side-by-side (each already returns its own PASS/SHORT/error shape) or
+      whether the verdict renderer needs new plumbing to show three
+      independent gate results in one card; either way, all three gates'
+      pass/fail must combine with AND, and a failure/error in any one gate
+      must render clearly attributable to that gate, not a generic
+      catch-all. Wire into `ALL_USE_KEYS`, `USE_DEMAND` (`demandKind:
+      "trivial"`, same as data_center/solar_farm/truck_stop — confirm the
+      generic `bestFitLeg`/`bestFitReasonText` engine still needs no
+      changes), `BEST_FIT_USES`, `VERDICT_REFRESH`, and
+      `reverseSearchSignals` (this is a `preferNearComp`-shaped use per the
+      existing `nearSubstation` rule — confirm the reverse-search toggle
+      comes up *enabled* here, unlike truck_stop, since the substation leg
+      gives `rankCandidates` a real point layer to score against). Add a
+      `standardUseVerdict` unit test exercising all 3×2 combinations of the
+      three gates (pass/fail each) plus the missing-data/lookup-error
+      states for each gate. Verify: `python tools/build_model_json.py`
+      (27 land uses), `simy validate`, `python -m pytest -q`, `node --test
+      tests/js/*.test.mjs`, headless-Chromium zero-console-error loads of
+      both pages, and a mocked-network headless pass driving
+      `maybeRenderColdStorageVerdict` directly through every documented
+      gate-combination state.
+- [ ] **Airport-proximity checklist row (nearest airfield).** Same shape as
+      the transit-proximity row just shipped: a live, keyless Overpass
+      query (reuse the existing `overpass()`/`overpassRaw` session-cache
+      wrapper in `web/explore.html`, no new fetch mechanism) for the
+      nearest `aeroway=aerodrome` node/way/relation within a wider radius
+      than transit's 1 km — airports matter for noise/height/FAA-obstruction
+      questions well beyond walking distance, so use something like 10 km —
+      surfaced as a new "✈️ Airport" developer-checklist row, e.g. "~4.2 km
+      — Austin-Bergstrom International (IATA: AUS)" or "no airport within
+      10 km". Informational only, not a new PASS/SHORT verdict gate on any
+      land use (same "checklist row, not a gate" call transit-proximity
+      made). Add a pure `nearestAirport(json, center)` helper to
+      `web/logic.js` mirroring `nearestTransitStop`'s shape exactly (same
+      node-lat/lon-or-way/relation-center element handling, same
+      dropped-not-crashed treatment of malformed/missing-coordinate
+      elements) — label by the element's `name` tag, else its `iata`/`icao`
+      tag in parens, else fall back to "unnamed airfield". Add unit tests
+      mirroring `nearestTransitStop`'s test shape (nearest-wins among
+      several airfields, empty result set, an airfield exactly at the
+      query center, malformed elements dropped). Verify: `python -m
+      pytest -q`, `simy validate`, `node --test tests/js/*.test.mjs`,
+      headless Chromium two ways — a plain load of both pages with zero
+      genuine console/page errors, and a second pass mocking the Overpass
+      fetch and driving the new checklist row directly, confirming both the
+      hit and empty-result text render correctly. A live end-to-end fetch
+      against the real Overpass API (blocked from this sandbox) is a good
+      human spot-check.
+- [ ] **28th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+      covers 27 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
+      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
+      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
+      Mecklenburg/Bernalillo/Multnomah/Santa Clara/Alameda). Worth checking
+      first for a public ArcGIS-hosted parcel MapServer/FeatureServer:
+      Broward County, FL (Fort Lauderdale — South Florida coverage is thin
+      outside Miami-Dade), Sacramento County, CA (state capital, another
+      historically open-GIS CA county not yet covered), Pima County, AZ
+      (Tucson — Southwest coverage is thin outside Maricopa/Bernalillo/Clark
+      NV), or Wayne County, MI (Detroit — no Michigan coverage yet at all).
+      Same research-then-graceful-partial-coverage approach every prior
+      county here used: confirm the live REST endpoint and real field names
+      via web search (this sandbox blocks ArcGIS REST introspection
+      directly, same constraint every prior `PARCEL_SOURCES` entry had),
+      map only the fields independently confirmed rather than guessing a
+      label, and check the new bbox against all 27 existing entries before
+      appending (`inBbox` resolves to the *first* match, so a silent
+      overlap would shadow an existing county — Sacramento's bbox in
+      particular should be checked against nothing else in Northern CA, and
+      a Detroit-area pick against nothing else in the Midwest). Verify:
+      `simy validate`, `python -m pytest -q`, `node --test
+      tests/js/*.test.mjs`, headless-Chromium load of `web/explore.html`
+      with zero console errors, and a synthetic in-page check that the new
+      county's representative city resolves to it via `inBbox` while all
+      existing regression points still resolve to their own counties.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
