@@ -19,7 +19,7 @@ const {
   encodeSearchHash, decodeSearchHash,
   nominatimUrl, parseNominatimResult, parseCoordPair, geolocationErrorMessage, parseBulkAddressList, bulkImportSummary, extractAddressColumn, toCsvField, toCsvRow, toCsv, addRecentSite,
   removeRecentSite, clearRecentSites, undoClear, addSavedSearch, removeSavedSearch, sortPins, bestValueIndices, removePinAt, undoRemovePin, sampleGrid, rankCandidates,
-  parseOverpassPoints, nearestTransitStop, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
+  parseOverpassPoints, nearestTransitStop, nearestAirport, reverseSearchSignals, candidateWhyText, candidatesToCsvRows,
   pinsToGeoJson, candidatesToGeoJson,
   buildCandidatesReportText, buildCompareReportText,
   bestFitReasonText, bestFitToCsvRows, buildBestFitReportText,
@@ -2029,6 +2029,54 @@ test("nearestTransitStop: labels an unnamed, unoperated stop by its OSM kind alo
   const center = { lat: 30.1, lng: -97.1 };
   const json = { elements: [{ type: "node", lat: 30.1001, lon: -97.1, tags: {} }] };
   assert.equal(nearestTransitStop(json, center).label, "transit stop");
+});
+
+test("nearestAirport: picks the closer of two aerodromes and labels it name + IATA code", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [
+    { type: "way", center: { lat: 30.2, lon: -97.1 }, tags: { aeroway: "aerodrome", name: "Far Field" } },
+    { type: "node", lat: 30.101, lon: -97.1, tags: { aeroway: "aerodrome", name: "Austin-Bergstrom International", iata: "AUS" } },
+  ] };
+  const ap = nearestAirport(json, center);
+  assert.equal(ap.label, "Austin-Bergstrom International (IATA: AUS)");
+  assert.ok(ap.km > 0 && ap.km < 1);
+});
+
+test("nearestAirport: falls back to the ICAO code in parens when there's no IATA code", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [{ type: "node", lat: 30.101, lon: -97.1, tags: { aeroway: "aerodrome", name: "Small Field", icao: "KXYZ" } }] };
+  assert.equal(nearestAirport(json, center).label, "Small Field (ICAO: KXYZ)");
+});
+
+test("nearestAirport: labels an unnamed airfield by its code, or plainly if it has none", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  assert.equal(nearestAirport({ elements: [{ type: "node", lat: 30.101, lon: -97.1, tags: { aeroway: "aerodrome", iata: "ZZZ" } }] }, center).label,
+    "unnamed airfield (IATA: ZZZ)");
+  assert.equal(nearestAirport({ elements: [{ type: "node", lat: 30.101, lon: -97.1, tags: { aeroway: "aerodrome" } }] }, center).label,
+    "unnamed airfield");
+});
+
+test("nearestAirport: returns null for an empty result set", () => {
+  assert.equal(nearestAirport({ elements: [] }, { lat: 30.1, lng: -97.1 }), null);
+  assert.equal(nearestAirport(null, { lat: 30.1, lng: -97.1 }), null);
+});
+
+test("nearestAirport: an airfield exactly at the query center resolves to zero distance", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [{ type: "relation", center: { lat: 30.1, lon: -97.1 }, tags: { aeroway: "aerodrome", name: "Center Field" } }] };
+  const ap = nearestAirport(json, center);
+  assert.equal(ap.km, 0);
+  assert.equal(ap.label, "Center Field");
+});
+
+test("nearestAirport: drops malformed/missing-coordinate elements", () => {
+  const center = { lat: 30.1, lng: -97.1 };
+  const json = { elements: [
+    { type: "node", tags: { aeroway: "aerodrome", name: "No Coords" } },
+    null,
+    { type: "node", lat: 30.1001, lon: -97.1, tags: { aeroway: "aerodrome", name: "Good Field" } },
+  ] };
+  assert.equal(nearestAirport(json, center).label, "Good Field");
 });
 
 test("reverseSearchSignals: a min_distance_km_from_nearest competition read turns preferFar on", () => {

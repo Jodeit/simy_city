@@ -1004,6 +1004,35 @@ function nearestTransitStop(json,center){
   });
   return best;
 }
+/* Nearest airfield to a point, from a raw Overpass response — backs the
+   developer-checklist's informational "nearest airport" row (not a verdict
+   input for any land use, just due-diligence context: noise/height/FAA-
+   obstruction questions matter well beyond the ~1 km transit-proximity
+   radius, hence the wider query radius callers use). Mirrors
+   `nearestTransitStop`'s element-shape handling exactly (node lat/lon or
+   way/relation `center`, malformed/missing-coordinate elements dropped) —
+   only the labeling differs: name tag, else IATA/ICAO code in parens, else
+   a plain "unnamed airfield" fallback. */
+function nearestAirport(json,center){
+  if(!center)return null;
+  let best=null;
+  ((json&&json.elements)||[]).forEach(e=>{
+    if(!e)return;
+    const lat=e.lat!=null?e.lat:(e.center&&e.center.lat);
+    const lng=e.lon!=null?e.lon:(e.center&&e.center.lon);
+    if(lat==null||lng==null||!isFinite(lat)||!isFinite(lng))return;
+    const km=haversine(center.lat,center.lng,lat,lng);
+    if(!isFinite(km))return;
+    if(best&&km>=best.km)return;
+    const tags=e.tags||{};
+    const code=tags.iata?`IATA: ${tags.iata}`:tags.icao?`ICAO: ${tags.icao}`:null;
+    const label=tags.name?(code?`${tags.name} (${code})`:tags.name)
+      :code?`unnamed airfield (${code})`
+      :"unnamed airfield";
+    best={lat,lng,km,label};
+  });
+  return best;
+}
 // Decides which of rankCandidates' four scoring signals apply to a given land
 // use, from its model.json `requires`/`demand_signals` blocks plus the use's
 // own rooftop-need threshold (USE_DEMAND[id].roofNeed in explore.html —
@@ -1399,5 +1428,5 @@ function buildSimplePdf(lines,opts){
 // Node (CommonJS, no bundler) picks this up for tests; browsers ignore it
 // since `module` isn't defined in a plain <script>.
 if(typeof module!=="undefined" && module.exports){
-  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,extractAddressColumn,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,nearestTransitStop,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
+  module.exports={SEVERITY,AMENITY_USES,COST,evaluate,isContested,findStandoffs,cheapest,countOf,haversine,inBbox,pick,blendedDemand,seniorDemandRead,parseFccBlockFips,parseAcsTractRow,sampleTradeAreaPoints,dedupeTracts,aggregateAcsTracts,makeSessionCache,wrapText,debounce,shouldIgnoreGlobalShortcut,encodeHash,decodeHash,directionsUrl,hasWebShare,sharePayloadForLink,sharePayloadForCase,encodeComparePins,decodeComparePins,mergeComparePins,encodeSearchHash,decodeSearchHash,nominatimUrl,parseNominatimResult,parseCoordPair,geolocationErrorMessage,parseBulkAddressList,bulkImportSummary,extractAddressColumn,toCsvField,toCsvRow,toCsv,APP_STATE_KEYS,buildAppStateExport,parseAppStateImport,addRecentSite,removeRecentSite,clearRecentSites,undoClear,addSavedSearch,removeSavedSearch,sortPins,bestValueIndices,removePinAt,undoRemovePin,sampleGrid,rankCandidates,parseOverpassPoints,nearestTransitStop,nearestAirport,reverseSearchSignals,candidateWhyText,candidatesToCsvRows,pinsToGeoJson,candidatesToGeoJson,buildCandidatesReportText,buildCompareReportText,bestFitReasonText,bestFitToCsvRows,buildBestFitReportText,toPdfSafeText,escapePdfString,buildSimplePdf,parseAadtFeatures,maxAadtWithinRadius,standardUseVerdict,rankLandUseVerdicts,countDemandRead,schoolLoadDemandRead,AREA_UNITS,areaUnitLabel,convertArea,formatArea,formatDistance,distanceUnitForAreaUnit};
 }

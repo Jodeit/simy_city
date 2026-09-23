@@ -4044,6 +4044,7 @@ function showParcel(geo,src,seq){
     <div class="drow"><span>👪 Census tract (ACS)</span><b id="devCensus" class="loading">looking up tract…</b></div>
     ${(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"||current==="grocery_store"))?`<div class="drow"><span>🏘️ Trade-area demographics (ACS)</span><b id="devCensusTA" class="loading">sampling trade area…</b></div>`:""}
     <div class="drow"><span>🚌 Transit</span><b id="devTransit" class="loading">checking…</b></div>
+    <div class="drow"><span>✈️ Airport</span><b id="devAirport" class="loading">checking…</b></div>
     <div class="drow"><span>🧭 Zoning / jurisdiction</span><b>${owedZoning}</b></div>
     <div class="drow"><span>📜 Entitlements / permits</span><b>municipal/county dev-services — <a href="https://github.com/jodeit/simy_city/blob/main/data_sources/registry.yaml" target="_blank" rel="noopener">wire a source</a></b></div>
     <div class="drow"><span>🤝 Availability / seller</span><b>${avail}</b></div>
@@ -4055,7 +4056,7 @@ function showParcel(geo,src,seq){
 
   if(lastLatLng){
     runTopo(lastLatLng,seq); runDistricts(lastLatLng,seq); runFlood(lastLatLng,seq); runCensus(lastLatLng,seq);
-    runTransit(lastLatLng,seq);
+    runTransit(lastLatLng,seq); runAirport(lastLatLng,seq);
     if(mode==="build"&&(AMENITY_USES.has(current)||current==="senior_living"||current==="grocery_store"))runCensusTradeArea(lastLatLng,seq);
   }
   const acN=(acres!=null&&!isNaN(+acres))?+acres:null;
@@ -4255,6 +4256,28 @@ function runTransit(latlng,seq){
       ? `~${Math.round(stop.km*1000)} m — ${esc(stop.label)}`
       : `no transit stop within ${(TRANSIT_RADIUS_M/1000).toFixed(0)} km`);
   },()=>{if(document.getElementById("devTransit"))setHTML("devTransit",errHTML("couldn’t reach OpenStreetMap for transit"));});
+}
+
+/* Nearest airfield within ~10 km — informational developer-checklist context
+   (noise/height/FAA-obstruction questions matter well beyond walking
+   distance, hence the wider radius than transit's 1 km), not a PASS/SHORT
+   verdict gate on anything. Same keyless Overpass fetch as every other live
+   checklist row, just querying `aeroway=aerodrome` instead. */
+const AIRPORT_RADIUS_M=10000;
+function runAirport(latlng,seq){
+  if(!document.getElementById("devAirport"))return;
+  const q=`[out:json][timeout:25];(`+
+    `node["aeroway"="aerodrome"](around:${AIRPORT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `way["aeroway"="aerodrome"](around:${AIRPORT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `relation["aeroway"="aerodrome"](around:${AIRPORT_RADIUS_M},${latlng.lat},${latlng.lng});`+
+    `);out center 50;`;
+  overpass(q,seq,d=>{
+    if(!document.getElementById("devAirport"))return;
+    const ap=nearestAirport(d,latlng);
+    setHTML("devAirport", ap
+      ? `~${(ap.km).toFixed(1)} km — ${esc(ap.label)}`
+      : `no airport within ${(AIRPORT_RADIUS_M/1000).toFixed(0)} km`);
+  },()=>{if(document.getElementById("devAirport"))setHTML("devAirport",errHTML("couldn’t reach OpenStreetMap for airports"));});
 }
 
 /* Multi-tract Census ACS trade area (fast_casual/warehouse_club only): point-

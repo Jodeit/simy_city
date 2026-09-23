@@ -4213,7 +4213,7 @@ Ground rules for each run:
       both pages, and a mocked-network headless pass driving
       `maybeRenderColdStorageVerdict` directly through every documented
       gate-combination state.
-- [ ] **Airport-proximity checklist row (nearest airfield).** Same shape as
+- [x] **Airport-proximity checklist row (nearest airfield).** Same shape as
       the transit-proximity row just shipped: a live, keyless Overpass
       query (reuse the existing `overpass()`/`overpassRaw` session-cache
       wrapper in `web/explore.html`, no new fetch mechanism) for the
