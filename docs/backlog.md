@@ -4271,6 +4271,73 @@ Ground rules for each run:
       real ArcGIS REST endpoint (blocked from this sandbox) is a good human
       spot-check.
 
+## Now (high value) — newly added (23)
+- [ ] **Archive completed backlog sections to keep `docs/backlog.md` lean.**
+      This file has grown to 4,000+ lines and ~30 "Now (high value) — newly
+      added (N)" / "Next (breadth) — newly added (N)" sections, almost all
+      fully checked off, because each autonomous run appends a new section
+      rather than removing finished work. It's now so large that a plain
+      `Read` of the whole file exceeds the tool's 256KB limit and every run
+      has to `grep`/`sed` around it instead. Move every section that is
+      **100% `- [x]`** (i.e. no remaining `- [ ]` in it) out of
+      `docs/backlog.md` into a new `docs/backlog-archive.md`, preserving each
+      section's heading and full entry text verbatim (so the detailed
+      verification notes stay available for reference/history) — this is a
+      pure move, not a rewrite or summarization of past entries. Leave
+      `docs/backlog.md` holding only: the top instructions block, any section
+      still containing at least one `- [ ]`, and a short "## Done" section
+      (keep the existing 6-line legacy summary, optionally add one line
+      pointing to the archive file for the full history). Add a one-line
+      pointer near the top of `docs/backlog.md` ("Earlier shipped work:
+      `docs/backlog-archive.md`") so future runs and humans know where it
+      went. No code changes, so verification is just: `python -m pytest -q`
+      and `simy validate` still pass (untouched by this), and a scripted
+      check that every `- [x]`/`- [ ]` line that existed before the move
+      still exists exactly once across the two files combined (nothing lost
+      or duplicated) — e.g. diff the sorted line-sets of
+      `docs/backlog.md`+`docs/backlog-archive.md` after the change against
+      `docs/backlog.md` before it.
+- [ ] **Wildfire-hazard checklist row.** Same shape as the FEMA flood check
+      (`data_sources`/`web/explore.html` developer checklist): add a live,
+      keyless query against USFS Wildfire Risk to Communities' "Wildfire
+      Hazard Potential" ArcGIS REST layer (nationwide raster, identify-by-
+      point works the same way the existing FEMA NFHL point query does) and
+      surface it as a new "🔥 Wildfire hazard" checklist row (e.g. "High —
+      Wildfire Hazard Potential" / "Very Low" / "Non-burnable / water"),
+      informational only — not a new PASS/SHORT gate on any land use, same
+      "checklist row, not a gate" call transit/airport proximity made. Add a
+      pure helper mirroring the existing FEMA-zone-lookup helper's shape in
+      `web/logic.js` (map the layer's numeric hazard class to its label,
+      handle the "outside CONUS coverage" / no-data case explicitly rather
+      than crashing). Unit tests for the class→label mapping and the
+      no-data case. Verify: `python -m pytest -q`, `simy validate`, `node
+      --test tests/js/*.test.mjs`, headless-Chromium zero-console-error
+      loads of both pages, plus a mocked-network pass driving the new row
+      directly through each hazard class and the no-data state. A live
+      end-to-end fetch against the real ArcGIS endpoint (blocked from this
+      sandbox) is a good human spot-check.
+- [ ] **Wetlands (NWI) checklist row.** Same "informational checklist row,
+      not a gate" shape again: a live, keyless point query against the US
+      Fish & Wildlife Service's National Wetlands Inventory ArcGIS REST
+      "Wetlands" layer, surfaced as a new "💧 Wetlands (NWI)" row — e.g.
+      "Freshwater Emergent Wetland (PEM1C)" or "no mapped wetland at this
+      point" — flagging a real entitlement/permitting risk (Army Corps
+      Section 404) that today's flood/topo/MUD checks don't cover. Add a
+      pure classification-code→plain-English helper to `web/logic.js`
+      (NWI codes are a compact standard vocabulary — System + Class +
+      Water Regime, e.g. `PEM1C` = Palustrine/Emergent/Seasonally Flooded;
+      only needs to handle the handful of System letters, not every
+      possible code, with a graceful fallback that shows the raw code
+      rather than guessing at an unrecognized one). Unit tests for a few
+      representative codes, the "outside coverage" case, and the raw-code
+      fallback. Verify: `python -m pytest -q`, `simy validate`, `node
+      --test tests/js/*.test.mjs`, headless-Chromium zero-console-error
+      loads of both pages, plus a mocked-network pass driving the new row
+      through a mapped-wetland point, a no-wetland point, and an
+      unrecognized-code point. A live end-to-end fetch against the real NWI
+      ArcGIS endpoint (blocked from this sandbox) is a good human
+      spot-check.
+
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.
 - [x] Live demand read + real "why no Costco here" verdict (rooftops vs threshold).
