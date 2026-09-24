@@ -4240,32 +4240,36 @@ Ground rules for each run:
       hit and empty-result text render correctly. A live end-to-end fetch
       against the real Overpass API (blocked from this sandbox) is a good
       human spot-check.
-- [ ] **28th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
-      covers 27 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
-      Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
-      Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/
-      Mecklenburg/Bernalillo/Multnomah/Santa Clara/Alameda). Worth checking
-      first for a public ArcGIS-hosted parcel MapServer/FeatureServer:
-      Broward County, FL (Fort Lauderdale — South Florida coverage is thin
-      outside Miami-Dade), Sacramento County, CA (state capital, another
-      historically open-GIS CA county not yet covered), Pima County, AZ
-      (Tucson — Southwest coverage is thin outside Maricopa/Bernalillo/Clark
-      NV), or Wayne County, MI (Detroit — no Michigan coverage yet at all).
-      Same research-then-graceful-partial-coverage approach every prior
-      county here used: confirm the live REST endpoint and real field names
-      via web search (this sandbox blocks ArcGIS REST introspection
-      directly, same constraint every prior `PARCEL_SOURCES` entry had),
-      map only the fields independently confirmed rather than guessing a
-      label, and check the new bbox against all 27 existing entries before
-      appending (`inBbox` resolves to the *first* match, so a silent
-      overlap would shadow an existing county — Sacramento's bbox in
-      particular should be checked against nothing else in Northern CA, and
-      a Detroit-area pick against nothing else in the Midwest). Verify:
-      `simy validate`, `python -m pytest -q`, `node --test
-      tests/js/*.test.mjs`, headless-Chromium load of `web/explore.html`
-      with zero console errors, and a synthetic in-page check that the new
-      county's representative city resolves to it via `inBbox` while all
-      existing regression points still resolve to their own counties.
+- [x] **28th parcel county.** Added Sacramento County, CA to `PARCEL_SOURCES`
+      in `web/explore.html`, bringing coverage to 28 counties. Used
+      Sacramento's own hosted `PARCELS/MapServer/22` ("ALL Parcels",
+      countywide, vs. e.g. layer 15's tiled "BW Parcel Boundaries") —
+      confirmed live via multiple independent search-indexed sources (this
+      sandbox blocks direct ArcGIS REST introspection, same constraint every
+      prior `PARCEL_SOURCES` entry had). Only the APN field (14-digit,
+      dash-hyphenated) was independently confirmed on this layer; situs
+      address/acreage field names weren't, so — same graceful
+      partial-field-coverage as Dallas/Fulton/Tarrant/Hennepin/Bernalillo/
+      Multnomah/Alameda — those were left unmapped rather than guessed. No
+      documented per-APN deep-link scheme either, so `record()` sends people
+      to the Assessor's own tools page (same call as Harris/Bexar/LA/King).
+      Padded bbox `[-121.95,38.00,-120.95,38.85]` covers Sacramento/Elk
+      Grove/Folsom/Citrus Heights/Rancho Cordova; checked against all 27
+      existing entries before appending — no overlap (nearest CA entries,
+      Alameda and Santa Clara, both stay south of 37.92°N). Verified:
+      `python tools/build_model_json.py` (27 land uses, 32 sources), `simy
+      validate` (OK), `python -m pytest -q` (39 passed), `node --test
+      tests/js/*.test.mjs` (391 passed), headless Chromium load of both
+      `web/index.html` and `web/explore.html` with zero genuine console/page
+      errors (network-blocked-resource noise from the sandbox's egress
+      policy, expected and excluded), and a synthetic in-page check driving
+      `PARCEL_SOURCES.find(s => inBbox(...))` directly: Sacramento
+      (38.5816,-121.4944) now resolves to the new entry, and 6 existing
+      regression points (Austin/Travis, Oakland/Alameda, San Jose/Santa
+      Clara, Denver, Phoenix/Maricopa, Portland/Multnomah) all still resolve
+      to their own, unchanged counties. A live end-to-end fetch against the
+      real ArcGIS REST endpoint (blocked from this sandbox) is a good human
+      spot-check.
 
 ## Done
 - [x] Two-lane UX (Explore vs Test a use) with a real CTA.

@@ -1578,6 +1578,33 @@ const PARCEL_SOURCES=[
     county_state:"Alameda County, CA",
     zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
   },
+  {
+    name:"Sacramento County Assessor (Sacramento County, CA)",
+    // Sacramento County's own hosted PARCELS MapServer — confirmed live via
+    // multiple independent search-indexed sources (this sandbox blocks direct
+    // ArcGIS REST introspection like every prior county here). Layer 22 ("ALL
+    // Parcels", the countywide layer, as opposed to e.g. layer 15's tiled "BW
+    // Parcel Boundaries") is keyed by the 14-digit APN.
+    urls:["https://mapservices.gis.saccounty.net/arcgis/rest/services/PARCELS/MapServer/22"],
+    // Covers Sacramento/Elk Grove/Folsom/Citrus Heights/Rancho Cordova — padded
+    // rough rectangle, same loose pre-filter every PARCEL_SOURCES bbox here
+    // takes. No overlap with any other entry's bbox: the nearest CA entries,
+    // Alameda and Santa Clara, both stay south of 37.92°N, while this bbox
+    // starts at 38.00°N.
+    bbox:[-121.95,38.00,-120.95,38.85],
+    // Confirmed field (via multiple independent search-indexed sources): APN
+    // (14-digit, dash-hyphenated e.g. "006-0162-001-0000" — already in the
+    // shared id candidate list above). Situs address and acreage field names
+    // weren't independently confirmed on this specific layer — so, same
+    // cautious call as Dallas/Fulton/Tarrant/Hennepin/Bernalillo/Multnomah/
+    // Alameda here, left unmapped rather than guessed.
+    // No documented per-APN deep-link URL scheme either, so — same call as
+    // Harris/Bexar/LA/King — send people to the Assessor's own tools page.
+    record:()=>"https://assessor.saccounty.gov/Pages/Tools.aspx",
+    source_label:"Sacramento County Assessor",
+    county_state:"Sacramento County, CA",
+    zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
