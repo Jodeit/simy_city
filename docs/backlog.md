@@ -4240,7 +4240,7 @@ Ground rules for each run:
       hit and empty-result text render correctly. A live end-to-end fetch
       against the real Overpass API (blocked from this sandbox) is a good
       human spot-check.
-- [ ] **28th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
+- [x] **28th parcel county.** `PARCEL_SOURCES` in `web/explore.html` now
       covers 27 counties (Travis/Maricopa/Harris/Bexar/Orange CA/LA/King/
       Cook/Miami-Dade/San Diego/Dallas/Allegheny/Wake/Fulton/Salt Lake/
       Franklin/Tarrant/Hennepin/Clark NV/Denver/Suffolk MA/Philadelphia/

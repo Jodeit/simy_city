@@ -1578,6 +1578,50 @@ const PARCEL_SOURCES=[
     county_state:"Alameda County, CA",
     zoning_note:"CA counties do zone unincorporated land — check the county zoning ordinance, or the city if incorporated",
   },
+  {
+    name:"Pima County Assessor (Pima County, AZ)",
+    // PAREGION ("Parcels - Regional") — Pima County's own countywide parcel
+    // layer, republished on the City of Tucson's ArcGIS server (same "lean on
+    // a neighboring/hosting government's copy" call Bernalillo/Denver/Suffolk
+    // above already made). Two hostnames both confirmed live via independent
+    // search-indexed sources for the same layer — this sandbox blocks direct
+    // ArcGIS REST introspection like every prior county here — so both are
+    // listed, tried in order, same graceful-fallback shape as Travis County's
+    // multi-URL entry.
+    urls:[
+      "https://gis.tucsonaz.gov/public/rest/services/PublicMaps/PropertyHousing/MapServer/17",
+      "https://mapdata.tucsonaz.gov/public/rest/services/PublicMaps/PropertyHousing/MapServer/17",
+    ],
+    // Padded rough rectangle covering Tucson/Marana/Oro Valley/South Tucson/
+    // Sahuarita/Green Valley north to south, capped at Maricopa County's own
+    // bbox minLat (32.50) rather than Pima's true (irregular) county line
+    // with Pinal County further north, so the two entries' rectangles don't
+    // overlap — that shared seam sits in empty desert/mountain terrain with
+    // no cities on either side, so nothing real resolves to the wrong county.
+    bbox:[-113.34,31.33,-110.45,32.49],
+    // Confirmed fields (via multiple independent search-indexed sources):
+    // PARCEL (the assessor's APN, added to the shared id candidate list
+    // above), ADDRESSEE (owner/addressee name, added to the shared owner
+    // candidate list above), SITE_ADDRESS (already in the shared address
+    // candidate list from other counties), USE_DESC (land use, added to the
+    // shared land-use candidate list above), GISACRES (added to the shared
+    // acres candidate list above — note no underscore, so it needs its own
+    // exact entry rather than reusing GIS_ACRES), and FCV — Full Cash Value
+    // (added to the shared value candidate list above). MAIL1-5/LEGAL1-5/
+    // SITE_ZIPCITY/SITE_ZIP/TAXAREA/CURZONE_OL/YearBuilt also exist on the
+    // layer but have no matching display row here, same graceful
+    // partial-field-coverage as every other county above.
+    // asr.pima.gov's Assessor property search is a form (address, owner, or
+    // APN) with no documented per-APN query-string deep link, so — same
+    // cautious call as Harris/Bexar/LA/King/Miami-Dade/San Diego/Dallas/
+    // Allegheny/Fulton/Salt Lake/Franklin/Clark/Suffolk/Mecklenburg/
+    // Bernalillo/Santa Clara — send people to the search page instead of
+    // guessing a link shape that might 404.
+    record:()=>"https://www.asr.pima.gov/Parcel/Search",
+    source_label:"Pima County Assessor",
+    county_state:"Pima County, AZ",
+    zoning_note:"unlike TX, AZ counties do zone unincorporated land — check Pima County's unincorporated-area zoning, or the city/town if incorporated",
+  },
 ];
 
 // Traffic-count (AADT) source for the `transportation.near_highway_aadt`/
@@ -4085,12 +4129,12 @@ function showParcel(geo,src,seq){
       {style:{color:"#b35a1e",weight:2.5,fillColor:"#e8843c",fillOpacity:.12}}).addTo(map);
     try{map.fitBounds(parcelLayer.getBounds(),{maxZoom:17,padding:[40,40]});}catch(e){}
   }
-  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC","PROPID","MAPTAXLOT"]);
-  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1"]);
+  const id=pick(a,["PROP_ID","GEO_ID","prop_id","geo_id","PROPERTY_ID","APN","HCAD_NUM","acct_num","AIN","PIN","PIN14_dash","PIN14","PIN10","FOLIO","APN_8","PARCELID","PIN_NUM","PARCEL_ID","TAXPIN","PID","parcel_id","LOC_ID","PARCEL_NUMBER","ASSESSMENT_NO","UPC","PROPID","MAPTAXLOT","PARCEL"]);
+  const owner=pick(a,["OWNER_NAME","py_owner_n","OWNER","NAME_CARE","owner_name","owner_name_1","TRUE_OWNER1","OWNERNME1","OWNERDESC","OWNER_NM","OWNER1","OWNER_1","ADDRESSEE"]);
   const situs=pick(a,["SITUS","SITUS_ADDR","situs_addr","SITUS_ADDRESS","ADDRESS","PROP_ADDRESS","PHYSICAL_ADDRESS","SitusFullAddress","SitusAddress","street_address","TRUE_SITE_ADDR","SITEADDRESS","PROPERTYADDRESS","SITE_ADDRESS","PARCEL_ADD","situsAdd","SITE_ADDR","LOCATION","SITUSADD"]);
-  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION"]);
-  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres"]);
-  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot"]);
+  const land=pick(a,["LAND_USE","LU_DESC","STATE_CD","LAND_STATE_CD","state_cd","dba_name","land_use","UseType","DOR_CODE_CUR","ASR_LANDUSE","CLASSDESC","USEDESC","TYPE_USE_DECODE","PROP_CLASS","PARCELTYPE","landUseDsc","USE_CODE","CATEGORY_CODE_DESCRIPTION","USE_DESC"]);
+  const acres=pick(a,["GIS_ACRES","LEGAL_ACRE","ACREAGE","LegalAcreage","gis_acres","acreage_1","acreage","DEED_ACRES","PARCEL_ACRES","LAND_ACRES","ACRES_POLY","ACRES_DEED","CALC_ACRES","ASSR_ACRES","landAcres","GISACRES"]);
+  const value=pick(a,["MARKET_VALUE","market_val","TOTAL_VAL","ASSESSED_VAL","appraised_val","MKT_VAL","total_appraised_val","FCV_CUR","TOTAL_VAL_CUR","FAIRMARKETTOTAL","TOTAL_VALUE_ASSD","TOTAL_MKT_VALUE","TOTAL_VALU","EMV_TOTAL","apprValTot","FCV"]);
   let rows="";
   const row=(k,v,id)=>{if(v!==null&&v!==undefined&&v!=="")rows+=`<div class="prow"><span>${k}</span><b${id?` id="${id}"`:""}>${esc(v)}</b></div>`;};
   row("Parcel ID",id);
